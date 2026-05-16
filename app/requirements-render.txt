@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+openpyxl
+lxml
+geopy
+simplekml
+fastkml
+shapely
+pandas
+numpy
+python-dotenv
+requests
