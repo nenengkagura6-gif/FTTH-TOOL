@@ -13,7 +13,6 @@ import uvicorn
 from engines.kml_engine import process_kml_to_excel
 from engines.apd_engine import process_apd_hpdb
 from engines.duplikat_engine import check_duplicates_kml
-from tasks import process_kml_to_boq_task, process_apd_hpdb_task
 import sentry_sdk
 
 sentry_dsn = os.environ.get("SENTRY_DSN_PYTHON")
@@ -177,14 +176,14 @@ async def queue_job(req: JobRequest):
     """
     try:
         if req.tool_name == "kml_to_boq":
-            process_kml_to_boq_task.delay(
+            process_kml_to_boq(
                 job_id=req.job_id,
                 input_file_path=req.file_path,
                 original_filename=req.original_filename,
                 user_id=req.user_id
             )
         elif req.tool_name == "kml_to_database_hp":
-            process_apd_hpdb_task.delay(
+            process_apd_hpdb(
                 job_id=req.job_id,
                 input_file_path=req.file_path,
                 original_filename=req.original_filename,
