@@ -32,6 +32,95 @@ interface SignInPageProps {
   onSuccessHref?: string
 }
 
+let cachedWebGLSupport: boolean | null = null
+
+const getWebGLSupport = () => {
+  if (typeof document === "undefined") {
+    return false
+  }
+
+  const canvas = document.createElement("canvas")
+  const contextOptions: WebGLContextAttributes = {
+    failIfMajorPerformanceCaveat: false,
+  }
+  let creationFailed = false
+
+  const handleContextCreationError = (event: Event) => {
+    event.preventDefault()
+    creationFailed = true
+  }
+
+  canvas.addEventListener("webglcontextcreationerror", handleContextCreationError)
+
+  try {
+    const context = (
+      canvas.getContext("webgl2", contextOptions) ??
+      canvas.getContext("webgl", contextOptions) ??
+      canvas.getContext("experimental-webgl" as "webgl", contextOptions)
+    ) as WebGLRenderingContext | WebGL2RenderingContext | null
+
+    if (!context || creationFailed) {
+      return false
+    }
+
+    context.getExtension("WEBGL_lose_context")?.loseContext()
+    return true
+  } catch {
+    return false
+  } finally {
+    canvas.removeEventListener(
+      "webglcontextcreationerror",
+      handleContextCreationError,
+    )
+  }
+}
+
+const useWebGLSupport = () => {
+  const [isSupported, setIsSupported] = useState<boolean | null>(
+    cachedWebGLSupport,
+  )
+
+  useEffect(() => {
+    if (cachedWebGLSupport === null) {
+      cachedWebGLSupport = getWebGLSupport()
+    }
+
+    setIsSupported(cachedWebGLSupport)
+  }, [])
+
+  return isSupported
+}
+
+const toRgbChannels = (color: number[] | undefined) => {
+  const [red = 120, green = 220, blue = 255] = color ?? []
+  return `${red} ${green} ${blue}`
+}
+
+const StaticDotMatrix = ({
+  colors,
+  dotSize,
+  totalSize,
+}: {
+  colors: number[][]
+  dotSize: number
+  totalSize: number
+}) => {
+  const primary = colors[0]
+  const secondary = colors[1] ?? primary
+  const primaryRadius = Math.max(dotSize * 0.42, 1)
+  const secondaryRadius = Math.max(dotSize * 0.28, 1)
+  const style: React.CSSProperties = {
+    backgroundImage: [
+      `radial-gradient(circle at center, rgb(${toRgbChannels(primary)} / 0.48) 0 ${primaryRadius}px, transparent ${primaryRadius + 0.8}px)`,
+      `radial-gradient(circle at center, rgb(${toRgbChannels(secondary)} / 0.16) 0 ${secondaryRadius}px, transparent ${secondaryRadius + 0.8}px)`,
+    ].join(", "),
+    backgroundPosition: "center",
+    backgroundSize: `${totalSize}px ${totalSize}px, ${totalSize * 2}px ${totalSize * 2}px`,
+  }
+
+  return <div className="absolute inset-0 h-full w-full" style={style} />
+}
+
 export const CanvasRevealEffect = ({
   animationSpeed = 10,
   opacities = [0.3, 0.3, 0.3, 0.5, 0.5, 0.5, 0.8, 0.8, 0.8, 1],
@@ -87,6 +176,7 @@ const DotMatrix: React.FC<DotMatrixProps> = ({
   shader = "",
   center = ["x", "y"],
 }) => {
+  const isWebGLSupported = useWebGLSupport()
   const uniforms = useMemo(() => {
     let colorsArray = [colors[0], colors[0], colors[0], colors[0], colors[0], colors[0]]
     if (colors.length === 2) {
@@ -117,6 +207,12 @@ const DotMatrix: React.FC<DotMatrixProps> = ({
       },
     }
   }, [colors, opacities, totalSize, dotSize, shader])
+
+  if (isWebGLSupported !== true) {
+    return (
+      <StaticDotMatrix colors={colors} dotSize={dotSize} totalSize={totalSize} />
+    )
+  }
 
   return (
     <Shader
