@@ -136,8 +136,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Sign out
     const signOut = useCallback(async () => {
         try {
-            // Log to audit trail via server API
-            await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
             await supabase.auth.signOut()
             setUser(null)
             setProfile(null)

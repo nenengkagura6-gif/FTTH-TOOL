@@ -37,6 +37,7 @@ interface Job {
   progress_message: string | null
   error_message: string | null
   result_file_url: string | null
+  output_file_url?: string | null
   original_file_size_bytes: number | null
   processing_time_ms: number | null
 }
@@ -145,22 +146,48 @@ export default function HistoryPage() {
   const fetchHistory = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: "15",
-        ...(statusFilter !== "all" && { status: statusFilter }),
-        ...(toolFilter !== "all" && { tool: toolFilter }),
+      const { getSupabaseClient } = await import("@/lib/supabase/client")
+      const supabase = getSupabaseClient()
+      
+      const { data: userData } = await supabase.auth.getUser()
+      if (!userData.user) throw new Error("Not authenticated")
+
+      let query = supabase
+        .from('processing_jobs')
+        .select('*', { count: 'exact' })
+        .eq('user_id', userData.user.id)
+
+      if (statusFilter !== "all") {
+        query = query.eq('status', statusFilter)
+      }
+      if (toolFilter !== "all") {
+        query = query.eq('tool_name', toolFilter)
+      }
+
+      const limit = 15
+      const from = (page - 1) * limit
+      const to = from + limit - 1
+
+      const { data, count, error } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) throw error
+
+      setJobs(data || [])
+      
+      const total = count || 0
+      setPagination({
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: from + limit < total
       })
-
-      const res = await fetch(`/api/jobs/history?${params}`)
-      if (!res.ok) throw new Error("Failed to fetch")
-
-      const data = await res.json()
-      setJobs(data.jobs || [])
-      setPagination(data.pagination || null)
     } catch (err) {
       console.error("Error fetching history:", err)
       setJobs([])
+      setPagination(null)
     } finally {
       setLoading(false)
     }
@@ -376,7 +403,7 @@ export default function HistoryPage() {
                       <div className="flex items-center justify-end gap-2">
                         {job.status === "completed" && (
                           <button
-                            onClick={() => handleDownload(job.result_file_url)}
+                            onClick={() => handleDownload(job.output_file_url || job.result_file_url)}
                             className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors ring-1 ring-primary/20"
                           >
                             <Download className="h-3 w-3" />
@@ -440,7 +467,7 @@ export default function HistoryPage() {
 
                       {job.status === "completed" && (
                         <button
-                          onClick={() => handleDownload(job.result_file_url)}
+                          onClick={() => handleDownload(job.output_file_url || job.result_file_url)}
                           className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors ring-1 ring-primary/20"
                         >
                           <Download className="h-3 w-3" />

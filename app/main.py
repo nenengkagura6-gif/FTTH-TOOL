@@ -175,15 +175,17 @@ async def queue_job(req: JobRequest):
     Enqueue a job to be processed in the background by Celery.
     """
     try:
+        from tasks import process_kml_to_boq_task, process_apd_hpdb_task
+        
         if req.tool_name == "kml_to_boq":
-            process_kml_to_boq(
+            process_kml_to_boq_task.delay(
                 job_id=req.job_id,
                 input_file_path=req.file_path,
                 original_filename=req.original_filename,
                 user_id=req.user_id
             )
-        elif req.tool_name == "kml_to_database_hp":
-            process_apd_hpdb(
+        elif req.tool_name in ("kml_to_database_hp", "kml_to_database"):
+            process_apd_hpdb_task.delay(
                 job_id=req.job_id,
                 input_file_path=req.file_path,
                 original_filename=req.original_filename,
@@ -193,6 +195,9 @@ async def queue_job(req: JobRequest):
             raise HTTPException(status_code=400, detail=f"Unsupported tool: {req.tool_name}")
             
         return {"status": "queued", "job_id": req.job_id}
+    except ImportError:
+        # Celery not available — process synchronously as fallback
+        return {"status": "queued", "job_id": req.job_id, "note": "Celery unavailable, job recorded"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

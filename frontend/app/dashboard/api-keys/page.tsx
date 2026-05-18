@@ -36,29 +36,66 @@ export default function ApiKeysPage() {
   const canAccessApi = isPro || isEnterprise
 
   useEffect(() => {
-    if (authLoading || !canAccessApi) {
+    if (authLoading || !canAccessApi || !profile) {
       setLoading(false)
       return
     }
-    fetch('/api/keys')
-      .then(r => r.json())
-      .then(d => setKeys(d.keys || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [authLoading, canAccessApi])
+    const fetchKeys = async () => {
+      const { getSupabaseClient } = await import("@/lib/supabase/client")
+      const supabase = getSupabaseClient()
+      const { data, error } = await supabase
+        .from('api_keys')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        
+      if (!error && data) {
+        setKeys(data)
+      }
+      setLoading(false)
+    }
+    fetchKeys()
+  }, [authLoading, canAccessApi, profile])
 
   const handleCreateKey = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!profile) return
     setCreating(true)
     try {
-      const res = await fetch('/api/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newKeyName || 'Default Key' })
-      })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setKeys([data, ...keys])
+      // Generate a new secure API key
+      const rawKey = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+        .map(b => b.toString(16).padStart(2, '0')).join('')
+      const plainKey = `sk_ftth_${rawKey}`
+      const keyPrefix = plainKey.substring(0, 12)
+      
+      // Hash the key using Web Crypto API
+      const encoder = new TextEncoder()
+      const data = encoder.encode(plainKey)
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const keyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+      const { getSupabaseClient } = await import("@/lib/supabase/client")
+      const supabase = getSupabaseClient()
+      
+      const newKey = {
+        user_id: profile.id,
+        name: newKeyName || 'Default Key',
+        key_hash: keyHash,
+        key_prefix: keyPrefix,
+        is_active: true,
+        usage_count: 0
+      }
+      
+      const { data: insertedData, error } = await supabase
+        .from('api_keys')
+        .insert(newKey)
+        .select()
+        .single()
+        
+      if (error) throw new Error(error.message)
+      
+      setKeys([{ ...insertedData, plainKey }, ...keys])
       setNewKeyName("")
     } catch (err) {
       console.error(err)
@@ -70,7 +107,10 @@ export default function ApiKeysPage() {
   const handleRevokeKey = async (id: string) => {
     if (!confirm("Are you sure you want to revoke this API key? Apps using it will stop working immediately.")) return
     try {
-      await fetch(`/api/keys?id=${id}`, { method: 'DELETE' })
+      const { getSupabaseClient } = await import("@/lib/supabase/client")
+      const supabase = getSupabaseClient()
+      const { error } = await supabase.from('api_keys').delete().eq('id', id)
+      if (error) throw new Error(error.message)
       setKeys(keys.filter(k => k.id !== id))
     } catch (err) {
       console.error(err)

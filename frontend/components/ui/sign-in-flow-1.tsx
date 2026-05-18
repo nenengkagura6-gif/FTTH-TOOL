@@ -341,9 +341,15 @@ export const SignInPage = ({
   const [supabaseClient, setSupabaseClient] = useState<any>(null)
   useEffect(() => {
     import("@/lib/supabase/client").then(({ getSupabaseClient }) => {
-      setSupabaseClient(getSupabaseClient())
+      const client = getSupabaseClient()
+      setSupabaseClient(client)
+      client.auth.getSession().then(({ data }) => {
+        if (data?.session) {
+          window.location.href = onSuccessHref
+        }
+      })
     }).catch(() => {})
-  }, [])
+  }, [onSuccessHref])
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

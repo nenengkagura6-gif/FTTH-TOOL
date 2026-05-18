@@ -151,29 +151,15 @@ export function UpgradeModalProvider({ children }: { children: ReactNode }) {
                                         onClick={async () => {
                                             setIsProcessing(true)
                                             try {
-                                                const res = await fetch('/api/payment/create', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ plan: requiredPlan })
-                                                })
-                                                const data = await res.json()
-                                                if (data.token) {
-                                                    // @ts-ignore
-                                                    window.snap.pay(data.token, {
-                                                        onSuccess: () => { window.location.reload() },
-                                                        onPending: () => { hideUpgradeModal() },
-                                                        onError: () => { setIsProcessing(false) },
-                                                        onClose: () => { setIsProcessing(false) }
-                                                    })
-                                                } else {
-                                                    alert(data.error || 'Failed to initialize payment')
-                                                    setIsProcessing(false)
-                                                }
-                                            } catch (err) {
-                                                console.error(err)
+                                                // Mock payment integration since backend is not available
+                                                alert("Payment integration is currently unavailable in this static export. Please contact support to upgrade your account.")
                                                 setIsProcessing(false)
-                                            }
-                                        }}
+					} catch (error) {
+        					console.error(error)
+    					} finally {
+        					setIsProcessing(false)
+    						}
+                                   	}}
                                         className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3 text-sm font-semibold text-black hover:from-amber-400 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50"
                                     >
                                         {isProcessing ? (

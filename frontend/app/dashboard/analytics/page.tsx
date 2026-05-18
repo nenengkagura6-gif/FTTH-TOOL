@@ -39,18 +39,78 @@ interface AnalyticsData {
 }
 
 export default function AnalyticsPage() {
-  const { isLoading: authLoading } = useAuth()
+  const { isLoading: authLoading, profile } = useAuth()
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (authLoading) return
-    fetch("/api/analytics")
-      .then(r => r.json())
-      .then(d => setData(d))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [authLoading])
+    if (authLoading || !profile) return
+    const fetchAnalytics = async () => {
+      try {
+        const { getSupabaseClient } = await import("@/lib/supabase/client")
+        const supabase = getSupabaseClient()
+        
+        const fourteenDaysAgo = new Date()
+        fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+        
+        const { data: jobs, error } = await supabase
+          .from('processing_jobs')
+          .select('created_at, status, tool_name, processing_time_ms')
+          .eq('user_id', profile.id)
+          .gte('created_at', fourteenDaysAgo.toISOString())
+          
+        if (error) throw error
+        
+        const totalJobs = jobs.length
+        const completed = jobs.filter(j => j.status === 'completed').length
+        const failed = jobs.filter(j => j.status === 'failed').length
+        const successRate = totalJobs > 0 ? Math.round((completed / totalJobs) * 100) : 0
+        
+        const completedJobsWithTime = jobs.filter(j => j.status === 'completed' && j.processing_time_ms)
+        const avgProcessingTimeMs = completedJobsWithTime.length > 0
+          ? completedJobsWithTime.reduce((acc, j) => acc + (j.processing_time_ms || 0), 0) / completedJobsWithTime.length
+          : 0
+          
+        const toolUsage: Record<string, number> = {}
+        jobs.forEach(j => {
+          toolUsage[j.tool_name] = (toolUsage[j.tool_name] || 0) + 1
+        })
+        
+        const dailyChartMap: Record<string, { completed: number; failed: number; total: number }> = {}
+        for (let i = 13; i >= 0; i--) {
+          const d = new Date()
+          d.setDate(d.getDate() - i)
+          dailyChartMap[d.toISOString().split('T')[0]] = { completed: 0, failed: 0, total: 0 }
+        }
+        
+        jobs.forEach(j => {
+          const dateStr = j.created_at.split('T')[0]
+          if (dailyChartMap[dateStr]) {
+            dailyChartMap[dateStr].total++
+            if (j.status === 'completed') dailyChartMap[dateStr].completed++
+            if (j.status === 'failed') dailyChartMap[dateStr].failed++
+          }
+        })
+        
+        setData({
+          stats: { totalJobs, completed, failed, successRate, avgProcessingTimeMs },
+          toolUsage,
+          dailyChart: Object.entries(dailyChartMap).map(([date, stats]) => ({ date, ...stats })),
+          quota: {
+            used: profile.quota_used || 0,
+            limit: profile.quota_limit || 100,
+            plan: profile.plan || 'free',
+            resetsAt: profile.quota_reset_at || null
+          }
+        })
+      } catch (err) {
+        console.error("Error fetching analytics:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAnalytics()
+  }, [authLoading, profile])
 
   if (loading || !data) {
     return (

@@ -134,15 +134,15 @@ export default function DocsPage() {
             </div>
             <pre className="p-5 font-mono text-xs leading-relaxed text-muted-foreground overflow-x-auto">
               <code>{`# 1. Sign in
-$ open https://ftth-tool.example.com/login
+$ open https://ftthtools.my.id/login
 
 # 2. Upload your KML
 $ curl -F "file=@cluster.kml" \\
        -H "Authorization: Bearer $TOKEN" \\
-       https://api.ftth-tool.example.com/v1/boq
+       https://api.ftthtools.my.id/v1/boq
 
 # 3. Download the result
-$ curl -O https://api.ftth-tool.example.com/v1/jobs/$ID/download`}</code>
+$ curl -O https://api.ftthtools.my.id/v1/jobs/$ID/download`}</code>
             </pre>
           </div>
         </section>

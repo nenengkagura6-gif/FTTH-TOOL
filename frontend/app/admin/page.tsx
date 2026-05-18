@@ -36,33 +36,88 @@ export default function AdminPage() {
     }
   }, [isLoading, profile, router])
 
-  // Fetch stats
+  // Fetch stats and users
   useEffect(() => {
-    fetch('/api/admin/stats').then(r => r.json()).then(setStats).catch(() => {})
-  }, [])
-
-  // Fetch users
-  useEffect(() => {
-    setLoading(true)
-    const params = new URLSearchParams({ page: String(page), limit: '15', ...(search && { search }) })
-    fetch(`/api/admin/users?${params}`)
-      .then(r => r.json())
-      .then(d => { setUsers(d.users || []); setUsersPagination(d.pagination) })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [page, search])
+    if (profile?.role !== 'admin') return;
+    
+    const fetchAdminData = async () => {
+      setLoading(true);
+      try {
+        const { getSupabaseClient } = await import("@/lib/supabase/client");
+        const supabase = getSupabaseClient();
+        
+        // Stats
+        const { data: usersData } = await supabase.from('profiles').select('*');
+        const { data: jobsData } = await supabase.from('processing_jobs').select('*');
+        const { data: subsData } = await supabase.from('subscriptions').select('*').eq('status', 'active');
+        
+        if (usersData && jobsData && subsData) {
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          
+          const usersByPlan = usersData.reduce((acc: any, u) => {
+            acc[u.plan || 'free'] = (acc[u.plan || 'free'] || 0) + 1;
+            return acc;
+          }, {});
+          
+          const jobsByStatus = jobsData.reduce((acc: any, j) => {
+            acc[j.status] = (acc[j.status] || 0) + 1;
+            return acc;
+          }, {});
+          
+          setStats({
+            overview: {
+              totalUsers: usersData.length,
+              totalJobs: jobsData.length,
+              todayJobs: jobsData.filter(j => new Date(j.created_at) >= today).length,
+              activeSubscriptions: subsData.length,
+              monthlyRevenueCents: subsData.reduce((sum, s) => sum + (s.price_cents || 0), 0)
+            },
+            usersByPlan,
+            jobsByStatus
+          });
+          
+          // Users with pagination
+          const limit = 15;
+          const from = (page - 1) * limit;
+          const to = from + limit - 1;
+          
+          let query = supabase.from('profiles').select('*', { count: 'exact' });
+          if (search) {
+            query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`);
+          }
+          
+          const { data: paginatedUsers, count } = await query.order('created_at', { ascending: false }).range(from, to);
+          
+          setUsers(paginatedUsers || []);
+          if (count !== null) {
+            setUsersPagination({
+              page,
+              limit,
+              total: count,
+              totalPages: Math.ceil(count / limit)
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Admin fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchAdminData();
+  }, [profile, page, search]);
 
   const handleUpdateUser = async (userId: string, updates: Record<string, unknown>) => {
-    await fetch('/api/admin/users', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, ...updates }),
-    })
-    // Refresh
-    const params = new URLSearchParams({ page: String(page), limit: '15', ...(search && { search }) })
-    const res = await fetch(`/api/admin/users?${params}`)
-    const data = await res.json()
-    setUsers(data.users || [])
+    try {
+      const { getSupabaseClient } = await import("@/lib/supabase/client");
+      const supabase = getSupabaseClient();
+      await supabase.from('profiles').update(updates).eq('id', userId);
+      setUsers(users.map(u => u.id === userId ? { ...u, ...updates } : u));
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   if (isLoading || profile?.role !== 'admin') {
