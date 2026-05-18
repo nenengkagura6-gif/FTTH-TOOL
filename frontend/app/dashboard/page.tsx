@@ -6,6 +6,7 @@ import { motion } from "framer-motion"
 import { ArrowUpRight, Activity, Files, Zap, Clock, Inbox } from "lucide-react"
 import { dashboardMenu } from "@/lib/site-config"
 import { useAuth } from "@/components/auth/auth-provider"
+import { getSupabaseClient } from "@/lib/supabase/client"
 
 interface JobStats {
   total: number
@@ -59,24 +60,34 @@ export default function DashboardPage() {
 
     const fetchData = async () => {
       try {
-        const res = await fetch("/api/jobs?limit=5")
-        if (res.ok) {
-          const data = await res.json()
-          setRecentJobs(data.jobs || [])
+        const supabase = getSupabaseClient()
+        
+        // Fetch recent jobs
+        const { data: recent, error: recentError } = await supabase
+          .from('processing_jobs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5)
 
-          // Calculate stats from all jobs
-          const statsRes = await fetch("/api/jobs?limit=1000")
-          if (statsRes.ok) {
-            const allData = await statsRes.json()
-            const jobs = allData.jobs || []
-            setStats({
-              total: jobs.length,
-              completed: jobs.filter((j: any) => j.status === "completed").length,
-              failed: jobs.filter((j: any) => j.status === "failed").length,
-              pending: jobs.filter((j: any) => j.status === "pending").length,
-              processing: jobs.filter((j: any) => j.status === "processing").length,
-            })
-          }
+        if (!recentError && recent) {
+          setRecentJobs(recent)
+        }
+
+        // Calculate stats from all jobs
+        const { data: allJobs, error: statsError } = await supabase
+          .from('processing_jobs')
+          .select('status')
+          .eq('user_id', user.id)
+        
+        if (!statsError && allJobs) {
+          setStats({
+            total: allJobs.length,
+            completed: allJobs.filter((j) => j.status === "completed").length,
+            failed: allJobs.filter((j) => j.status === "failed").length,
+            pending: allJobs.filter((j) => j.status === "queued" || j.status === "pending").length,
+            processing: allJobs.filter((j) => j.status === "processing").length,
+          })
         }
       } catch (err) {
         console.error("Error fetching dashboard data:", err)

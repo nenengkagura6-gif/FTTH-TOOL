@@ -20,6 +20,7 @@ import { useFeatureAccess } from "@/hooks/use-feature-access"
 import { useUpgradeModal } from "@/components/upgrade-modal"
 import type { FeatureKey } from "@/lib/features"
 import { getSupabaseClient } from "@/lib/supabase/client"
+import { jobApi } from "@/lib/api"
 
 interface ToolPageProps {
   title: string
@@ -129,28 +130,37 @@ export function ToolPage({
       setStatus("processing")
       setProgress(5)
 
-      // 2. Create Job
-      const res = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool_name: featureKey || "kml_to_boq", // Fallback for testing
-          original_filename: primary.file.name,
-          original_file_url: filePath,
-          original_file_size_bytes: primary.file.size
-        })
+      // 2. Create Job in Supabase
+      const newJobId = crypto.randomUUID()
+      const { error: insertError } = await supabase.from('processing_jobs').insert({
+        id: newJobId,
+        user_id: userData.user.id,
+        tool_name: featureKey || "kml_to_boq",
+        original_filename: primary.file.name,
+        original_file_url: filePath,
+        original_file_size_bytes: primary.file.size,
+        status: 'queued'
       })
 
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || "Failed to create job")
+      if (insertError) throw insertError
+
+      setJobId(newJobId)
+
+      // 3. Trigger Backend Processing
+      const triggerRes = await jobApi.submitJob({
+        job_id: newJobId,
+        file_path: filePath,
+        original_filename: primary.file.name,
+        user_id: userData.user.id,
+        tool_name: (featureKey || "kml_to_boq") as any
+      })
+
+      if (!triggerRes.success) {
+        throw new Error(triggerRes.error?.message || "Failed to trigger backend")
       }
 
-      const { job } = await res.json()
-      setJobId(job.id)
-
-      // 3. Start Polling
-      startPolling(job.id)
+      // 4. Start Polling
+      startPolling(newJobId)
 
     } catch (err: any) {
       console.error(err)
@@ -164,10 +174,14 @@ export function ToolPage({
     
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/jobs/${id}`)
-        if (!res.ok) return
-        
-        const { job } = await res.json()
+        const supabase = getSupabaseClient()
+        const { data: job, error } = await supabase
+          .from('processing_jobs')
+          .select('*')
+          .eq('id', id)
+          .single()
+
+        if (error || !job) return
         
         if (job.status === 'processing') {
           // Artificial progress if backend doesn't send real progress
@@ -180,10 +194,10 @@ export function ToolPage({
           setStatus("success")
           setProgress(100)
           
-          if (job.result_file_url) {
-             const supabase = getSupabaseClient()
+          const finalUrl = job.output_file_url || job.result_file_url
+          if (finalUrl) {
              // Create signed url valid for 1 hour to download the result securely
-             const { data } = await supabase.storage.from('outputs').createSignedUrl(job.result_file_url, 3600)
+             const { data } = await supabase.storage.from('outputs').createSignedUrl(finalUrl, 3600)
              if (data?.signedUrl) {
                 setResultUrl(data.signedUrl)
              }

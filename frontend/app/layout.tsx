@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   description:
     "Automate KML, Database, and document workflows for FTTH and telecom engineering. Built for fiber engineers who ship faster.",
   generator: "v0.app",
-  metadataBase: new URL("https://ftth-tool.example.com"),
+  metadataBase: new URL("https://ftthtools.my.id"),
   openGraph: {
     title: "FTTH Tool — Modern Telecom Engineering Automation",
     description:
