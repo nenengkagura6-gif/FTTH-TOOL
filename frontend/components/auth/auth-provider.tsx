@@ -105,24 +105,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, [supabase, router, fetchProfile])
 
+    // Get app URL (prefer env var, fallback to window.location.origin)
+    const getAppUrl = useCallback(() => {
+        // Gunakan env var jika tersedia, fallback ke current origin
+        const envUrl = process.env.NEXT_PUBLIC_APP_URL
+        if (envUrl) {
+            return envUrl.replace(/\/$/, '') // hapus trailing slash
+        }
+        if (typeof window !== 'undefined') {
+            return window.location.origin
+        }
+        return ''
+    }, [])
+
     // Sign in with Magic Link (OTP via email)
     const signInWithMagicLink = useCallback(async (email: string) => {
+        const appUrl = getAppUrl()
         const { error } = await supabase.auth.signInWithOtp({
             email,
             options: {
-                emailRedirectTo: `${window.location.origin}/auth/callback`,
+                emailRedirectTo: `${appUrl}/auth/callback`,
             },
         })
         
         return { error }
-    }, [supabase])
+    }, [supabase, getAppUrl])
 
     // Sign in with OAuth (Google, etc.)
     const signInWithOAuth = useCallback(async (provider: Provider) => {
+        const appUrl = getAppUrl()
         const { error } = await supabase.auth.signInWithOAuth({
             provider,
             options: {
-                redirectTo: `${window.location.origin}/auth/callback`,
+                redirectTo: `${appUrl}/auth/callback`,
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',
@@ -131,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
         
         return { error }
-    }, [supabase])
+    }, [supabase, getAppUrl])
 
     // Sign out
     const signOut = useCallback(async () => {
