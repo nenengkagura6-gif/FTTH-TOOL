@@ -10,6 +10,15 @@ export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
     const next = searchParams.get('next') ?? '/dashboard'
+    const errorDescription = searchParams.get('error_description')
+    
+    // Handle OAuth errors from provider
+    if (searchParams.get('error')) {
+        console.error('OAuth error:', searchParams.get('error'), errorDescription)
+        return NextResponse.redirect(
+            `${origin}/login?error=${searchParams.get('error')}&message=${encodeURIComponent(errorDescription || '')}`
+        )
+    }
     
     if (code) {
         const supabase = await createClient()
@@ -23,7 +32,16 @@ export async function GET(request: NextRequest) {
             }
             
             console.error('Error exchanging code for session:', error)
-            return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
+            
+            // Provide specific error messages
+            let errorCode = 'auth_callback_failed'
+            if (error.message?.includes('code verifier')) {
+                errorCode = 'pkce_verifier_missing'
+            } else if (error.message?.includes('expired')) {
+                errorCode = 'code_expired'
+            }
+            
+            return NextResponse.redirect(`${origin}/login?error=${errorCode}`)
             
         } catch (error) {
             console.error('Unexpected error in auth callback:', error)

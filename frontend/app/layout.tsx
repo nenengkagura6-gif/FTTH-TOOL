@@ -2,8 +2,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import Script from "next/script"
-import { AuthProvider } from "@/components/auth/auth-provider"
-import { UpgradeModalProvider } from "@/components/upgrade-modal"
+import { AppProviders } from "@/components/app-providers"
 import "./globals.css"
 
 const geist = Geist({
@@ -54,11 +53,7 @@ export default function RootLayout({
         className="font-sans antialiased min-h-screen bg-background text-foreground"
         suppressHydrationWarning
       >
-        <AuthProvider>
-          <UpgradeModalProvider>
-            {children}
-          </UpgradeModalProvider>
-        </AuthProvider>
+        <AppProviders>{children}</AppProviders>
         <Script
           src="https://app.sandbox.midtrans.com/snap/snap.js"
           data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
