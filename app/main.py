@@ -5,7 +5,7 @@ Supports Render + Cloudflare deployment
 import os
 import io
 from typing import List, Optional
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form, BackgroundTasks
 from fastapi.responses import Response, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -169,124 +169,116 @@ class JobRequest(BaseModel):
     user_id: str
     tool_name: str
 
-@app.post("/api/v1/queue/job")
-async def queue_job(req: JobRequest):
+def _process_job_sync(
+    job_id: str,
+    file_path: str,
+    original_filename: str,
+    user_id: str,
+    tool_name: str,
+):
     """
-    Enqueue a job to be processed in the background by Celery.
-    Falls back to synchronous processing in a background thread if Celery/Redis is unavailable.
+    Process a KML job directly (no Celery/Redis needed).
+    Runs as a FastAPI BackgroundTask.
     """
-    celery_available = False
-    
+    import time
+    from datetime import datetime, timedelta, timezone
+    from supabase_client import update_job_status, download_input_file, upload_output_file
+
     try:
-        from tasks import process_kml_to_boq_task, process_apd_hpdb_task
-        
-        if req.tool_name == "kml_to_boq":
-            process_kml_to_boq_task.delay(
-                job_id=req.job_id,
-                input_file_path=req.file_path,
-                original_filename=req.original_filename,
-                user_id=req.user_id
+        update_job_status(job_id, "processing", {
+            "started_at": time.strftime('%Y-%m-%dT%H:%M:%S%z')
+        })
+        start_time = time.time()
+
+        # 1. Download file from Supabase Storage
+        print(f"[job {job_id}] Downloading input file: {file_path}")
+        file_bytes = download_input_file(file_path)
+        if not file_bytes:
+            raise Exception("Failed to download input file from storage")
+        print(f"[job {job_id}] Downloaded {len(file_bytes)} bytes")
+
+        # 2. Process the file
+        is_kmz = original_filename.lower().endswith(".kmz")
+
+        if tool_name == "kml_to_boq":
+            result = process_kml_to_excel(
+                kml_content=file_bytes,
+                filename=original_filename,
+                template_content=None,
+                is_kmz=is_kmz
             )
-            celery_available = True
-        elif req.tool_name in ("kml_to_database_hp", "kml_to_database"):
-            process_apd_hpdb_task.delay(
-                job_id=req.job_id,
-                input_file_path=req.file_path,
-                original_filename=req.original_filename,
-                user_id=req.user_id
+        elif tool_name in ("kml_to_database_hp", "kml_to_database"):
+            result = process_apd_hpdb(
+                kml_content=file_bytes,
+                filename=original_filename,
+                apd_template_content=None
             )
-            celery_available = True
         else:
-            raise HTTPException(status_code=400, detail=f"Unsupported tool: {req.tool_name}")
-            
-    except (ImportError, Exception) as e:
-        # Celery or Redis not available — fall through to sync fallback
-        if isinstance(e, HTTPException):
-            raise
-        print(f"Celery/Redis unavailable ({type(e).__name__}: {e}), using sync fallback")
-    
-    if celery_available:
-        return {"status": "queued", "job_id": req.job_id}
-    
-    # ── Synchronous fallback: process in a background thread ──
-    import threading
-    
-    def process_sync():
-        import time
+            raise Exception(f"Unsupported tool: {tool_name}")
+
+        if result.get("status") == "error":
+            raise Exception(result.get("message", "Unknown processing error"))
+
+        # 3. Upload output to Supabase Storage
+        output_filename = result["filename"]
+        print(f"[job {job_id}] Uploading output: {output_filename}")
+        output_path = upload_output_file(
+            user_id=user_id,
+            filename=output_filename,
+            file_bytes=result["content"],
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        if not output_path:
+            raise Exception("Failed to upload output file to storage")
+
+        # 4. Mark as completed
+        processing_time_ms = int((time.time() - start_time) * 1000)
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+
+        update_job_status(job_id, "completed", {
+            "output_filename": output_filename,
+            "output_file_url": output_path,
+            "processing_time_ms": processing_time_ms,
+            "completed_at": time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            "output_file_size_bytes": len(result["content"]),
+            "expires_at": expires_at
+        })
+        print(f"[job {job_id}] ✅ Completed in {processing_time_ms}ms")
+
+    except Exception as exc:
+        error_msg = str(exc)
+        print(f"[job {job_id}] ❌ Failed: {error_msg}")
         from datetime import datetime, timedelta, timezone
-        from supabase_client import update_job_status, download_input_file, upload_output_file
-        
-        try:
-            update_job_status(req.job_id, "processing", {
-                "started_at": time.strftime('%Y-%m-%dT%H:%M:%S%z')
-            })
-            start_time = time.time()
-            
-            # Download file from Supabase Storage
-            file_bytes = download_input_file(req.file_path)
-            if not file_bytes:
-                raise Exception("Failed to download input file from storage")
-            
-            is_kmz = req.original_filename.lower().endswith(".kmz")
-            
-            if req.tool_name == "kml_to_boq":
-                result = process_kml_to_excel(
-                    kml_content=file_bytes,
-                    filename=req.original_filename,
-                    template_content=None,
-                    is_kmz=is_kmz
-                )
-            elif req.tool_name in ("kml_to_database_hp", "kml_to_database"):
-                result = process_apd_hpdb(
-                    kml_content=file_bytes,
-                    filename=req.original_filename,
-                    apd_template_content=None
-                )
-            else:
-                raise Exception(f"Unsupported tool: {req.tool_name}")
-            
-            if result.get("status") == "error":
-                raise Exception(result.get("message", "Unknown processing error"))
-            
-            # Upload output
-            output_filename = result["filename"]
-            output_path = upload_output_file(
-                user_id=req.user_id,
-                filename=output_filename,
-                file_bytes=result["content"],
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-            
-            if not output_path:
-                raise Exception("Failed to upload output file to storage")
-            
-            processing_time_ms = int((time.time() - start_time) * 1000)
-            expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
-            
-            update_job_status(req.job_id, "completed", {
-                "output_filename": output_filename,
-                "output_file_url": output_path,
-                "processing_time_ms": processing_time_ms,
-                "completed_at": time.strftime('%Y-%m-%dT%H:%M:%S%z'),
-                "output_file_size_bytes": len(result["content"]),
-                "expires_at": expires_at
-            })
-            print(f"[sync-fallback] Job {req.job_id} completed successfully")
-            
-        except Exception as exc:
-            error_msg = str(exc)
-            print(f"[sync-fallback] Job {req.job_id} failed: {error_msg}")
-            expires_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
-            update_job_status(req.job_id, "failed", {
-                "error_message": error_msg,
-                "completed_at": time.strftime('%Y-%m-%dT%H:%M:%S%z'),
-                "expires_at": expires_at
-            })
-    
-    thread = threading.Thread(target=process_sync, daemon=True)
-    thread.start()
-    
-    return {"status": "queued", "job_id": req.job_id, "mode": "sync-fallback"}
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        update_job_status(job_id, "failed", {
+            "error_message": error_msg,
+            "completed_at": time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            "expires_at": expires_at
+        })
+
+
+@app.post("/api/v1/queue/job")
+async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
+    """
+    Process a KML job in the background using FastAPI BackgroundTasks.
+    No Celery/Redis required.
+    """
+    if req.tool_name not in ("kml_to_boq", "kml_to_database_hp", "kml_to_database"):
+        raise HTTPException(status_code=400, detail=f"Unsupported tool: {req.tool_name}")
+
+    # Schedule processing as a background task
+    background_tasks.add_task(
+        _process_job_sync,
+        job_id=req.job_id,
+        file_path=req.file_path,
+        original_filename=req.original_filename,
+        user_id=req.user_id,
+        tool_name=req.tool_name,
+    )
+
+    print(f"[job {req.job_id}] Queued for processing (tool={req.tool_name})")
+    return {"status": "queued", "job_id": req.job_id}
 
 
 # =========================
