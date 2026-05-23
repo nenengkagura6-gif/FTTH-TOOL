@@ -58,23 +58,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Initialize auth state
     useEffect(() => {
+        let mounted = true
+        
         const initializeAuth = async () => {
             try {
-                // Get current session
-                const { data: { session }, error } = await supabase.auth.getSession()
+                // Timeout helper
+                const withTimeout = <T,>(promise: Promise<T>, ms = 5000): Promise<T> => {
+                    return Promise.race([
+                        promise,
+                        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
+                    ])
+                }
+
+                // Get current session with timeout
+                const { data: { session }, error } = await withTimeout(supabase.auth.getSession())
                 
                 if (error) {
                     console.error('Error getting session:', error)
                 }
                 
-                if (session?.user) {
+                if (mounted && session?.user) {
                     setUser(session.user)
-                    await fetchProfile(session.user.id)
+                    // run in background without blocking
+                    fetchProfile(session.user.id).catch(console.error)
                 }
             } catch (error) {
                 console.error('Error initializing auth:', error)
             } finally {
-                setIsLoading(false)
+                if (mounted) setIsLoading(false)
             }
         }
         
@@ -84,26 +95,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
                 console.log('Auth state changed:', event)
+                if (!mounted) return
+                
+                setIsLoading(false) // always unblock UI immediately
                 
                 if (session?.user) {
                     setUser(session.user)
-                    await fetchProfile(session.user.id)
+                    // fetch profile in background without blocking
+                    fetchProfile(session.user.id).catch(console.error)
                 } else {
                     setUser(null)
                     setProfile(null)
                 }
                 
-                setIsLoading(false)
-                
-                // Refresh router on auth state changes
-                router.refresh()
+                // Only refresh router on active auth state changes, not on initial mount
+                if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+                    router.refresh()
+                }
             }
         )
         
         return () => {
+            mounted = false
             subscription.unsubscribe()
         }
-    }, [supabase, router, fetchProfile])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []) // empty dependency array to prevent infinite loops
 
     // Get app URL (prefer env var, fallback to window.location.origin)
     const getAppUrl = useCallback(() => {

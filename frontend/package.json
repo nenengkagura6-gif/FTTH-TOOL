@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "deploy:cloudflare": "npm run build && wrangler pages deploy out --project-name=NAMA_PROJECT_YANG_BENAR",
+    "deploy:cloudflare": "npm run build && wrangler deploy --assets=out",
     "start": "next start",
     "lint": "eslint ."
   },
