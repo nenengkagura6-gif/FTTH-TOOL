@@ -12,7 +12,7 @@ import uvicorn
 
 from engines.kml_engine import process_kml_to_excel
 from engines.apd_engine import process_apd_hpdb
-from engines.duplikat_engine import check_duplicates_kml
+from engines.duplikat_engine import check_duplicates_kml, DuplikatEngine
 import sentry_sdk
 
 sentry_dsn = os.environ.get("SENTRY_DSN_PYTHON")
@@ -24,10 +24,13 @@ if sentry_dsn:
     )
     print("Sentry initialized for FastAPI")
 
+APP_VERSION = "1.1.0"
+APP_BUILD_DATE = "2026-05-23"
+
 app = FastAPI(
     title="KML Processing API",
     description="API for processing KML/KMZ files - Cloud Ready",
-    version="1.0.0"
+    version=APP_VERSION
 )
 
 # CORS Configuration - Allow all origins for Cloudflare
@@ -52,7 +55,17 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": APP_VERSION}
+
+
+@app.get("/api/v1/version")
+async def get_version():
+    """Version endpoint for deployment verification."""
+    return {
+        "version": APP_VERSION,
+        "build_date": APP_BUILD_DATE,
+        "supported_tools": ["kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker"]
+    }
 
 
 # =========================
@@ -184,23 +197,39 @@ def _process_job_sync(
     from datetime import datetime, timedelta, timezone
     from supabase_client import update_job_status, download_input_file, upload_output_file
 
+    print(f"[job {job_id}] _process_job_sync started: tool_name={tool_name}, file={original_filename}")
+
     try:
         update_job_status(job_id, "processing", {
-            "started_at": time.strftime('%Y-%m-%dT%H:%M:%S%z')
+            "started_at": time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            "progress_percent": 5,
+            "progress_message": "Memulai proses..."
         })
         start_time = time.time()
 
         # 1. Download file from Supabase Storage
         print(f"[job {job_id}] Downloading input file: {file_path}")
+        update_job_status(job_id, "processing", {
+            "progress_percent": 10,
+            "progress_message": "Mengunduh file..."
+        })
         file_bytes = download_input_file(file_path)
         if not file_bytes:
             raise Exception("Failed to download input file from storage")
         print(f"[job {job_id}] Downloaded {len(file_bytes)} bytes")
 
         # 2. Process the file
+        update_job_status(job_id, "processing", {
+            "progress_percent": 25,
+            "progress_message": "Memproses KML..."
+        })
         is_kmz = original_filename.lower().endswith(".kmz")
 
         if tool_name == "kml_to_boq":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Konversi KML ke BOQ Excel..."
+            })
             result = process_kml_to_excel(
                 kml_content=file_bytes,
                 filename=original_filename,
@@ -208,25 +237,54 @@ def _process_job_sync(
                 is_kmz=is_kmz
             )
         elif tool_name in ("kml_to_database_hp", "kml_to_database"):
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Memproses APD HPDB..."
+            })
             result = process_apd_hpdb(
                 kml_content=file_bytes,
                 filename=original_filename,
                 apd_template_content=None
             )
+        elif tool_name == "kml_duplicate_checker":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Mengecek duplikat POLE/HP..."
+            })
+            engine = DuplikatEngine(max_distance_meter=3.0)
+            dup_result = engine.process_multiple([(file_bytes, original_filename)])
+            report_text = engine.generate_report(dup_result)
+            output_name = original_filename.rsplit('.', 1)[0] + "_duplikat_report.txt"
+            result = {
+                "status": dup_result.get("status", "success"),
+                "filename": output_name,
+                "content": report_text.encode("utf-8"),
+                "content_type": "text/plain; charset=utf-8"
+            }
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
+
+        update_job_status(job_id, "processing", {
+            "progress_percent": 70,
+            "progress_message": "Validasi hasil..."
+        })
 
         if result.get("status") == "error":
             raise Exception(result.get("message", "Unknown processing error"))
 
         # 3. Upload output to Supabase Storage
         output_filename = result["filename"]
+        output_content_type = result.get("content_type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         print(f"[job {job_id}] Uploading output: {output_filename}")
+        update_job_status(job_id, "processing", {
+            "progress_percent": 80,
+            "progress_message": "Mengupload hasil..."
+        })
         output_path = upload_output_file(
             user_id=user_id,
             filename=output_filename,
             file_bytes=result["content"],
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            content_type=output_content_type
         )
 
         if not output_path:
@@ -242,7 +300,9 @@ def _process_job_sync(
             "processing_time_ms": processing_time_ms,
             "completed_at": time.strftime('%Y-%m-%dT%H:%M:%S%z'),
             "output_file_size_bytes": len(result["content"]),
-            "expires_at": expires_at
+            "expires_at": expires_at,
+            "progress_percent": 100,
+            "progress_message": "Selesai!"
         })
         print(f"[job {job_id}] ✅ Completed in {processing_time_ms}ms")
 
@@ -264,8 +324,12 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
     Process a KML job in the background using FastAPI BackgroundTasks.
     No Celery/Redis required.
     """
-    if req.tool_name not in ("kml_to_boq", "kml_to_database_hp", "kml_to_database"):
-        raise HTTPException(status_code=400, detail=f"Unsupported tool: {req.tool_name}")
+    supported_tools = ("kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker")
+    print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
+    
+    if req.tool_name not in supported_tools:
+        print(f"[queue_job] ❌ Rejected: tool_name='{req.tool_name}' not in {supported_tools}")
+        raise HTTPException(status_code=400, detail=f"Unsupported tool: {req.tool_name}. Supported: {', '.join(supported_tools)}")
 
     # Schedule processing as a background task
     background_tasks.add_task(
@@ -277,7 +341,7 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
         tool_name=req.tool_name,
     )
 
-    print(f"[job {req.job_id}] Queued for processing (tool={req.tool_name})")
+    print(f"[job {req.job_id}] ✅ Queued for processing (tool={req.tool_name}, version={APP_VERSION})")
     return {"status": "queued", "job_id": req.job_id}
 
 
