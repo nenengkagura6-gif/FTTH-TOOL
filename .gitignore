@@ -43,6 +43,8 @@ uploads/
 *.txt
 !BOQ_Template.xlsx
 !APD_HPDB_.xlsx
+!requirements.txt
+!requirements-render.txt
 
 # Environment
 .env
