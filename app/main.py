@@ -327,12 +327,12 @@ def _process_job_sync(
             engine = DuplikatEngine(max_distance_meter=3.0)
             dup_result = engine.process_multiple([(file_bytes, original_filename)])
             report_text = engine.generate_report(dup_result)
-            output_name = original_filename.rsplit('.', 1)[0] + "_duplikat_report.txt"
+            output_name = original_filename.rsplit('.', 1)[0] + "_duplikat_report.csv"
             result = {
                 "status": dup_result.get("status", "success"),
                 "filename": output_name,
                 "content": report_text.encode("utf-8"),
-                "content_type": "text/plain; charset=utf-8"
+                "content_type": "text/csv"
             }
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
