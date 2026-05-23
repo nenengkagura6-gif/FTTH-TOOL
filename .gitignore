@@ -43,6 +43,7 @@ uploads/
 *.txt
 !BOQ_Template.xlsx
 !APD_HPDB_.xlsx
+!app/templates/*.xlsx
 !requirements.txt
 !requirements-render.txt
 
