@@ -59,10 +59,13 @@ export function ToolPage({
   const [isDragging, setIsDragging] = useState(false)
   const [jobId, setJobId] = useState<string | null>(null)
   const [resultUrl, setResultUrl] = useState<string | null>(null)
+  const [progressMessage, setProgressMessage] = useState<string>("")
   
   const primaryInputRef = useRef<HTMLInputElement>(null)
   const templateInputRef = useRef<HTMLInputElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pollStartTimeRef = useRef<number>(0)
+  const POLL_TIMEOUT_MS = 3 * 60 * 1000 // 3 minute timeout
 
   const { canAccess } = useFeatureAccess()
   const { showUpgradeModal } = useUpgradeModal()
@@ -171,9 +174,19 @@ export function ToolPage({
 
   const startPolling = (id: string) => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+    pollStartTimeRef.current = Date.now()
     
     pollIntervalRef.current = setInterval(async () => {
       try {
+        // Check for timeout
+        const elapsed = Date.now() - pollStartTimeRef.current
+        if (elapsed > POLL_TIMEOUT_MS) {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+          setStatus("error")
+          setErrorMsg("Processing timeout — backend tidak merespon. Silakan coba lagi atau hubungi support.")
+          return
+        }
+
         const supabase = getSupabaseClient()
         const { data: job, error } = await supabase
           .from('processing_jobs')
@@ -182,19 +195,39 @@ export function ToolPage({
           .single()
 
         if (error || !job) return
+
+        // Update progress message if backend sends one
+        if (job.progress_message) {
+          setProgressMessage(job.progress_message)
+        }
         
-        if (job.status === 'processing') {
-          // Artificial progress if backend doesn't send real progress
+        if (job.status === 'queued' || job.status === 'processing') {
+          // Use real progress from backend if available, otherwise artificial progress
           setProgress(prev => {
-             if (job.progress_percent > 0) return job.progress_percent
-             return prev < 90 ? prev + 5 : 90
+            if (job.progress_percent && job.progress_percent > 0) {
+              return job.progress_percent
+            }
+            // Artificial progress: slow increments that asymptotically approach 90%
+            if (job.status === 'queued') {
+              // Slow progress while queued (5% → 15%)
+              return prev < 15 ? prev + 1 : 15
+            }
+            // Faster progress during processing (up to 90%)
+            const remaining = 90 - prev
+            const increment = Math.max(1, Math.floor(remaining * 0.15))
+            return Math.min(prev + increment, 90)
           })
+
+          if (!progressMessage) {
+            setProgressMessage(job.status === 'queued' ? 'Antrian...' : 'Sedang diproses...')
+          }
         } else if (job.status === 'completed') {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
           setStatus("success")
           setProgress(100)
+          setProgressMessage('Selesai!')
           
-          const finalUrl = job.output_file_url || job.result_file_url
+          const finalUrl = job.output_file_url
           if (finalUrl) {
              // Create signed url valid for 1 hour to download the result securely
              const { data } = await supabase.storage.from('outputs').createSignedUrl(finalUrl, 3600)
@@ -205,12 +238,12 @@ export function ToolPage({
         } else if (job.status === 'failed') {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
           setStatus("error")
-          setErrorMsg(job.error_message || "Processing failed at backend")
+          setErrorMsg(job.error_message || "Processing gagal di backend")
         }
       } catch (err) {
         console.error("Polling error:", err)
       }
-    }, 3000)
+    }, 2000) // Poll every 2 seconds instead of 3 for faster feedback
   }
 
   const handleReset = () => {
@@ -221,6 +254,7 @@ export function ToolPage({
     setErrorMsg(null)
     setJobId(null)
     setResultUrl(null)
+    setProgressMessage("")
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
   }
 
@@ -526,7 +560,7 @@ export function ToolPage({
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span className="flex items-center gap-2">
                       <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                      {progress < 10 ? "Queued..." : "Processing..."}
+                      {progressMessage || (progress < 10 ? "Antrian..." : "Sedang diproses...")}
                     </span>
                     <span className="font-mono">{progress}%</span>
                   </div>
