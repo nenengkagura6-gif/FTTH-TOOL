@@ -238,6 +238,7 @@ class JobRequest(BaseModel):
     original_filename: str
     user_id: str
     tool_name: str
+    template_path: Optional[str] = None
 
 def _process_job_sync(
     job_id: str,
@@ -245,6 +246,7 @@ def _process_job_sync(
     original_filename: str,
     user_id: str,
     tool_name: str,
+    template_path: Optional[str] = None
 ):
     """
     Process a KML job directly (no Celery/Redis needed).
@@ -254,7 +256,7 @@ def _process_job_sync(
     import traceback
     from datetime import datetime, timedelta, timezone
 
-    print(f"[job {job_id}] _process_job_sync started: tool_name={tool_name}, file={original_filename}")
+    print(f"[job {job_id}] _process_job_sync started: tool_name={tool_name}, file={original_filename}, template={template_path}")
 
     # Import supabase functions early, fail fast if missing
     try:
@@ -281,6 +283,11 @@ def _process_job_sync(
         
         try:
             file_bytes = download_input_file(file_path)
+            
+            template_bytes = None
+            if template_path:
+                print(f"[job {job_id}] Step 1.5: Downloading template file: {template_path}")
+                template_bytes = download_input_file(template_path)
         except Exception as dl_err:
             print(f"[job {job_id}] download_input_file threw exception: {dl_err}")
             traceback.print_exc()
@@ -306,7 +313,7 @@ def _process_job_sync(
             result = process_kml_to_excel(
                 kml_content=file_bytes,
                 filename=original_filename,
-                template_content=None,
+                template_content=template_bytes,
                 is_kmz=is_kmz
             )
         elif tool_name in ("kml_to_database_hp", "kml_to_database"):
@@ -317,7 +324,7 @@ def _process_job_sync(
             result = process_apd_hpdb(
                 kml_content=file_bytes,
                 filename=original_filename,
-                apd_template_content=None
+                apd_template_content=template_bytes
             )
         elif tool_name == "kml_duplicate_checker":
             update_job_status(job_id, "processing", {

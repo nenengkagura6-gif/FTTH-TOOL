@@ -130,6 +130,20 @@ export function ToolPage({
 
       if (uploadError) throw uploadError
 
+      let templatePath: string | undefined = undefined;
+      if (secondary) {
+        const tplExt = secondary.file.name.split('.').pop()
+        const tplName = `${crypto.randomUUID()}.${tplExt}`
+        templatePath = `${userData.user.id}/${tplName}`
+        const { error: tplUploadError } = await supabase.storage
+          .from('uploads')
+          .upload(templatePath, secondary.file, {
+            cacheControl: '3600',
+            upsert: false
+          })
+        if (tplUploadError) throw tplUploadError
+      }
+
       setStatus("processing")
       setProgress(5)
 
@@ -155,7 +169,8 @@ export function ToolPage({
         file_path: filePath,
         original_filename: primary.file.name,
         user_id: userData.user.id,
-        tool_name: (featureKey || "kml_to_boq") as any
+        tool_name: (featureKey || "kml_to_boq") as any,
+        template_path: templatePath
       })
 
       if (!triggerRes.success) {
