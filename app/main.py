@@ -429,6 +429,7 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
         original_filename=req.original_filename,
         user_id=req.user_id,
         tool_name=req.tool_name,
+        template_path=req.template_path
     )
 
     print(f"[job {req.job_id}] ✅ Queued for processing (tool={req.tool_name}, version={APP_VERSION})")
