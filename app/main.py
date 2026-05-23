@@ -24,7 +24,7 @@ if sentry_dsn:
     )
     print("Sentry initialized for FastAPI")
 
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 APP_BUILD_DATE = "2026-05-23"
 
 app = FastAPI(
@@ -66,6 +66,53 @@ async def get_version():
         "build_date": APP_BUILD_DATE,
         "supported_tools": ["kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker"]
     }
+
+
+@app.get("/api/v1/debug/supabase")
+async def debug_supabase():
+    """Debug endpoint to check Supabase connectivity from backend."""
+    from supabase_client import get_supabase, SUPABASE_URL, SUPABASE_KEY
+    
+    result = {
+        "supabase_url_set": bool(SUPABASE_URL),
+        "supabase_url_preview": SUPABASE_URL[:30] + "..." if SUPABASE_URL else None,
+        "supabase_key_set": bool(SUPABASE_KEY),
+        "supabase_key_type": "service_role" if (SUPABASE_KEY and "service_role" in (SUPABASE_KEY or "")) else ("anon" if SUPABASE_KEY else None),
+        "client_created": False,
+        "storage_accessible": False,
+        "uploads_bucket": False,
+        "outputs_bucket": False,
+        "error": None
+    }
+    
+    try:
+        client = get_supabase()
+        result["client_created"] = client is not None
+        
+        if client:
+            # Test storage access
+            try:
+                buckets = client.storage.list_buckets()
+                result["storage_accessible"] = True
+                bucket_names = [b.name for b in buckets] if buckets else []
+                result["buckets"] = bucket_names
+                result["uploads_bucket"] = "uploads" in bucket_names
+                result["outputs_bucket"] = "outputs" in bucket_names
+            except Exception as storage_err:
+                result["storage_error"] = str(storage_err)
+                
+            # Test DB access
+            try:
+                test = client.table("processing_jobs").select("id").limit(1).execute()
+                result["db_accessible"] = True
+                result["db_test_rows"] = len(test.data) if test.data else 0
+            except Exception as db_err:
+                result["db_error"] = str(db_err)
+                
+    except Exception as e:
+        result["error"] = str(e)
+    
+    return result
 
 
 # =========================
@@ -194,10 +241,18 @@ def _process_job_sync(
     Runs as a FastAPI BackgroundTask.
     """
     import time
+    import traceback
     from datetime import datetime, timedelta, timezone
-    from supabase_client import update_job_status, download_input_file, upload_output_file
 
     print(f"[job {job_id}] _process_job_sync started: tool_name={tool_name}, file={original_filename}")
+
+    # Import supabase functions early, fail fast if missing
+    try:
+        from supabase_client import update_job_status, download_input_file, upload_output_file
+    except Exception as import_err:
+        print(f"[job {job_id}] ❌ FATAL: Cannot import supabase_client: {import_err}")
+        traceback.print_exc()
+        return
 
     try:
         update_job_status(job_id, "processing", {
@@ -208,17 +263,25 @@ def _process_job_sync(
         start_time = time.time()
 
         # 1. Download file from Supabase Storage
-        print(f"[job {job_id}] Downloading input file: {file_path}")
+        print(f"[job {job_id}] Step 1: Downloading input file: {file_path}")
         update_job_status(job_id, "processing", {
             "progress_percent": 10,
             "progress_message": "Mengunduh file..."
         })
-        file_bytes = download_input_file(file_path)
+        
+        try:
+            file_bytes = download_input_file(file_path)
+        except Exception as dl_err:
+            print(f"[job {job_id}] download_input_file threw exception: {dl_err}")
+            traceback.print_exc()
+            raise Exception(f"Download error: {dl_err}")
+            
         if not file_bytes:
-            raise Exception("Failed to download input file from storage")
+            raise Exception(f"Failed to download input file from storage: {file_path}")
         print(f"[job {job_id}] Downloaded {len(file_bytes)} bytes")
 
         # 2. Process the file
+        print(f"[job {job_id}] Step 2: Processing with tool={tool_name}")
         update_job_status(job_id, "processing", {
             "progress_percent": 25,
             "progress_message": "Memproses KML..."
@@ -264,6 +327,7 @@ def _process_job_sync(
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
 
+        print(f"[job {job_id}] Step 2 done. Result status: {result.get('status')}")
         update_job_status(job_id, "processing", {
             "progress_percent": 70,
             "progress_message": "Validasi hasil..."
@@ -275,7 +339,7 @@ def _process_job_sync(
         # 3. Upload output to Supabase Storage
         output_filename = result["filename"]
         output_content_type = result.get("content_type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        print(f"[job {job_id}] Uploading output: {output_filename}")
+        print(f"[job {job_id}] Step 3: Uploading output: {output_filename}")
         update_job_status(job_id, "processing", {
             "progress_percent": 80,
             "progress_message": "Mengupload hasil..."
@@ -309,13 +373,22 @@ def _process_job_sync(
     except Exception as exc:
         error_msg = str(exc)
         print(f"[job {job_id}] ❌ Failed: {error_msg}")
-        from datetime import datetime, timedelta, timezone
-        expires_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
-        update_job_status(job_id, "failed", {
-            "error_message": error_msg,
-            "completed_at": time.strftime('%Y-%m-%dT%H:%M:%S%z'),
-            "expires_at": expires_at
-        })
+        traceback.print_exc()
+        
+        # Robust error update — wrapped in its own try/catch so it never silently fails
+        try:
+            expires_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+            update_result = update_job_status(job_id, "failed", {
+                "error_message": error_msg[:500],  # Truncate to avoid DB issues
+                "completed_at": time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                "expires_at": expires_at,
+                "progress_percent": 0,
+                "progress_message": f"Error: {error_msg[:100]}"
+            })
+            print(f"[job {job_id}] Error status update result: {update_result}")
+        except Exception as update_err:
+            print(f"[job {job_id}] ❌❌ CRITICAL: Failed to update job status to 'failed': {update_err}")
+            traceback.print_exc()
 
 
 @app.post("/api/v1/queue/job")
