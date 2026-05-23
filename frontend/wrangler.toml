@@ -5,10 +5,6 @@
 name = "ftth-tool"
 compatibility_date = "2024-01-01"
 
-# Build settings
-[build]
-command = "npm run build"
-output_directory = "out"
 
 # Environment variables (production)
 [env.production]
