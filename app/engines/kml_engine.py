@@ -24,7 +24,8 @@ class KMLEngine:
         if template_content:
             self.template_content = template_content
         else:
-            default_template = Path("app/templates/default_boq.xlsx")
+            base_dir = Path(__file__).resolve().parent.parent
+            default_template = base_dir / "templates" / "default_boq.xlsx"
             
             if default_template.exists():
                 with open(default_template, "rb") as f:

@@ -45,7 +45,8 @@ class APDEngine:
         if apd_template_content:
             self.apd_template_content = apd_template_content
         else:
-            default_template = Path("app/templates/default_apd.xlsx")
+            base_dir = Path(__file__).resolve().parent.parent
+            default_template = base_dir / "templates" / "default_apd.xlsx"
             
             if default_template.exists():
                 with open(default_template, "rb") as f:
@@ -650,17 +651,20 @@ class APDEngine:
         excel_base = os.path.splitext(excel_name)[0]
         
         excel_base = excel_base.replace("_with_pole", "")
-        prefix = "APD_HPDB_"
         
-        if excel_base.startswith(prefix):
-            after_prefix = excel_base[len(prefix):]
-        else:
-            after_prefix = excel_base
+        # Remove old prefixes if they exist in the original filename
+        for old_prefix in ["APD_HPDB_", "HPDB_"]:
+            if excel_base.startswith(old_prefix):
+                excel_base = excel_base[len(old_prefix):]
         
-        parts = after_prefix.split(" ", 1)
-        lokasi_nama_final = parts[1].strip() if len(parts) > 1 else after_prefix.strip()
+        # New prefix format requested by user
+        prefix = "HPDB_-"
         
-        return f"{prefix}{lokasi_nama_final}.xlsx"
+        parts = excel_base.split(" ", 1)
+        lokasi_nama_final = parts[1].strip() if len(parts) > 1 else excel_base.strip()
+        
+        # Ensure there's a space after the prefix
+        return f"{prefix} {lokasi_nama_final}.xlsx"
 
 
 def process_apd_hpdb(
