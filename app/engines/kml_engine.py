@@ -130,9 +130,16 @@ class KMLEngine:
     
     def _process_fdt_column(self, col: str, all_folders: List) -> None:
         """Process Distribution Cable for an FDT column."""
+        processed_pms = set()  # Track processed Placemarks to avoid double counting
+        
         for sub in all_folders:
             if "distribution" in get_folder_name(sub).lower():
                 for pm in sub.getElementsByTagName("Placemark"):
+                    pm_id = id(pm)
+                    if pm_id in processed_pms:
+                        continue
+                    processed_pms.add(pm_id)
+                    
                     nm_nodes = pm.getElementsByTagName("name")
                     pm_name = (nm_nodes[0].firstChild.nodeValue if nm_nodes and nm_nodes[0].firstChild else "").upper()
                     length = self._calculate_length_from_placemark(pm)
@@ -142,10 +149,14 @@ class KMLEngine:
             
             # Process Sling Wire
             if "sling" in get_folder_name(sub).lower():
-                total_sling_length = sum(
-                    self._calculate_length_from_placemark(pm)
-                    for pm in sub.getElementsByTagName("Placemark")
-                )
+                sling_pms = set()
+                total_sling_length = 0
+                for pm in sub.getElementsByTagName("Placemark"):
+                    pm_id = id(pm)
+                    if pm_id in sling_pms:
+                        continue
+                    sling_pms.add(pm_id)
+                    total_sling_length += self._calculate_length_from_placemark(pm)
                 self.sheet_ae[f"{col}15"] = round(total_sling_length)
     
     def _process_cable_entry(self, col: str, pm_name: str, length: float) -> None:
@@ -192,12 +203,17 @@ class KMLEngine:
             "existing pole emr 7-4": "C61",
         }
         folder_totals = {key: 0 for key in target_counts}
+        processed_pms = {key: set() for key in target_counts}
         
         for folder in all_folders:
             folder_name = get_folder_name(folder).strip().lower()
             for target_name in target_counts:
                 if folder_name == target_name:
-                    folder_totals[target_name] += len(folder.getElementsByTagName("Placemark"))
+                    for pm in folder.getElementsByTagName("Placemark"):
+                        pm_id = id(pm)
+                        if pm_id not in processed_pms[target_name]:
+                            processed_pms[target_name].add(pm_id)
+                            folder_totals[target_name] += 1
         
         for name, total in folder_totals.items():
             self.sheet_ae[target_counts[name]] = total
@@ -205,9 +221,14 @@ class KMLEngine:
     def _process_hp_cover(self, all_folders: List) -> None:
         """Process HP Cover count."""
         hp_cover_total = 0
+        processed_pms = set()
         for folder in all_folders:
             if "hp cover" in get_folder_name(folder).lower():
-                hp_cover_total += len(folder.getElementsByTagName("Placemark"))
+                for pm in folder.getElementsByTagName("Placemark"):
+                    pm_id = id(pm)
+                    if pm_id not in processed_pms:
+                        processed_pms.add(pm_id)
+                        hp_cover_total += 1
         
         self.sheet_bo["O5"] = hp_cover_total
         self.sheet_bo["O3"] = clean_project_name(self.input_filename)

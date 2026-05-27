@@ -131,13 +131,13 @@ export function ToolPage({
       if (uploadError) throw uploadError
 
       let templatePath: string | undefined = undefined;
-      if (secondary) {
-        const tplExt = secondary.file.name.split('.').pop()
+      if (template) {
+        const tplExt = template.file.name.split('.').pop()
         const tplName = `${crypto.randomUUID()}.${tplExt}`
         templatePath = `${userData.user.id}/${tplName}`
         const { error: tplUploadError } = await supabase.storage
           .from('uploads')
-          .upload(templatePath, secondary.file, {
+          .upload(templatePath, template.file, {
             cacheControl: '3600',
             upsert: false
           })
