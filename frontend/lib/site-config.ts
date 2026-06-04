@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   Layers,
   Globe,
+  DraftingCompass,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -106,6 +107,12 @@ export const dashboardMenu: DashboardMenuItem[] = [
     href: "/dashboard/shp-kml",
     icon: Globe,
     description: "Convert ESRI Shapefile ZIP back to KML/KMZ",
+  },
+  {
+    title: "KML to AutoCAD (DXF)",
+    href: "/dashboard/kml-dxf",
+    icon: DraftingCompass,
+    description: "Convert KML/KMZ vector designs to AutoCAD DXF format",
   },
   {
     title: "Admin Panel",
