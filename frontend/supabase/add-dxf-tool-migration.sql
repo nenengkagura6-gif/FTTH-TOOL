@@ -19,6 +19,22 @@ ALTER TABLE public.processing_jobs ADD CONSTRAINT processing_jobs_tool_name_chec
     'kml_to_dxf'
 ));
 
+-- 2. Update allowed mime types for 'outputs' bucket to allow .dxf files
+-- This is a fallback to support native DXF mime-types if needed.
+UPDATE storage.buckets
+SET allowed_mime_types = ARRAY[
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv',
+    'application/zip',
+    'application/pdf',
+    'application/vnd.google-earth.kml+xml',
+    'application/vnd.google-earth.kmz',
+    'application/octet-stream',
+    'image/vnd.dxf',
+    'application/dxf'
+]
+WHERE id = 'outputs';
+
 -- =========================================================================
 -- Done! Migration completed.
 -- =========================================================================

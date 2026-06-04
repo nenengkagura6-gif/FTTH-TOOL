@@ -25,7 +25,9 @@ VALUES
     'application/pdf',
     'application/vnd.google-earth.kml+xml',
     'application/vnd.google-earth.kmz',
-    'application/octet-stream'
+    'application/octet-stream',
+    'image/vnd.dxf',
+    'application/dxf'
   ])
 ON CONFLICT (id) DO NOTHING;
 

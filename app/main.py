@@ -345,7 +345,7 @@ def _process_job_sync(
                 "status": "success",
                 "filename": output_name,
                 "content": dxf_content,
-                "content_type": "image/vnd.dxf"
+                "content_type": "application/octet-stream"
             }
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
