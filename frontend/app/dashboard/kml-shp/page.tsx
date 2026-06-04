@@ -15,6 +15,7 @@ export default function KmlShpPage() {
       ]}
       primaryAccept=".kml,.kmz"
       supportsExcelTemplate={false}
+      toolName="kml_to_shp"
     />
   )
 }

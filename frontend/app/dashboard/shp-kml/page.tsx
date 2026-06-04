@@ -14,6 +14,7 @@ export default function ShpKmlPage() {
       ]}
       primaryAccept=".zip"
       supportsExcelTemplate={false}
+      toolName="shp_to_kml"
     />
   )
 }
