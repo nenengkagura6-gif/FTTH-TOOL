@@ -55,7 +55,7 @@ def parse_kml_content(content: bytes, is_kmz: bool = False) -> minidom.Document:
 
 def parse_kml_lxml(content: bytes, is_kmz: bool = False) -> etree.ElementTree:
     """Parse KML content using lxml."""
-    parser = etree.XMLParser(recover=True)
+    parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
     
     if is_kmz:
         with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:

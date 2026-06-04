@@ -28,7 +28,7 @@ class DuplikatEngine:
     
     def parse_kml(self, content: bytes, filename: str = "input.kml") -> List[Dict]:
         """Parse KML content and extract POLE/HP points."""
-        parser = etree.XMLParser(recover=True)
+        parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
         tree = etree.parse(io.BytesIO(content), parser)
         root = tree.getroot()
         

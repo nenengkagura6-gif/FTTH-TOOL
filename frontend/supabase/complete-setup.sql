@@ -269,12 +269,15 @@ ALTER TABLE processing_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usage_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE system_config ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE profiles FORCE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions FORCE ROW LEVEL SECURITY;
 ALTER TABLE processing_jobs FORCE ROW LEVEL SECURITY;
 ALTER TABLE usage_logs FORCE ROW LEVEL SECURITY;
 ALTER TABLE api_keys FORCE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs FORCE ROW LEVEL SECURITY;
+ALTER TABLE system_config FORCE ROW LEVEL SECURITY;
 
 -- Profiles policies
 CREATE POLICY "Users can read own profile" ON profiles FOR SELECT USING (auth.uid() = id);
@@ -305,6 +308,10 @@ CREATE POLICY "Service role can read all API keys" ON api_keys FOR SELECT TO ser
 -- Audit logs policies
 CREATE POLICY "Users can read own audit logs" ON audit_logs FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Service role can write audit logs" ON audit_logs FOR INSERT TO service_role WITH CHECK (true);
+
+-- System config policies
+CREATE POLICY "Allow public read access to system_config" ON system_config FOR SELECT USING (true);
+CREATE POLICY "Service role can manage all system_config" ON system_config FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- ==================================================
 -- 10. AUTH TRIGGERS (auto profile creation)
@@ -381,19 +388,22 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 11. ANALYTICS VIEWS
 -- ==================================================
 
-CREATE OR REPLACE VIEW daily_usage_summary AS
+CREATE OR REPLACE VIEW daily_usage_summary 
+WITH (security_invoker = on) AS
 SELECT DATE(created_at) as date, user_id, COUNT(*) as total_requests,
     SUM(processing_time_ms) as total_processing_time_ms, COUNT(DISTINCT endpoint) as unique_endpoints
 FROM usage_logs WHERE created_at > NOW() - INTERVAL '30 days' GROUP BY DATE(created_at), user_id;
 
-CREATE OR REPLACE VIEW job_success_rate AS
+CREATE OR REPLACE VIEW job_success_rate 
+WITH (security_invoker = on) AS
 SELECT user_id, tool_name, COUNT(*) as total_jobs,
     COUNT(*) FILTER (WHERE status = 'completed') as successful_jobs,
     COUNT(*) FILTER (WHERE status = 'failed') as failed_jobs,
     ROUND(COUNT(*) FILTER (WHERE status = 'completed')::numeric / NULLIF(COUNT(*), 0)::numeric * 100, 2) as success_rate_percent
 FROM processing_jobs WHERE created_at > NOW() - INTERVAL '30 days' GROUP BY user_id, tool_name;
 
-CREATE OR REPLACE VIEW active_subscriptions_summary AS
+CREATE OR REPLACE VIEW active_subscriptions_summary 
+WITH (security_invoker = on) AS
 SELECT plan, status, COUNT(*) as count, SUM(price_cents) as total_revenue_cents
 FROM subscriptions WHERE status = 'active' GROUP BY plan, status;
 
