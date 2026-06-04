@@ -356,6 +356,7 @@ def convert_kml_to_dxf(content: bytes, is_kmz: bool = False) -> bytes:
     Convert KML points, lines, and polygons into an AutoCAD DXF file with UTM projected coordinates.
     """
     import math
+    import ezdxf
     parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
     if is_kmz:
         with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:
@@ -446,27 +447,11 @@ def convert_kml_to_dxf(content: bytes, is_kmz: bool = False) -> bytes:
             
         return easting, northing
 
-    # Sanitize layer names and extract unique ones
-    layers = set()
-    for f in features:
-        sanitized = sanitize_dxf_name(f["layer"])
-        f["layer"] = sanitized
-        layers.add(sanitized)
-        
-    # Start DXF building
-    dxf_lines = []
+    # Create new DXF document (R2010 format)
+    doc = ezdxf.new('R2010')
+    msp = doc.modelspace()
     
-    def add_val(code, val):
-        dxf_lines.append(f"{code:>3}")
-        dxf_lines.append(str(val))
-        
-    # 1. Write TABLES section for layer colors
-    add_val(0, "SECTION")
-    add_val(2, "TABLES")
-    add_val(0, "TABLE")
-    add_val(2, "LAYER")
-    add_val(70, len(layers))
-    
+    # Layer colors
     color_map = {
         "tiang": 2,      # Yellow
         "pole": 2,       # Yellow
@@ -481,28 +466,26 @@ def convert_kml_to_dxf(content: bytes, is_kmz: bool = False) -> bytes:
         "default": 7     # White
     }
     
-    for l_name in sorted(layers):
-        l_lower = l_name.lower()
-        color = 7
-        for key, val in color_map.items():
-            if key in l_lower:
-                color = val
-                break
-        add_val(0, "LAYER")
-        add_val(2, l_name)
-        add_val(70, 0)
-        add_val(62, color)
-        add_val(6, "Continuous")
-        
-    add_val(0, "ENDTAB")
-    add_val(0, "ENDSEC")
+    # Track created layers
+    created_layers = set()
     
-    # 2. Write ENTITIES section
-    add_val(0, "SECTION")
-    add_val(2, "ENTITIES")
-    
+    def get_or_create_layer(layer_name):
+        sanitized = sanitize_dxf_name(layer_name)
+        if sanitized not in created_layers:
+            # Determine color
+            l_lower = sanitized.lower()
+            color = 7
+            for key, val in color_map.items():
+                if key in l_lower:
+                    color = val
+                    break
+            # Add layer to document
+            doc.layers.new(name=sanitized, dxfattribs={'color': color})
+            created_layers.add(sanitized)
+        return sanitized
+
     for f in features:
-        layer = f["layer"]
+        layer = get_or_create_layer(f["layer"])
         name = f["name"]
         ftype = f["type"]
         
@@ -510,63 +493,33 @@ def convert_kml_to_dxf(content: bytes, is_kmz: bool = False) -> bytes:
             lon, lat = f["coords"]
             x, y = project_coords(lon, lat)
             
-            # Write a point circle (Radius = 1 meter)
-            add_val(0, "CIRCLE")
-            add_val(8, layer)
-            add_val(10, x)
-            add_val(20, y)
-            add_val(30, 0.0)
-            add_val(40, 1.0)
-            
-            # Write point node (standard POINT)
-            add_val(0, "POINT")
-            add_val(8, layer)
-            add_val(10, x)
-            add_val(20, y)
-            add_val(30, 0.0)
-            
-            # Write text label next to the circle
-            add_val(0, "TEXT")
-            add_val(8, layer)
-            add_val(10, x + 1.2)
-            add_val(20, y + 1.2)
-            add_val(30, 0.0)
-            add_val(40, 1.5) # Height in meters
-            add_val(1, name)
+            # 1. Circle node (Radius = 1 meter)
+            msp.add_circle(center=(x, y), radius=1.0, dxfattribs={'layer': layer})
+            # 2. Point entity
+            msp.add_point(location=(x, y), dxfattribs={'layer': layer})
+            # 3. Label text next to it
+            msp.add_text(text=name, dxfattribs={'layer': layer, 'height': 1.5}).set_placement((x + 1.2, y + 1.2))
             
         elif ftype in ("line", "polygon"):
-            # Project all vertices
             projected = [project_coords(lon, lat) for lon, lat in f["coords"]]
             is_closed = ftype == "polygon"
             
             # Write polyline
-            add_val(0, "LWPOLYLINE")
-            add_val(8, layer)
-            add_val(90, len(projected))
-            add_val(70, 1 if is_closed else 0)
-            add_val(43, 0.0)
-            
-            for x, y in projected:
-                add_val(10, x)
-                add_val(20, y)
+            poly = msp.add_lwpolyline(points=projected, dxfattribs={'layer': layer})
+            if is_closed:
+                poly.closed = True
                 
-            # Write line name at the midpoint of the line for identification
+            # Write line name at the midpoint of the line
             if name and name != "No Name" and len(projected) >= 2:
                 mid_idx = len(projected) // 2
                 x_mid = (projected[mid_idx-1][0] + projected[mid_idx][0]) / 2.0
                 y_mid = (projected[mid_idx-1][1] + projected[mid_idx][1]) / 2.0
-                add_val(0, "TEXT")
-                add_val(8, layer)
-                add_val(10, x_mid + 1.0)
-                add_val(20, y_mid + 1.0)
-                add_val(30, 0.0)
-                add_val(40, 1.5)
-                add_val(1, name)
+                msp.add_text(text=name, dxfattribs={'layer': layer, 'height': 1.5}).set_placement((x_mid + 1.0, y_mid + 1.0))
                 
-    add_val(0, "ENDSEC")
-    add_val(0, "EOF")
-    
-    return "\n".join(dxf_lines).encode("utf-8")
+    # Save to string buffer
+    dxf_string_io = io.StringIO()
+    doc.write(dxf_string_io)
+    return dxf_string_io.getvalue().encode("utf-8")
 
 def sanitize_dxf_name(name: str) -> str:
     # AutoCAD layer names must not contain forbidden characters
