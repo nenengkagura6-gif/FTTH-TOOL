@@ -60,6 +60,10 @@ const toolLabels: Record<string, string> = {
   kml_duplicate_checker: "Duplicate Checker",
   otdr_analyzer: "OTDR Analyzer",
   opm_calculator: "OPM Calculator",
+  kml_to_csv: "KML to CSV",
+  kml_to_shp: "KML to Shapefile",
+  shp_to_kml: "Shapefile to KML",
+  kml_to_dxf: "KML to AutoCAD (DXF)",
 }
 
 const statusConfig: Record<string, { label: string; icon: typeof CheckCircle2; color: string; bg: string }> = {

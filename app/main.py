@@ -333,6 +333,20 @@ def _process_job_sync(
                 "content": kml_content,
                 "content_type": "application/vnd.google-earth.kml+xml"
             }
+        elif tool_name == "kml_to_dxf":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Mengkonversi KML ke AutoCAD (DXF)..."
+            })
+            from engines.conversion_engine import convert_kml_to_dxf
+            dxf_content = convert_kml_to_dxf(file_bytes, is_kmz)
+            output_name = original_filename.rsplit('.', 1)[0] + ".dxf"
+            result = {
+                "status": "success",
+                "filename": output_name,
+                "content": dxf_content,
+                "content_type": "image/vnd.dxf"
+            }
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
 
@@ -408,7 +422,7 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
     """
     supported_tools = (
         "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
-        "kml_to_csv", "kml_to_shp", "shp_to_kml"
+        "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf"
     )
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     

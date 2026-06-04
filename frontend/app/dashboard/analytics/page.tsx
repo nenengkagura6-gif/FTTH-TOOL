@@ -21,6 +21,10 @@ const toolLabels: Record<string, string> = {
   kml_duplicate_checker: "Dup Checker",
   otdr_analyzer: "OTDR",
   opm_calculator: "OPM",
+  kml_to_csv: "KML to CSV",
+  kml_to_shp: "KML to SHP",
+  shp_to_kml: "SHP to KML",
+  kml_to_dxf: "KML to DXF",
 }
 
 const toolColors: Record<string, string> = {
@@ -29,6 +33,10 @@ const toolColors: Record<string, string> = {
   kml_duplicate_checker: "bg-emerald-500",
   otdr_analyzer: "bg-amber-500",
   opm_calculator: "bg-rose-500",
+  kml_to_csv: "bg-indigo-500",
+  kml_to_shp: "bg-blue-500",
+  shp_to_kml: "bg-teal-500",
+  kml_to_dxf: "bg-orange-500",
 }
 
 interface AnalyticsData {
