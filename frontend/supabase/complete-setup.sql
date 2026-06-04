@@ -71,7 +71,8 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
     user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     tool_name TEXT NOT NULL CHECK (tool_name IN (
         'kml_to_boq', 'kml_to_database', 'kml_duplicate_checker',
-        'otdr_analyzer', 'opm_calculator'
+        'otdr_analyzer', 'opm_calculator',
+        'kml_to_csv', 'kml_to_shp', 'shp_to_kml'
     )),
     job_type TEXT NOT NULL DEFAULT 'single',
     original_filename TEXT NOT NULL,

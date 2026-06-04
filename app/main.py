@@ -291,6 +291,48 @@ def _process_job_sync(
                 "content": report_text.encode("utf-8"),
                 "content_type": "text/csv"
             }
+        elif tool_name == "kml_to_csv":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Mengkonversi KML ke CSV..."
+            })
+            from engines.conversion_engine import convert_kml_to_csv
+            csv_content = convert_kml_to_csv(file_bytes, is_kmz)
+            output_name = original_filename.rsplit('.', 1)[0] + ".csv"
+            result = {
+                "status": "success",
+                "filename": output_name,
+                "content": csv_content,
+                "content_type": "text/csv"
+            }
+        elif tool_name == "kml_to_shp":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Mengkonversi KML ke Shapefile..."
+            })
+            from engines.conversion_engine import convert_kml_to_shp
+            shp_zip_content = convert_kml_to_shp(file_bytes, is_kmz)
+            output_name = original_filename.rsplit('.', 1)[0] + "_shp.zip"
+            result = {
+                "status": "success",
+                "filename": output_name,
+                "content": shp_zip_content,
+                "content_type": "application/zip"
+            }
+        elif tool_name == "shp_to_kml":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Mengkonversi Shapefile ke KML..."
+            })
+            from engines.conversion_engine import convert_shp_to_kml
+            kml_content = convert_shp_to_kml(file_bytes)
+            output_name = original_filename.rsplit('.', 1)[0] + "_converted.kml"
+            result = {
+                "status": "success",
+                "filename": output_name,
+                "content": kml_content,
+                "content_type": "application/vnd.google-earth.kml+xml"
+            }
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
 
@@ -364,7 +406,10 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
     Process a KML job in the background using FastAPI BackgroundTasks.
     No Celery/Redis required.
     """
-    supported_tools = ("kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker")
+    supported_tools = (
+        "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
+        "kml_to_csv", "kml_to_shp", "shp_to_kml"
+    )
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     
     if req.tool_name not in supported_tools:

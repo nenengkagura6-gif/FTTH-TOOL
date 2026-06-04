@@ -20,3 +20,6 @@ supabase>=2.3.0
 
 # Observability
 sentry-sdk[fastapi,celery]>=1.39.0
+
+# GIS/Shapefile Processing
+pyshp==2.3.1

@@ -7,6 +7,9 @@ import {
   BarChart3,
   Shield,
   Key,
+  FileSpreadsheet,
+  Layers,
+  Globe,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -85,6 +88,24 @@ export const dashboardMenu: DashboardMenuItem[] = [
     icon: ShieldCheck,
     description: "Detect duplicate HP and pole points",
     featureKey: "kml_duplicate_checker",
+  },
+  {
+    title: "KML to CSV",
+    href: "/dashboard/kml-csv",
+    icon: FileSpreadsheet,
+    description: "Extract KML Point placemarks to a CSV file",
+  },
+  {
+    title: "KML to Shapefile",
+    href: "/dashboard/kml-shp",
+    icon: Layers,
+    description: "Convert KML/KMZ network layers to ESRI Shapefile",
+  },
+  {
+    title: "Shapefile to KML",
+    href: "/dashboard/shp-kml",
+    icon: Globe,
+    description: "Convert ESRI Shapefile ZIP back to KML/KMZ",
   },
   {
     title: "Admin Panel",
