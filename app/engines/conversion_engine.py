@@ -716,14 +716,23 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
     """
     import ezdxf
     import io
+    import os
+    import tempfile
     import math
     
-    try:
-        dxf_text = content.decode("utf-8")
-    except UnicodeDecodeError:
-        dxf_text = content.decode("cp1252", errors="ignore")
+    # Save DXF content to a temporary file to let ezdxf auto-detect ASCII/Binary encoding
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
+        tmp.write(content)
+        temp_path = tmp.name
         
-    doc = ezdxf.read(io.StringIO(dxf_text))
+    try:
+        doc = ezdxf.readfile(temp_path)
+    finally:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+            
     msp = doc.modelspace()
     
     points = []
