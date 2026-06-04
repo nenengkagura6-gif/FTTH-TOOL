@@ -14,6 +14,8 @@ VALUES
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-excel',
     'text/csv',
+    'application/zip',
+    'application/x-zip-compressed',
     'application/octet-stream'
   ]),
   ('outputs', 'outputs', false, 104857600, ARRAY[
