@@ -14,6 +14,7 @@ export default function KmlCsvPage() {
       ]}
       primaryAccept=".kml,.kmz"
       supportsExcelTemplate={false}
+      toolName="kml_to_csv"
     />
   )
 }

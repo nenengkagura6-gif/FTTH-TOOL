@@ -33,6 +33,8 @@ interface ToolPageProps {
   supportsExcelTemplate?: boolean
   /** Feature key for plan gating */
   featureKey?: FeatureKey
+  /** Explicit tool name to process */
+  toolName?: string
 }
 
 type Status = "idle" | "uploading" | "processing" | "success" | "error"
@@ -50,6 +52,7 @@ export function ToolPage({
   primaryAccept = ".kml,.kmz",
   supportsExcelTemplate = true,
   featureKey,
+  toolName,
 }: ToolPageProps) {
   const [primary, setPrimary] = useState<UploadFile | null>(null)
   const [template, setTemplate] = useState<UploadFile | null>(null)
@@ -147,12 +150,14 @@ export function ToolPage({
       setStatus("processing")
       setProgress(5)
 
+      const resolvedToolName = toolName || featureKey || "kml_to_boq"
+
       // 2. Create Job in Supabase
       const newJobId = crypto.randomUUID()
       const { error: insertError } = await supabase.from('processing_jobs').insert({
         id: newJobId,
         user_id: userData.user.id,
-        tool_name: featureKey || "kml_to_boq",
+        tool_name: resolvedToolName,
         original_filename: primary.file.name,
         original_file_url: filePath,
         original_file_size_bytes: primary.file.size,
@@ -169,7 +174,7 @@ export function ToolPage({
         file_path: filePath,
         original_filename: primary.file.name,
         user_id: userData.user.id,
-        tool_name: (featureKey || "kml_to_boq") as any,
+        tool_name: resolvedToolName as any,
         template_path: templatePath
       })
 
