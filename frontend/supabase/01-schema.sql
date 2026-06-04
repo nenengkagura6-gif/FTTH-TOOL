@@ -102,7 +102,8 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
         'kml_to_csv',
         'kml_to_shp',
         'shp_to_kml',
-        'kml_to_dxf'
+        'kml_to_dxf',
+        'dxf_to_kml'
     )),
     job_type TEXT NOT NULL DEFAULT 'single',
     

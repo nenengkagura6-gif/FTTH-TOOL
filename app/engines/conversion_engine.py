@@ -643,3 +643,276 @@ def extract_features_with_folders(element, current_folder="Default") -> list:
             features.extend(extract_features_with_folders(child, current_folder))
         return features
 
+def utm_to_latlon(easting: float, northing: float, zone_number: int, is_southern: bool) -> tuple:
+    """
+    Convert flat metric UTM coordinates (Easting/Northing) back to WGS84 geographic degrees (Lon/Lat).
+    """
+    import math
+    
+    # WGS84 ellipsoid constants
+    a = 6378137.0
+    f = 1.0 / 298.257223563
+    b = a * (1.0 - f)
+    e = math.sqrt(1.0 - (b**2 / a**2))
+    e2 = e**2
+    e4 = e2**2
+    e6 = e2**3
+    
+    k0 = 0.9996
+    
+    # Adjust for southern hemisphere false-northing
+    if is_southern:
+        northing -= 10000000.0
+        
+    x = easting - 500000.0
+    y = northing
+    
+    # Central meridian of the UTM Zone
+    lon_origin = (zone_number - 1) * 6 - 180 + 3
+    lon_origin_rad = math.radians(lon_origin)
+    
+    # Footpoint latitude calculation
+    M = y / k0
+    mu = M / (a * (1.0 - e2 / 4.0 - 3.0 * e4 / 64.0 - 5.0 * e6 / 256.0))
+    
+    e1 = (1.0 - math.sqrt(1.0 - e2)) / (1.0 + math.sqrt(1.0 - e2))
+    e12 = e1**2
+    e13 = e1**3
+    e14 = e1**4
+    
+    phi1 = (
+        mu
+        + (3.0 * e1 / 2.0 - 27.0 * e13 / 32.0) * math.sin(2.0 * mu)
+        + (21.0 * e12 / 16.0 - 55.0 * e14 / 32.0) * math.sin(4.0 * mu)
+        + (151.0 * e13 / 96.0) * math.sin(6.0 * mu)
+        + (1097.0 * e14 / 512.0) * math.sin(8.0 * mu)
+    )
+    
+    C1 = (e2 / (1.0 - e2)) * math.cos(phi1)**2
+    T1 = math.tan(phi1)**2
+    N1 = a / math.sqrt(1.0 - e2 * math.sin(phi1)**2)
+    R1 = a * (1.0 - e2) / (1.0 - e2 * math.sin(phi1)**2)**1.5
+    D = x / (N1 * k0)
+    
+    # Latitude
+    lat = phi1 - (N1 * math.tan(phi1) / R1) * (
+        D**2 / 2.0
+        - (5.0 + 3.0 * T1 + 10.0 * C1 - 4.0 * C1**2 - 9.0 * (e2 / (1.0 - e2))) * D**4 / 24.0
+        + (61.0 + 90.0 * T1 + 298.0 * C1 + 45.0 * T1**2 - 252.0 * (e2 / (1.0 - e2)) - 3.0 * C1**2) * D**6 / 720.0
+    )
+    
+    # Longitude
+    lon = lon_origin_rad + (
+        D
+        - (1.0 + 2.0 * T1 + C1) * D**3 / 6.0
+        + (5.0 - 2.0 * C1 + 28.0 * T1 - 3.0 * C1**2 + 8.0 * (e2 / (1.0 - e2)) + 24.0 * T1**2) * D**5 / 120.0
+    ) / math.cos(phi1)
+    
+    return math.degrees(lon), math.degrees(lat)
+
+def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> bytes:
+    """
+    Convert points, lines, circles, and polygons from DXF back to standard KML/KMZ format.
+    """
+    import ezdxf
+    import io
+    import math
+    
+    try:
+        dxf_text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        dxf_text = content.decode("cp1252", errors="ignore")
+        
+    doc = ezdxf.read(io.StringIO(dxf_text))
+    msp = doc.modelspace()
+    
+    points = []
+    lines = []
+    texts = []
+    
+    for entity in msp:
+        etype = entity.dxftype()
+        layer = entity.dxf.layer
+        
+        if etype == "POINT":
+            loc = entity.dxf.location
+            points.append({
+                "x": loc.x,
+                "y": loc.y,
+                "layer": layer,
+                "name": None,
+                "type": "point"
+            })
+        elif etype == "CIRCLE":
+            center = entity.dxf.center
+            points.append({
+                "x": center.x,
+                "y": center.y,
+                "layer": layer,
+                "name": None,
+                "type": "circle"
+            })
+        elif etype in ("TEXT", "MTEXT"):
+            text_val = entity.dxf.text if etype == "TEXT" else entity.text
+            text_val = text_val.strip() if text_val else ""
+            if not text_val:
+                continue
+            
+            insert = entity.dxf.insert
+            texts.append({
+                "x": insert.x,
+                "y": insert.y,
+                "layer": layer,
+                "text": text_val
+            })
+        elif etype == "LWPOLYLINE":
+            pts = entity.get_points()
+            coords = [(pt[0], pt[1]) for pt in pts]
+            if len(coords) >= 2:
+                lines.append({
+                    "coords": coords,
+                    "layer": layer,
+                    "name": None,
+                    "is_closed": entity.closed,
+                    "type": "lwpolyline"
+                })
+        elif etype == "POLYLINE":
+            coords = [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+            if len(coords) >= 2:
+                lines.append({
+                    "coords": coords,
+                    "layer": layer,
+                    "name": None,
+                    "is_closed": entity.is_closed,
+                    "type": "polyline"
+                })
+                
+    # Match TEXT labels to close POINTS/CIRCLES or LINES (proximity search)
+    unmatched_texts = []
+    for t in texts:
+        best_dist = float("inf")
+        best_obj = None
+        best_obj_type = None
+        
+        # Search points on the same layer
+        for p in points:
+            if p["layer"] == t["layer"]:
+                dist = math.sqrt((p["x"] - t["x"])**2 + (p["y"] - t["y"])**2)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_obj = p
+                    best_obj_type = "point"
+                    
+        # Search lines on the same layer
+        for l in lines:
+            if l["layer"] == t["layer"]:
+                pts = l["coords"]
+                mid = len(pts) // 2
+                x_mid = (pts[mid-1][0] + pts[mid][0]) / 2.0
+                y_mid = (pts[mid-1][1] + pts[mid][1]) / 2.0
+                dist = math.sqrt((x_mid - t["x"])**2 + (y_mid - t["y"])**2)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_obj = l
+                    best_obj_type = "line"
+                    
+        # Associate if distance is within 15 meters for points, or 30 meters for lines
+        if best_obj_type == "point" and best_dist < 15.0:
+            if not best_obj["name"]:
+                best_obj["name"] = t["text"]
+            else:
+                best_obj["name"] += " " + t["text"]
+        elif best_obj_type == "line" and best_dist < 30.0:
+            if not best_obj["name"]:
+                best_obj["name"] = t["text"]
+            else:
+                best_obj["name"] += " " + t["text"]
+        else:
+            unmatched_texts.append(t)
+            
+    # Group elements by AutoCAD layer
+    layers = {}
+    def add_to_layer(layer_name, item):
+        if layer_name not in layers:
+            layers[layer_name] = []
+        layers[layer_name].append(item)
+        
+    for p in points:
+        name = p["name"] or f"Node-{p['type'].upper()}"
+        lon, lat = utm_to_latlon(p["x"], p["y"], utm_zone, is_southern)
+        add_to_layer(p["layer"], {
+            "name": name,
+            "type": "point",
+            "coords": [lon, lat]
+        })
+        
+    for l in lines:
+        name = l["name"] or ("Polygon" if l["is_closed"] else "LineString")
+        proj_coords = [utm_to_latlon(x, y, utm_zone, is_southern) for x, y in l["coords"]]
+        add_to_layer(l["layer"], {
+            "name": name,
+            "type": "polygon" if l["is_closed"] else "line",
+            "coords": proj_coords
+        })
+        
+    for t in unmatched_texts:
+        lon, lat = utm_to_latlon(t["x"], t["y"], utm_zone, is_southern)
+        add_to_layer(t["layer"], {
+            "name": t["text"],
+            "type": "point",
+            "coords": [lon, lat]
+        })
+        
+    # Build KML
+    kml_parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<kml xmlns="http://www.opengis.net/kml/2.2">',
+        '  <Document>',
+        '    <name>Converted DXF Drawing</name>',
+        '    <open>1</open>'
+    ]
+    
+    for l_name, items in sorted(layers.items()):
+        kml_parts.append('    <Folder>')
+        kml_parts.append(f'      <name>{l_name}</name>')
+        
+        for item in items:
+            name_esc = item["name"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            kml_parts.append('      <Placemark>')
+            kml_parts.append(f'        <name>{name_esc}</name>')
+            
+            if item["type"] == "point":
+                lon, lat = item["coords"]
+                kml_parts.append('        <Point>')
+                kml_parts.append(f'          <coordinates>{lon:.6f},{lat:.6f},0</coordinates>')
+                kml_parts.append('        </Point>')
+            elif item["type"] == "line":
+                coord_str = " ".join(f"{lon:.6f},{lat:.6f},0" for lon, lat in item["coords"])
+                kml_parts.append('        <LineString>')
+                kml_parts.append(f'          <coordinates>{coord_str}</coordinates>')
+                kml_parts.append('        </LineString>')
+            elif item["type"] == "polygon":
+                coords = list(item["coords"])
+                if coords[0] != coords[-1]:
+                    coords.append(coords[0])
+                coord_str = " ".join(f"{lon:.6f},{lat:.6f},0" for lon, lat in coords)
+                kml_parts.append('        <Polygon>')
+                kml_parts.append('          <outerBoundaryIs>')
+                kml_parts.append('            <LinearRing>')
+                kml_parts.append(f'              <coordinates>{coord_str}</coordinates>')
+                kml_parts.append('            </LinearRing>')
+                kml_parts.append('          </outerBoundaryIs>')
+                kml_parts.append('        </Polygon>')
+                
+            kml_parts.append('      </Placemark>')
+            
+        kml_parts.append('    </Folder>')
+        
+    kml_parts.extend([
+        '  </Document>',
+        '</kml>'
+    ])
+    
+    return "\n".join(kml_parts).encode("utf-8")
+
+
