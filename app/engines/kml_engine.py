@@ -73,8 +73,17 @@ class KMLEngine:
     
     def _safe_add(self, sheet, cell: str, value: float) -> None:
         """Safely add value to a cell."""
-        current = sheet[cell].value or 0
-        sheet[cell] = round(current + value)
+        current = sheet[cell].value
+        if current is None:
+            current_val = 0.0
+        elif isinstance(current, (int, float)):
+            current_val = float(current)
+        else:
+            try:
+                current_val = float(str(current).strip())
+            except ValueError:
+                current_val = 0.0
+        sheet[cell] = round(current_val + value)
     
     def _is_true_fat_folder(self, name: str) -> bool:
         """Check if folder is a FAT folder (not FAT COVER)."""
