@@ -375,7 +375,8 @@ $$ LANGUAGE plpgsql;
 -- ==================================================
 
 -- Daily usage summary
-CREATE OR REPLACE VIEW daily_usage_summary AS
+CREATE OR REPLACE VIEW daily_usage_summary 
+WITH (security_invoker = on) AS
 SELECT 
     DATE(created_at) as date,
     user_id,
@@ -387,7 +388,8 @@ WHERE created_at > NOW() - INTERVAL '30 days'
 GROUP BY DATE(created_at), user_id;
 
 -- Job success rate
-CREATE OR REPLACE VIEW job_success_rate AS
+CREATE OR REPLACE VIEW job_success_rate 
+WITH (security_invoker = on) AS
 SELECT 
     user_id,
     tool_name,
@@ -404,7 +406,8 @@ WHERE created_at > NOW() - INTERVAL '30 days'
 GROUP BY user_id, tool_name;
 
 -- Active subscriptions summary
-CREATE OR REPLACE VIEW active_subscriptions_summary AS
+CREATE OR REPLACE VIEW active_subscriptions_summary 
+WITH (security_invoker = on) AS
 SELECT 
     plan,
     status,
@@ -413,3 +416,4 @@ SELECT
 FROM subscriptions
 WHERE status = 'active'
 GROUP BY plan, status;
+

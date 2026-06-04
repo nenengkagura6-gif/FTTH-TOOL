@@ -10,6 +10,7 @@ ALTER TABLE processing_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usage_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE system_config ENABLE ROW LEVEL SECURITY;
 
 -- Force RLS for table owners (important!)
 ALTER TABLE profiles FORCE ROW LEVEL SECURITY;
@@ -17,6 +18,8 @@ ALTER TABLE subscriptions FORCE ROW LEVEL SECURITY;
 ALTER TABLE processing_jobs FORCE ROW LEVEL SECURITY;
 ALTER TABLE usage_logs FORCE ROW LEVEL SECURITY;
 ALTER TABLE api_keys FORCE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs FORCE ROW LEVEL SECURITY;
+ALTER TABLE system_config FORCE ROW LEVEL SECURITY;
 
 -- ==================================================
 -- PROFILES TABLE POLICIES
@@ -327,6 +330,22 @@ BEGIN
         NULL::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ==================================================
+-- SYSTEM_CONFIG TABLE POLICIES
+-- ==================================================
+
+-- Allow read-only (SELECT) access to public & authenticated users
+CREATE POLICY "Allow public read access to system_config"
+    ON system_config FOR SELECT
+    USING (true);
+
+-- Allow write/all (INSERT, UPDATE, DELETE) access strictly to the service_role
+CREATE POLICY "Service role can manage system_config"
+    ON system_config FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
 
 -- ==================================================
 -- STORAGE BUCKET POLICIES (for file storage)

@@ -33,10 +33,16 @@ app = FastAPI(
     version=APP_VERSION
 )
 
-# CORS Configuration - Allow all origins for Cloudflare
+# CORS Configuration - Restrict origins in production, support localhost
+frontend_url = os.environ.get("FRONTEND_URL") or os.environ.get("NEXT_PUBLIC_APP_URL") or "https://ftthtools.my.id"
+allow_origins = [frontend_url] if frontend_url else []
+# Add common localhost ports for local development
+if "localhost" not in frontend_url:
+    allow_origins.extend(["http://localhost:3000", "http://localhost:5173"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -67,62 +73,6 @@ async def get_version():
         "supported_tools": ["kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker"]
     }
 
-
-@app.get("/api/v1/debug/supabase")
-async def debug_supabase():
-    """Debug endpoint to check Supabase connectivity from backend."""
-    result = {
-        "supabase_url_set": False,
-        "supabase_key_set": False,
-        "client_created": False,
-        "storage_accessible": False,
-        "uploads_bucket": False,
-        "outputs_bucket": False,
-        "error": None,
-        "import_error": None
-    }
-    
-    try:
-        from supabase_client import get_supabase, SUPABASE_URL, SUPABASE_KEY
-        
-        result["supabase_url_set"] = bool(SUPABASE_URL)
-        result["supabase_url_preview"] = SUPABASE_URL[:30] + "..." if SUPABASE_URL else None
-        result["supabase_key_set"] = bool(SUPABASE_KEY)
-        result["supabase_key_type"] = "service_role" if (SUPABASE_KEY and "service_role" in (SUPABASE_KEY or "")) else ("anon" if SUPABASE_KEY else None)
-        
-        try:
-            client = get_supabase()
-            result["client_created"] = client is not None
-            
-            if client:
-                # Test storage access
-                try:
-                    buckets = client.storage.list_buckets()
-                    result["storage_accessible"] = True
-                    bucket_names = [b.name for b in buckets] if buckets else []
-                    result["buckets"] = bucket_names
-                    result["uploads_bucket"] = "uploads" in bucket_names
-                    result["outputs_bucket"] = "outputs" in bucket_names
-                except Exception as storage_err:
-                    result["storage_error"] = str(storage_err)
-                    
-                # Test DB access
-                try:
-                    test = client.table("processing_jobs").select("id").limit(1).execute()
-                    result["db_accessible"] = True
-                    result["db_test_rows"] = len(test.data) if test.data else 0
-                except Exception as db_err:
-                    result["db_error"] = str(db_err)
-                    
-        except Exception as e:
-            result["error"] = str(e)
-            
-    except Exception as import_err:
-        import traceback
-        result["import_error"] = str(import_err)
-        result["traceback"] = traceback.format_exc()
-        
-    return result
 
 
 # =========================
@@ -520,9 +470,9 @@ async def validate_kml(kml_file: UploadFile = File(...)):
     try:
         content = await kml_file.read()
         
-        # Try to parse
+        # Try to parse securely
         from lxml import etree
-        parser = etree.XMLParser(recover=True)
+        parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
         tree = etree.parse(io.BytesIO(content), parser)
         root = tree.getroot()
         

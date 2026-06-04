@@ -22,7 +22,7 @@ from utils.commons import haversine, safe_localname
 
 def parse_kml_lxml_with_kmz(content: bytes, is_kmz: bool = False) -> etree.ElementTree:
     """Parse KML content using lxml, with KMZ support."""
-    parser = etree.XMLParser(recover=True)
+    parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
     
     if is_kmz:
         with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:
