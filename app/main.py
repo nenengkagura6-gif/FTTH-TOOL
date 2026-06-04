@@ -347,6 +347,26 @@ def _process_job_sync(
                 "content": dxf_content,
                 "content_type": "application/octet-stream"
             }
+        elif tool_name == "dxf_to_kml":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Mengkonversi AutoCAD (DXF) ke KML..."
+            })
+            from supabase_client import get_job_config
+            job_config = get_job_config(job_id)
+            
+            utm_zone = job_config.get("utm_zone", 48)
+            is_southern = job_config.get("is_southern", True)
+            
+            from engines.conversion_engine import convert_dxf_to_kml
+            kml_content = convert_dxf_to_kml(file_bytes, utm_zone, is_southern)
+            output_name = original_filename.rsplit('.', 1)[0] + "_converted.kml"
+            result = {
+                "status": "success",
+                "filename": output_name,
+                "content": kml_content,
+                "content_type": "application/vnd.google-earth.kml+xml"
+            }
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
 
@@ -422,7 +442,7 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
     """
     supported_tools = (
         "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
-        "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf"
+        "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml"
     )
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     

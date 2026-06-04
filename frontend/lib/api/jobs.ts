@@ -12,8 +12,9 @@ export interface QueueJobRequest {
   file_path: string
   original_filename: string
   user_id: string
-  tool_name: 'kml_to_boq' | 'kml_to_database_hp' | 'kml_to_database' | 'kml_duplicate_checker'
+  tool_name: string
   template_path?: string
+  config?: any
 }
 
 export interface QueueJobResponse {

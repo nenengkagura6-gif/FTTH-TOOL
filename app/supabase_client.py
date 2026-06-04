@@ -144,3 +144,18 @@ def mark_jobs_expired(job_ids: list[str]) -> bool:
     except Exception as e:
         print(f"Error marking jobs expired: {e}")
         return False
+
+def get_job_config(job_id: str) -> dict:
+    """Fetch the configuration JSON for a job from processing_jobs table."""
+    supabase = get_supabase()
+    if not supabase:
+        return {}
+    try:
+        res = supabase.table("processing_jobs").select("config").eq("id", job_id).execute()
+        if res.data:
+            return res.data[0].get("config") or {}
+        return {}
+    except Exception as e:
+        print(f"Error fetching job config: {e}")
+        return {}
+

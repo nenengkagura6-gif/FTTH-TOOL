@@ -11,6 +11,7 @@ import {
   Layers,
   Globe,
   DraftingCompass,
+  Compass,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -113,6 +114,12 @@ export const dashboardMenu: DashboardMenuItem[] = [
     href: "/dashboard/kml-dxf",
     icon: DraftingCompass,
     description: "Convert KML/KMZ vector designs to AutoCAD DXF format",
+  },
+  {
+    title: "AutoCAD (DXF) to KML",
+    href: "/dashboard/dxf-kml",
+    icon: Compass,
+    description: "Convert AutoCAD DXF metric drawings back to KML/KMZ vector data",
   },
   {
     title: "Admin Panel",

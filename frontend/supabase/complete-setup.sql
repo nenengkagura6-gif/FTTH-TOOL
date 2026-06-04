@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
     tool_name TEXT NOT NULL CHECK (tool_name IN (
         'kml_to_boq', 'kml_to_database', 'kml_duplicate_checker',
         'otdr_analyzer', 'opm_calculator',
-        'kml_to_csv', 'kml_to_shp', 'shp_to_kml', 'kml_to_dxf'
+        'kml_to_csv', 'kml_to_shp', 'shp_to_kml', 'kml_to_dxf', 'dxf_to_kml'
     )),
     job_type TEXT NOT NULL DEFAULT 'single',
     original_filename TEXT NOT NULL,
