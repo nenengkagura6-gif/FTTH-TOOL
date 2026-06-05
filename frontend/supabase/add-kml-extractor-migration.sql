@@ -1,9 +1,9 @@
 -- =========================================================================
--- MIGRATION: ADD KML/KMZ FOLDER EXTRACTOR TOOL
+-- MIGRATION: ADD KML/KMZ EXTRACTOR TOOL
 -- Run this script in the Supabase SQL Editor (https://supabase.com)
 -- =========================================================================
 
--- 1. Alter processing_jobs tool_name check constraint to allow kml_folder_extractor
+-- 1. Alter processing_jobs tool_name check constraint to allow kml_extractor
 ALTER TABLE public.processing_jobs DROP CONSTRAINT IF EXISTS processing_jobs_tool_name_check;
 
 ALTER TABLE public.processing_jobs ADD CONSTRAINT processing_jobs_tool_name_check CHECK (tool_name IN (
@@ -17,8 +17,8 @@ ALTER TABLE public.processing_jobs ADD CONSTRAINT processing_jobs_tool_name_chec
     'shp_to_kml',
     'kml_to_dxf',
     'dxf_to_kml',
-    -- New KML Folder Extractor Tool:
-    'kml_folder_extractor'
+    -- New KML Extractor Tool:
+    'kml_extractor'
 ));
 
 -- =========================================================================

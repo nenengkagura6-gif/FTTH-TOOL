@@ -256,10 +256,10 @@ def _process_job_sync(
         })
         is_kmz = original_filename.lower().endswith(".kmz")
 
-        if tool_name == "kml_folder_extractor":
+        if tool_name == "kml_extractor":
             update_job_status(job_id, "processing", {
                 "progress_percent": 35,
-                "progress_message": "Mengekstraksi folder KML/KMZ..."
+                "progress_message": "Mengekstraksi KML/KMZ..."
             })
             result = process_kml_extractor(
                 kml_content=file_bytes,
@@ -453,7 +453,7 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
     """
     supported_tools = (
         "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
-        "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_folder_extractor"
+        "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor"
     )
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     
