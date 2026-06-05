@@ -83,11 +83,11 @@ export const dashboardMenu: DashboardMenuItem[] = [
     featureKey: "kml_to_boq",
   },
   {
-    title: "KML Folder Extractor",
+    title: "KML Extractor",
     href: "/dashboard/kml-extractor",
     icon: FolderSearch,
     description: "Extract elements and summarize counts by folder to Excel",
-    featureKey: "kml_folder_extractor",
+    featureKey: "kml_extractor",
   },
   {
     title: "KML to Database HP",
