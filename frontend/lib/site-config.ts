@@ -15,6 +15,7 @@ import {
   Activity,
   Palette,
   LineChart,
+  Scissors,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -141,6 +142,12 @@ export const dashboardMenu: DashboardMenuItem[] = [
     href: "/dashboard/otdr-analyzer",
     icon: LineChart,
     description: "Analyze SOR traces and generate reports",
+  },
+  {
+    title: "Splice Manager",
+    href: "/dashboard/splice-manager",
+    icon: Scissors,
+    description: "Generate fiber distribution core splicing tables",
   },
   {
     title: "Admin Panel",
