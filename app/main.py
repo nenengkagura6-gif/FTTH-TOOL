@@ -539,6 +539,26 @@ async def check_duplicates_json(
 
 
 # =========================
+# OTDR Parser
+# =========================
+from engines.otdr_engine import parse_sor_file
+
+@app.post("/api/v1/otdr/parse")
+async def parse_otdr_trace(
+    sor_file: UploadFile = File(..., description="Bellcore/Telcordia .sor binary trace file")
+):
+    """
+    Parse a standard OTDR SOR file and return structured trace coordinates and events.
+    """
+    try:
+        content = await sor_file.read()
+        result = parse_sor_file(content)
+        return JSONResponse(content=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================
 # File Validation
 # =========================
 @app.post("/validate-kml")

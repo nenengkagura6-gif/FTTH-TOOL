@@ -745,6 +745,8 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
         
         if etype == "POINT":
             loc = entity.dxf.location
+            if abs(loc.x) < 0.0001 and abs(loc.y) < 0.0001:
+                continue
             points.append({
                 "x": loc.x,
                 "y": loc.y,
@@ -754,6 +756,8 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
             })
         elif etype == "CIRCLE":
             center = entity.dxf.center
+            if abs(center.x) < 0.0001 and abs(center.y) < 0.0001:
+                continue
             points.append({
                 "x": center.x,
                 "y": center.y,
@@ -768,6 +772,8 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
                 continue
             
             insert = entity.dxf.insert
+            if abs(insert.x) < 0.0001 and abs(insert.y) < 0.0001:
+                continue
             texts.append({
                 "x": insert.x,
                 "y": insert.y,
@@ -777,6 +783,7 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
         elif etype == "LWPOLYLINE":
             pts = entity.get_points()
             coords = [(pt[0], pt[1]) for pt in pts]
+            coords = [(x, y) for x, y in coords if not (abs(x) < 0.0001 and abs(y) < 0.0001)]
             if len(coords) >= 2:
                 lines.append({
                     "coords": coords,
@@ -787,6 +794,7 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
                 })
         elif etype == "POLYLINE":
             coords = [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+            coords = [(x, y) for x, y in coords if not (abs(x) < 0.0001 and abs(y) < 0.0001)]
             if len(coords) >= 2:
                 lines.append({
                     "coords": coords,
@@ -839,6 +847,34 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
         else:
             unmatched_texts.append(t)
             
+    # Collect all coordinates to detect if the drawing is already using direct GPS coordinates (degree units)
+    xs = []
+    ys = []
+    for p in points:
+        xs.append(p["x"])
+        ys.append(p["y"])
+    for l in lines:
+        for x, y in l["coords"]:
+            xs.append(x)
+            ys.append(y)
+    for t in texts:
+        xs.append(t["x"])
+        ys.append(t["y"])
+        
+    is_already_latlon = False
+    if xs and ys:
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        # GPS bounds: Longitude between -180 and 180, Latitude between -90 and 90
+        if -180.0 <= min_x <= 180.0 and -180.0 <= max_x <= 180.0 and -90.0 <= min_y <= 90.0 and -90.0 <= max_y <= 90.0:
+            is_already_latlon = True
+            
+    # Helper to project back
+    def project_back(x, y):
+        if is_already_latlon:
+            return x, y
+        return utm_to_latlon(x, y, utm_zone, is_southern)
+        
     # Group elements by AutoCAD layer
     layers = {}
     def add_to_layer(layer_name, item):
@@ -848,7 +884,7 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
         
     for p in points:
         name = p["name"] or f"Node-{p['type'].upper()}"
-        lon, lat = utm_to_latlon(p["x"], p["y"], utm_zone, is_southern)
+        lon, lat = project_back(p["x"], p["y"])
         add_to_layer(p["layer"], {
             "name": name,
             "type": "point",
@@ -857,7 +893,7 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
         
     for l in lines:
         name = l["name"] or ("Polygon" if l["is_closed"] else "LineString")
-        proj_coords = [utm_to_latlon(x, y, utm_zone, is_southern) for x, y in l["coords"]]
+        proj_coords = [project_back(x, y) for x, y in l["coords"]]
         add_to_layer(l["layer"], {
             "name": name,
             "type": "polygon" if l["is_closed"] else "line",
@@ -865,7 +901,7 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
         })
         
     for t in unmatched_texts:
-        lon, lat = utm_to_latlon(t["x"], t["y"], utm_zone, is_southern)
+        lon, lat = project_back(t["x"], t["y"])
         add_to_layer(t["layer"], {
             "name": t["text"],
             "type": "point",
