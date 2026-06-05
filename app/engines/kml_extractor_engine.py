@@ -3,6 +3,7 @@ Engine for extracting layers and folders from KML/KMZ files and generating summa
 """
 import io
 import os
+import re
 from typing import Dict, List, Tuple, Any
 from geopy.distance import geodesic
 from xml.dom import minidom
@@ -42,20 +43,32 @@ class KMLExtractorEngine:
         return path
 
     def _determine_layer_folder(self, path: List[str]) -> str:
-        """Determine the main top-level folder, skipping the wrapper folder if present."""
+        """Determine the main top-level folder, mapping subfolders correctly."""
         if not path:
             return "Tanpa Folder"
-        if len(path) == 1:
-            return path[0]
         
-        # Clean filename to see if the first folder is just a filename wrapper
+        # Clean filename wrapper
         clean_file = clean_project_name(self.filename).lower()
-        first_folder = path[0].lower()
-        
-        # If the first folder name matches or contains the filename (or vice versa), skip it
-        if clean_file == first_folder or clean_file in first_folder or first_folder in clean_file:
-            return path[1]
-        return path[0]
+        folders = [f for f in path]
+        if len(folders) > 1:
+            first = folders[0].lower()
+            if clean_file == first or clean_file in first or first in clean_file:
+                folders.pop(0)
+                
+        # Check for known telecom layer keywords
+        for f in folders:
+            f_up = f.upper().strip()
+            # If contains cover/hp cover or matches sector codes (like A01, B02, C10)
+            if "HP COVER" in f_up or "COVER" in f_up:
+                return "HP COVER"
+            if re.match(r'^[A-Z]\d{2}$', f_up):
+                return "HP COVER"
+            if "KABEL" in f_up or "CABLE" in f_up:
+                return f
+            if "TIANG" in f_up or "POLE" in f_up:
+                return f
+                
+        return folders[0]
 
     def _calculate_line_length(self, pm: minidom.Element) -> float:
         """Calculate length of a LineString in meters."""
@@ -83,8 +96,8 @@ class KMLExtractorEngine:
             return {"status": "error", "message": "No KML loaded"}
 
         # Groups structure: layer_folder -> cable_type -> statistics
-        # cable_type is empty string for non-cable folders
         groups = {}
+        processed_pms = set() # Track coordinates and names to prevent double counting
 
         all_placemarks = self.doc.getElementsByTagName("Placemark")
         for pm in all_placemarks:
@@ -103,11 +116,28 @@ class KMLExtractorEngine:
             # Determine if folder represents cable/kabel
             is_cable = "cable" in layer.lower() or "kabel" in layer.lower()
             
+            pm_name = self._get_placemark_name(pm)
             if is_cable and is_line:
-                pm_name = self._get_placemark_name(pm)
                 cable_type = pm_name if pm_name else "Kabel Tanpa Nama"
             else:
                 cable_type = ""
+
+            # Deduplication key based on layer, type, name, and coordinate string
+            coords_tags = pm.getElementsByTagName("coordinates")
+            coord_str = ""
+            if coords_tags and coords_tags[0].firstChild:
+                coord_str = coords_tags[0].firstChild.nodeValue.strip()
+                
+            if is_point or is_poly:
+                pm_key = (layer, cable_type, coord_str)
+            else:
+                pm_key = (layer, cable_type, pm_name, coord_str)
+
+            if coord_str and pm_key in processed_pms:
+                # Skip duplicate
+                continue
+            if coord_str:
+                processed_pms.add(pm_key)
 
             if layer not in groups:
                 groups[layer] = {}
@@ -146,6 +176,7 @@ class KMLExtractorEngine:
         fill_header = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid") # Dark Grayish Blue
         fill_zebra = PatternFill(start_color="F2F4F4", end_color="F2F4F4", fill_type="solid") # Light Zebra
         fill_total = PatternFill(start_color="EAECEE", end_color="EAECEE", fill_type="solid") # Gray
+        fill_value = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid") # Soft light green
 
         thin_side = Side(border_style="thin", color="D5D8DC")
         double_side = Side(border_style="double", color="2C3E50")
@@ -158,8 +189,8 @@ class KMLExtractorEngine:
         align_left = Alignment(horizontal="left", vertical="center")
         align_right = Alignment(horizontal="right", vertical="center")
 
-        # 1. Title Block
-        ws.merge_cells("A1:H1")
+        # 1. Title Block (Merged A-G)
+        ws.merge_cells("A1:G1")
         title_cell = ws["A1"]
         title_cell.value = f"LAPORAN EKSTRAKSI FOLDER KML: {clean_project_name(self.filename)}"
         title_cell.font = font_title
@@ -168,7 +199,7 @@ class KMLExtractorEngine:
         ws.row_dimensions[1].height = 40
 
         # Subtitle
-        ws.merge_cells("A2:H2")
+        ws.merge_cells("A2:G2")
         sub_cell = ws["A2"]
         sub_cell.value = "Dibuat secara otomatis oleh FTTH Tool Platform"
         sub_cell.font = Font(name="Segoe UI", size=10, italic=True, color="566573")
@@ -178,7 +209,7 @@ class KMLExtractorEngine:
         # Leave row 3 empty
         ws.row_dimensions[3].height = 10
 
-        # 2. Table Headers
+        # 2. Table Headers (7 Columns - removed KM)
         headers = [
             "No",
             "Nama Folder",
@@ -186,8 +217,7 @@ class KMLExtractorEngine:
             "Titik (Points)",
             "Area (Polygons)",
             "Rute (Lines)",
-            "Panjang Total (m)",
-            "Panjang Total (km)"
+            "Panjang Total (m)"
         ]
 
         for col_idx, h in enumerate(headers, 1):
@@ -212,29 +242,33 @@ class KMLExtractorEngine:
         total_length_m = 0.0
 
         for layer in sorted_layers:
-            # Sort cable types, putting empty string (non-cables or standard stats) first
             sorted_cables = sorted(groups[layer].keys())
             
             for cable in sorted_cables:
                 stats = groups[layer][cable]
                 
-                # Write rows
-                cells = [
-                    ws.cell(row=row_num, column=1, value=no_counter),
-                    ws.cell(row=row_num, column=2, value=layer),
-                    ws.cell(row=row_num, column=3, value=cable if cable else "-"),
-                    ws.cell(row=row_num, column=4, value=stats["points"]),
-                    ws.cell(row=row_num, column=5, value=stats["polygons"]),
-                    ws.cell(row=row_num, column=6, value=stats["lines"]),
-                    ws.cell(row=row_num, column=7, value=round(stats["length_m"])),
-                    ws.cell(row=row_num, column=8, value=round(stats["length_m"] / 1000.0, 3))
-                ]
-
                 # Update totals
                 total_points += stats["points"]
                 total_polygons += stats["polygons"]
                 total_lines += stats["lines"]
                 total_length_m += stats["length_m"]
+
+                # Extract values, use empty string if zero
+                pt_val = stats["points"] if stats["points"] > 0 else ""
+                poly_val = stats["polygons"] if stats["polygons"] > 0 else ""
+                ln_val = stats["lines"] if stats["lines"] > 0 else ""
+                len_val = round(stats["length_m"]) if stats["length_m"] > 0 else ""
+
+                # Write rows (7 columns)
+                cells = [
+                    ws.cell(row=row_num, column=1, value=no_counter),
+                    ws.cell(row=row_num, column=2, value=layer),
+                    ws.cell(row=row_num, column=3, value=cable if cable else "-"),
+                    ws.cell(row=row_num, column=4, value=pt_val),
+                    ws.cell(row=row_num, column=5, value=poly_val),
+                    ws.cell(row=row_num, column=6, value=ln_val),
+                    ws.cell(row=row_num, column=7, value=len_val)
+                ]
 
                 # Apply formatting
                 is_even = (no_counter % 2 == 0)
@@ -243,6 +277,10 @@ class KMLExtractorEngine:
                     cell.border = border_cell
                     if is_even:
                         cell.fill = fill_zebra
+                    
+                    # Highlight cells with values > 0 in soft green
+                    if col_idx in [4, 5, 6, 7] and isinstance(cell.value, (int, float)) and cell.value > 0:
+                        cell.fill = fill_value
                     
                     # Alignments
                     if col_idx in [1, 4, 5, 6]:
@@ -253,27 +291,22 @@ class KMLExtractorEngine:
                         cell.alignment = align_right
 
                     # Number formats
-                    if col_idx in [4, 5, 6]:
+                    if col_idx in [4, 5, 6, 7] and isinstance(cell.value, (int, float)):
                         cell.number_format = "#,##0"
-                    elif col_idx == 7:
-                        cell.number_format = "#,##0"
-                    elif col_idx == 8:
-                        cell.number_format = "#,##0.000"
 
                 ws.row_dimensions[row_num].height = 20
                 row_num += 1
                 no_counter += 1
 
-        # 4. Total Summary Row
+        # 4. Total Summary Row (7 columns)
         total_cells = [
             ws.cell(row=row_num, column=1, value=""),
             ws.cell(row=row_num, column=2, value="TOTAL"),
             ws.cell(row=row_num, column=3, value=""),
-            ws.cell(row=row_num, column=4, value=total_points),
-            ws.cell(row=row_num, column=5, value=total_polygons),
-            ws.cell(row=row_num, column=6, value=total_lines),
-            ws.cell(row=row_num, column=7, value=round(total_length_m)),
-            ws.cell(row=row_num, column=8, value=round(total_length_m / 1000.0, 3))
+            ws.cell(row=row_num, column=4, value=total_points if total_points > 0 else ""),
+            ws.cell(row=row_num, column=5, value=total_polygons if total_polygons > 0 else ""),
+            ws.cell(row=row_num, column=6, value=total_lines if total_lines > 0 else ""),
+            ws.cell(row=row_num, column=7, value=round(total_length_m) if total_length_m > 0 else "")
         ]
 
         for col_idx, cell in enumerate(total_cells, 1):
@@ -281,18 +314,21 @@ class KMLExtractorEngine:
             cell.fill = fill_total
             cell.border = border_total
             
+            # Highlight total values > 0 in soft green
+            if col_idx in [4, 5, 6, 7] and isinstance(cell.value, (int, float)) and cell.value > 0:
+                cell.fill = fill_value
+            
             # Alignments
             if col_idx == 2:
                 cell.alignment = align_left
             elif col_idx in [4, 5, 6]:
                 cell.alignment = align_center
-                cell.number_format = "#,##0"
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = "#,##0"
             elif col_idx == 7:
                 cell.alignment = align_right
-                cell.number_format = "#,##0"
-            elif col_idx == 8:
-                cell.alignment = align_right
-                cell.number_format = "#,##0.000"
+                if isinstance(cell.value, (int, float)):
+                    cell.number_format = "#,##0"
 
         ws.row_dimensions[row_num].height = 24
 
