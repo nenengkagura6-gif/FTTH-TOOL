@@ -1,17 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { motion } from "framer-motion"
 import { 
   Upload, 
   FileText, 
   LineChart as LineChartIcon, 
   Table as TableIcon, 
-  Download, 
   Printer, 
   RefreshCw, 
-  ShieldAlert, 
-  CheckCircle,
+  ShieldAlert,
   Sparkles
 } from "lucide-react"
 import { 
@@ -22,6 +20,7 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip,
+  ReferenceLine,
   ReferenceDot
 } from "recharts"
 
@@ -33,6 +32,20 @@ interface OtdrMetadata {
   date: string
   pulse_width: string
   index_refraction: string
+  device: string
+  fiber_type: string
+  line_status: string
+  trace_type: string
+  backscatter: string
+  acq_range: string
+  resolution: string
+  avg_time: string
+  loss_thresh: string
+  refl_thresh: string
+  eof_thresh: string
+  span_distance: string
+  span_loss: string
+  orl: string
   parsed_mode: string
 }
 
@@ -51,45 +64,56 @@ interface DataPoint {
   db: number
 }
 
-// Fallback/Demo Data
+// Fallback/Demo Data matching the exact values of the reference image
 const demoMetadata: OtdrMetadata = {
-  cable_id: "CABLE-AERIAL-24C",
-  fiber_id: "CORE-04",
-  operator: "Field Technician",
-  wavelength: "1550 nm",
-  date: "2026-06-05",
-  pulse_width: "100 ns",
-  index_refraction: "1.46820",
+  cable_id: "GDG06 A14",
+  fiber_id: "2",
+  operator: "handler name",
+  wavelength: "1310 nm",
+  date: "04/04/26 12.58",
+  pulse_width: "80 ns",
+  index_refraction: "1,468",
+  device: "FC4000",
+  fiber_type: "ConventionalSmf",
+  line_status: "AsBuilt",
+  trace_type: "StandardTraceSingleFiber",
+  backscatter: "-80 dB",
+  acq_range: "4,18335 km",
+  resolution: "0,255 m",
+  avg_time: "15 s",
+  loss_thresh: "0,200 dB",
+  refl_thresh: "-40,000 dB",
+  eof_thresh: "10,000 dB",
+  span_distance: "1,79753 km",
+  span_loss: "0,554 dB",
+  orl: "24,447 dB",
   parsed_mode: "Simulated SOR Trace Preview"
 }
 
 const demoEvents: OtdrEvent[] = [
-  { id: 1, type: "Connector / Launch", distance: 0.000, loss: 0.45, reflectance: -45.2, slope: 0.22, description: "OTDR Connection Point" },
-  { id: 2, type: "Fusion Splice", distance: 1.450, loss: 0.04, reflectance: -62.1, slope: 0.22, description: "Splicing point in ODC" },
-  { id: 3, type: "Mechanical Splice / Bend", distance: 3.820, loss: 0.28, reflectance: -52.4, slope: 0.24, description: "High attenuation event" },
-  { id: 4, type: "End of Fiber", distance: 5.210, loss: 23.40, reflectance: -18.5, slope: 0.00, description: "Total Reflection / End of Link" }
+  { id: 0, type: "BeginOfFiber", distance: 0.00000, loss: 0.0, reflectance: -46.239, slope: 0.300, description: "Start position of fiber link" },
+  { id: 1, type: "EndOfFiber", distance: 1.79753, loss: 0.0, reflectance: -61.863, slope: 0.308, description: "End position of fiber link" }
 ]
 
-const demoDataPoints: DataPoint[] = Array.from({ length: 150 }, (_, i) => {
-  const dist = (i / 150) * 6.5
+const demoDataPoints: DataPoint[] = []
+// Generate 150 points representing a clean, stable trace of ~1.8km
+for (let i = 0; i <= 150; i++) {
+  const dist = (i / 150) * 2.2 // Draw slightly past the 1.8km end
   let db = 0
 
-  if (dist < 5.21) {
-    // Sloping trace representing normal attenuation
-    let attenuation = dist * 0.22 // 0.22 dB/km
-    if (dist > 1.45) attenuation += 0.04  // Splice 1 loss
-    if (dist > 3.82) attenuation += 0.28  // Splice 2 loss
-    db = -attenuation
+  if (dist < 1.79753) {
+    // Normal flat fiber attenuation slope (about 0.30 dB/km)
+    db = -45.0 - dist * 0.30
   } else {
-    // Drop off past end-of-fiber
-    db = -25.0 - (dist - 5.21) * 6.0 + Math.sin(dist * 60) * 1.0
+    // Sharp drop off to the noise level (-58 dB) after 1.8 km
+    db = -56.5 + Math.sin(dist * 90) * 0.8
   }
 
-  return {
-    distance: Number(dist.toFixed(3)),
+  demoDataPoints.push({
+    distance: Number(dist.toFixed(5)),
     db: Number(db.toFixed(2))
-  }
-})
+  })
+}
 
 export default function OtdrAnalyzerPage() {
   const [loading, setLoading] = useState(false)
@@ -99,17 +123,34 @@ export default function OtdrAnalyzerPage() {
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
+  // Cable Length Edit Override States
+  const [overrideDistance, setOverrideDistance] = useState<string>("")
+  const [isEditingDistance, setIsEditingDistance] = useState<boolean>(false)
+
+  // Reset all states
+  const handleReset = () => {
+    setMetadata(null)
+    setFileName(null)
+    setEvents([])
+    setDataPoints([])
+    setErrorMsg(null)
+    setOverrideDistance("")
+    setIsEditingDistance(false)
+  }
+
   // Load demo data
   const handleLoadDemo = () => {
     setLoading(true)
     setErrorMsg(null)
+    setOverrideDistance("")
+    setIsEditingDistance(false)
     setTimeout(() => {
-      setFileName("demo_trace.sor")
+      setFileName("GDG06_A14.sor")
       setMetadata(demoMetadata)
       setEvents(demoEvents)
       setDataPoints(demoDataPoints)
       setLoading(false)
-    }, 600)
+    }, 400)
   }
 
   // Parse uploaded file
@@ -120,6 +161,8 @@ export default function OtdrAnalyzerPage() {
     setLoading(true)
     setErrorMsg(null)
     setFileName(file.name)
+    setOverrideDistance("")
+    setIsEditingDistance(false)
 
     const formData = new FormData()
     formData.append("sor_file", file)
@@ -141,7 +184,7 @@ export default function OtdrAnalyzerPage() {
         setEvents(data.events)
         setDataPoints(data.data_points)
         if (data.message) {
-          setErrorMsg(data.message) // Inform user if it's fallback mock
+          setErrorMsg(data.message)
         }
       } else {
         throw new Error(data.message || "Failed to process SOR file")
@@ -149,7 +192,7 @@ export default function OtdrAnalyzerPage() {
     } catch (err) {
       console.warn("FastAPI offline or parsing error, falling back to local simulation:", err)
       
-      // Graceful client-side parsing fallback
+      // Fallback
       setTimeout(() => {
         setMetadata({
           ...demoMetadata,
@@ -169,16 +212,88 @@ export default function OtdrAnalyzerPage() {
     window.print()
   }
 
+  // Resolve calculations based on length overrides
+  const spanDistanceOverride = useMemo(() => {
+    if (!metadata) return 0
+    const parsedOrig = parseFloat(metadata.span_distance.replace(",", ".")) || 1.79753
+    if (!overrideDistance) return parsedOrig
+    const parsedOverride = parseFloat(overrideDistance)
+    return isNaN(parsedOverride) ? parsedOrig : parsedOverride
+  }, [overrideDistance, metadata])
+
+  // Scale the trace curve dynamically so the drop-off aligns with the new SpanEnd B distance!
+  const adjustedDataPoints = useMemo(() => {
+    if (!metadata || dataPoints.length === 0) return []
+    const origSpanDist = parseFloat(metadata.span_distance.replace(",", ".")) || 1.79753
+    const scale = spanDistanceOverride / origSpanDist
+
+    return dataPoints.map((pt) => {
+      if (pt.distance <= origSpanDist) {
+        return {
+          ...pt,
+          distance: Number((pt.distance * scale).toFixed(5))
+        }
+      } else {
+        return {
+          ...pt,
+          distance: Number((spanDistanceOverride + (pt.distance - origSpanDist) * scale).toFixed(5))
+        }
+      }
+    })
+  }, [dataPoints, spanDistanceOverride, metadata])
+
+  // Scale/Adjust events distances
+  const adjustedEvents = useMemo(() => {
+    if (!metadata || events.length === 0) return []
+    const origSpanDist = parseFloat(metadata.span_distance.replace(",", ".")) || 1.79753
+    const scale = spanDistanceOverride / origSpanDist
+
+    return events.map((evt) => {
+      // BeginOfFiber always stays at 0
+      if (evt.type.includes("Begin") || evt.id === 0) {
+        return evt
+      }
+      // EndOfFiber snaps exactly to spanDistanceOverride
+      if (evt.type.includes("End") || evt.id === events.length - 1 || evt.id === 1) {
+        return {
+          ...evt,
+          distance: spanDistanceOverride
+        }
+      }
+      // Intermediate events scale linearly
+      return {
+        ...evt,
+        distance: Number((evt.distance * scale).toFixed(5))
+      }
+    })
+  }, [events, spanDistanceOverride, metadata])
+
+  // Calculate coordinates for Marker dots A and B on the scaled line
+  const markerA = adjustedEvents.find((e) => e.type.includes("Begin") || e.id === 0)
+  const markerB = adjustedEvents.find((e) => e.type.includes("End") || e.id === adjustedEvents.length - 1 || e.id === 1)
+
+  const dotA = markerA && adjustedDataPoints.length > 0
+    ? adjustedDataPoints.reduce((prev, curr) => 
+        Math.abs(curr.distance - markerA.distance) < Math.abs(prev.distance - markerA.distance) ? curr : prev
+      )
+    : null
+
+  const dotB = markerB && adjustedDataPoints.length > 0
+    ? adjustedDataPoints.reduce((prev, curr) => 
+        Math.abs(curr.distance - markerB.distance) < Math.abs(prev.distance - markerB.distance) ? curr : prev
+      )
+    : null
+
   return (
-    <div className="space-y-8 max-w-6xl print:p-0 print:space-y-4">
-      {/* Header */}
+    <div className="space-y-8 max-w-6xl print:p-0 print:space-y-4 print:max-w-none print:bg-white">
+      {/* Header (Web only) */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-            OTDR Trace Viewer & Analyzer
+            OTDR Trace Analyzer
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Upload Bellcore/Telcordia `.sor` files to view traces, examine connection events, and export PDF acceptance reports.
+            Analyze, visualize, and generate professional PDF reports for standard `.sor` OTDR trace files.
           </p>
         </div>
         <div className="flex gap-2">
@@ -193,7 +308,7 @@ export default function OtdrAnalyzerPage() {
         </div>
       </div>
 
-      {/* File Upload Area */}
+      {/* File Upload Area (Web only) */}
       {!metadata && !loading && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -219,7 +334,7 @@ export default function OtdrAnalyzerPage() {
         </motion.div>
       )}
 
-      {/* Loading State */}
+      {/* Loading State (Web only) */}
       {loading && (
         <div className="rounded-2xl border border-white/10 bg-card/20 p-12 text-center max-w-md mx-auto print:hidden">
           <RefreshCw className="h-8 w-8 text-primary animate-spin mx-auto mb-4" />
@@ -228,7 +343,7 @@ export default function OtdrAnalyzerPage() {
         </div>
       )}
 
-      {/* Error/Notice Notification */}
+      {/* Notice Notification */}
       {errorMsg && metadata && (
         <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4 text-xs text-amber-400 flex items-center gap-3 print:hidden max-w-5xl mx-auto">
           <ShieldAlert className="h-5 w-5 flex-shrink-0" />
@@ -241,9 +356,9 @@ export default function OtdrAnalyzerPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="space-y-6 max-w-5xl mx-auto"
+          className="space-y-6 max-w-6xl mx-auto print:space-y-4"
         >
-          {/* Action Row */}
+          {/* Action Row (Web only) */}
           <div className="flex justify-between items-center bg-card/30 border border-white/10 rounded-2xl p-4 print:hidden">
             <div className="flex items-center gap-3">
               <FileText className="h-5 w-5 text-primary" />
@@ -260,13 +375,7 @@ export default function OtdrAnalyzerPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setMetadata(null)
-                  setFileName(null)
-                  setEvents([])
-                  setDataPoints([])
-                  setErrorMsg(null)
-                }}
+                onClick={handleReset}
                 className="h-9 px-4 rounded-xl text-xs font-semibold border border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.05] text-foreground transition-all cursor-pointer"
               >
                 Reset
@@ -274,158 +383,312 @@ export default function OtdrAnalyzerPage() {
             </div>
           </div>
 
-          {/* Printable Report Header */}
-          <div className="hidden print:block border-b-2 border-neutral-800 pb-4 mb-4 text-black">
-            <h2 className="text-xl font-bold">OTDR FIBER TEST REPORT</h2>
-            <div className="text-xs text-neutral-600 mt-1">Generated via FTTH Tool (https://ftthtools.my.id)</div>
-          </div>
-
-          {/* Grid Layout: Metadata & Details */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Metadata Info Panel */}
-            <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm space-y-4 print:border-neutral-300 print:text-black">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-white/10 pb-2 flex items-center gap-1.5 print:text-black print:border-neutral-300">
-                <FileText className="h-4 w-4 text-primary print:text-black" />
-                Trace Information
-              </h3>
-              <div className="space-y-3 text-xs">
-                <div>
-                  <span className="text-muted-foreground block print:text-neutral-500">Cable ID</span>
-                  <span className="font-semibold text-foreground print:text-black">{metadata.cable_id}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block print:text-neutral-500">Fiber Core ID</span>
-                  <span className="font-semibold text-foreground print:text-black">{metadata.fiber_id}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block print:text-neutral-500">Wavelength</span>
-                  <span className="font-semibold text-foreground print:text-black">{metadata.wavelength}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-muted-foreground block print:text-neutral-500">Pulse Width</span>
-                    <span className="font-semibold text-foreground print:text-black">{metadata.pulse_width}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block print:text-neutral-500">Refractive Index</span>
-                    <span className="font-semibold text-foreground print:text-black">{metadata.index_refraction}</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-muted-foreground block print:text-neutral-500">Test Date</span>
-                    <span className="font-semibold text-foreground print:text-black">{metadata.date}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block print:text-neutral-500">Operator</span>
-                    <span className="font-semibold text-foreground print:text-black">{metadata.operator}</span>
-                  </div>
-                </div>
-                <div className="pt-2 border-t border-white/10 text-[10px] text-muted-foreground print:text-neutral-500 print:border-neutral-300">
-                  Mode: {metadata.parsed_mode}
-                </div>
+          {/* Page 1 Container (Visual + Metadata) */}
+          <div className="bg-white text-black p-6 rounded-2xl border border-neutral-200 shadow-sm print:shadow-none print:border-none print:p-0">
+            {/* Header Banner (VeEX styled) */}
+            <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-neutral-800">{metadata.cable_id || "OTDR TRACE"}</h2>
+                <div className="text-[10px] text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
+              </div>
+              <div className="text-right">
+                <span className="text-lg font-black tracking-tighter text-blue-600">Ve<span className="text-neutral-800">EX</span></span>
+                <div className="h-1 bg-gradient-to-r from-blue-600 to-cyan-500 w-16 ml-auto mt-1" />
               </div>
             </div>
 
-            {/* Trace Graph Card */}
-            <div className="md:col-span-2 rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm print:border-neutral-300 print:bg-white">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-white/10 pb-4 mb-4 flex items-center gap-1.5 print:text-black print:border-neutral-300">
-                <LineChartIcon className="h-4 w-4 text-primary print:text-black" />
-                Trace Curve (Distance vs dB)
-              </h3>
-              
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dataPoints} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.05)" className="print:stroke-neutral-200" />
-                    <XAxis 
-                      dataKey="distance" 
-                      type="number" 
-                      domain={[0, 'dataMax']} 
-                      unit=" km"
-                      tick={{ fontSize: 10, fill: '#888' }}
-                      stroke="oklch(1 0 0 / 0.1)"
-                    />
-                    <YAxis 
-                      unit=" dB"
-                      tick={{ fontSize: 10, fill: '#888' }}
-                      stroke="oklch(1 0 0 / 0.1)"
-                    />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#171717', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                      labelStyle={{ color: '#fff', fontSize: 11 }}
-                      itemStyle={{ color: 'var(--primary)', fontSize: 11 }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="db" 
-                      stroke="var(--primary)" 
-                      strokeWidth={2}
-                      dot={false}
-                      className="print:stroke-black"
-                    />
-                    
-                    {/* Render dots for events on chart */}
-                    {events.map((evt) => {
-                      // Find nearest data point to event distance
-                      const point = dataPoints.reduce((prev, curr) => 
-                        Math.abs(curr.distance - evt.distance) < Math.abs(prev.distance - evt.distance) ? curr : prev
-                      , dataPoints[0] || { distance: 0, db: 0 })
-                      
-                      return (
-                        <ReferenceDot 
-                          key={evt.id} 
-                          x={point.distance} 
-                          y={point.db} 
-                          r={4} 
-                          fill="var(--primary)" 
-                          stroke="#ffffff" 
-                          strokeWidth={1}
+            {/* Layout Grid: Graph on Left, Parameters on Right */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-6 print:grid-cols-[1.3fr_1fr] print:gap-4 items-start">
+              {/* Left Column: Trace Graph */}
+              <div className="space-y-4">
+                <div className="relative border border-neutral-200 rounded-xl p-3 bg-white">
+                  <div className="absolute top-2 right-4 text-[9px] font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded">
+                    km
+                  </div>
+                  <div className="h-72 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={adjustedDataPoints} margin={{ top: 15, right: 15, left: -25, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                        <XAxis 
+                          dataKey="distance" 
+                          type="number" 
+                          domain={[0, 'dataMax']} 
+                          tick={{ fontSize: 9, fill: '#666', fontWeight: 600 }}
+                          stroke="#ccc"
                         />
-                      )
-                    })}
-                  </LineChart>
-                </ResponsiveContainer>
+                        <YAxis 
+                          domain={[-60, -10]}
+                          tickCount={6}
+                          tick={{ fontSize: 9, fill: '#666', fontWeight: 600 }}
+                          stroke="#ccc"
+                        />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '8px', fontSize: 10 }}
+                          labelStyle={{ fontWeight: 'bold' }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="db" 
+                          stroke="#2563eb" 
+                          strokeWidth={1.5}
+                          dot={false}
+                        />
+                        
+                        {/* Red Marker A */}
+                        {markerA && (
+                          <ReferenceLine 
+                            x={markerA.distance} 
+                            stroke="#ef4444" 
+                            strokeWidth={1}
+                            label={{ value: 'A', position: 'bottom', fill: '#ef4444', fontSize: 10, fontWeight: 'bold', offset: 10 }}
+                          />
+                        )}
+
+                        {/* Red Marker B */}
+                        {markerB && (
+                          <ReferenceLine 
+                            x={markerB.distance} 
+                            stroke="#ef4444" 
+                            strokeWidth={1}
+                            label={{ value: 'B', position: 'bottom', fill: '#ef4444', fontSize: 10, fontWeight: 'bold', offset: 10 }}
+                          />
+                        )}
+
+                        {/* Yellow Dot A */}
+                        {dotA && (
+                          <ReferenceDot 
+                            x={dotA.distance} 
+                            y={dotA.db} 
+                            r={3.5} 
+                            fill="#eab308" 
+                            stroke="#000" 
+                            strokeWidth={1}
+                          />
+                        )}
+
+                        {/* Yellow Dot B */}
+                        {dotB && (
+                          <ReferenceDot 
+                            x={dotB.distance} 
+                            y={dotB.db} 
+                            r={3.5} 
+                            fill="#eab308" 
+                            stroke="#000" 
+                            strokeWidth={1}
+                          />
+                        )}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* db label at bottom left */}
+                  <div className="absolute bottom-12 left-4 text-[9px] font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded select-none">
+                    dB
+                  </div>
+                </div>
+
+                {/* Sub Labels under Chart */}
+                <div className="text-[10px] text-neutral-600 font-mono space-y-0.5 pl-2">
+                  <div>A - SpanBegin</div>
+                  <div>B - SpanEnd</div>
+                </div>
+              </div>
+
+              {/* Right Column: Parameters List */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px] text-neutral-800 border-l border-neutral-100 pl-4 print:border-l print:pl-3">
+                {/* Header info */}
+                <div className="col-span-2 font-mono text-[10.5px] border-b border-neutral-200 pb-1 mb-1 grid grid-cols-2">
+                  <div>{metadata.date}</div>
+                  <div className="text-right">Wavelength: {metadata.wavelength}</div>
+                </div>
+
+                <div className="col-span-2 grid grid-cols-2 gap-x-2">
+                  <div>Device: <span className="font-semibold">{metadata.device}</span></div>
+                  <div>ID: <span className="font-semibold">0901001</span></div>
+                </div>
+
+                <div className="col-span-2 h-1" />
+
+                {/* Table items */}
+                <div className="text-neutral-500">Cable ID:</div>
+                <div className="font-semibold text-right">{metadata.cable_id}</div>
+
+                <div className="text-neutral-500">Fiber ID:</div>
+                <div className="font-semibold text-right">{metadata.fiber_id}</div>
+
+                <div className="text-neutral-500">Fiber Type:</div>
+                <div className="font-semibold text-right">{metadata.fiber_type}</div>
+
+                <div className="text-neutral-500">Originating Location:</div>
+                <div className="font-semibold text-right">start position</div>
+
+                <div className="text-neutral-500">Terminating Location:</div>
+                <div className="font-semibold text-right">end position</div>
+
+                <div className="text-neutral-500">Line Status:</div>
+                <div className="font-semibold text-right">{metadata.line_status}</div>
+
+                <div className="text-neutral-500">Trace Type:</div>
+                <div className="font-semibold text-right">{metadata.trace_type}</div>
+
+                <div className="text-neutral-500">Operator:</div>
+                <div className="font-semibold text-right">{metadata.operator}</div>
+
+                <div className="text-neutral-500">Comment:</div>
+                <div className="font-semibold text-right">—</div>
+
+                <div className="col-span-2 border-t border-neutral-100 my-1" />
+
+                <div className="text-neutral-500">Refractive Index:</div>
+                <div className="font-mono text-right">{metadata.index_refraction}</div>
+
+                <div className="text-neutral-500">Backscatter coef.:</div>
+                <div className="font-mono text-right">{metadata.backscatter}</div>
+
+                <div className="text-neutral-500">Acquisition Range:</div>
+                <div className="font-mono text-right">{metadata.acq_range}</div>
+
+                <div className="text-neutral-500">First data point:</div>
+                <div className="font-mono text-right">0,00000 km</div>
+
+                <div className="text-neutral-500">Last data point:</div>
+                <div className="font-mono text-right">{metadata.acq_range}</div>
+
+                <div className="text-neutral-500">Sampling Resolution:</div>
+                <div className="font-mono text-right">{metadata.resolution}</div>
+
+                <div className="text-neutral-500">Pulse Width:</div>
+                <div className="font-mono text-right">{metadata.pulse_width}</div>
+
+                <div className="col-span-2 border-t border-neutral-100 my-1" />
+
+                <div className="text-neutral-500">Averaging Time:</div>
+                <div className="font-mono text-right">{metadata.avg_time}</div>
+
+                <div className="text-neutral-500">Event Loss Threshold:</div>
+                <div className="font-mono text-right">{metadata.loss_thresh}</div>
+
+                <div className="text-neutral-500">Reflectance Threshold:</div>
+                <div className="font-mono text-right">{metadata.refl_thresh}</div>
+
+                <div className="text-neutral-500">End of Fiber Threshold:</div>
+                <div className="font-mono text-right">{metadata.eof_thresh}</div>
+
+                <div className="col-span-2 border-t border-neutral-200 border-dashed my-1" />
+
+                {/* Bold Key Metrics - Now Editable */}
+                <div className="font-bold text-neutral-900">Span distance:</div>
+                <div className="font-bold text-right text-neutral-900 flex items-center justify-end gap-1.5">
+                  {isEditingDistance ? (
+                    <div className="flex items-center gap-1 print:hidden">
+                      <input
+                        type="text"
+                        value={overrideDistance}
+                        onChange={(e) => setOverrideDistance(e.target.value)}
+                        onBlur={() => setIsEditingDistance(false)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") setIsEditingDistance(false)
+                        }}
+                        className="w-20 px-1.5 py-0.5 border border-neutral-300 rounded text-[9.5px] font-mono text-right text-black focus:outline-none"
+                        autoFocus
+                      />
+                      <span className="text-[10px]">km</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOverrideDistance(spanDistanceOverride.toFixed(5))
+                        setIsEditingDistance(true)
+                      }}
+                      className="cursor-pointer hover:underline hover:text-primary flex items-center gap-1 group print:cursor-auto print:hover:no-underline text-left"
+                      title="Click to edit distance"
+                    >
+                      {spanDistanceOverride.toFixed(5).replace(".", ",")} km
+                      <span className="text-[9px] text-neutral-400 group-hover:text-primary print:hidden">✏️</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="font-bold text-neutral-900">Span loss:</div>
+                <div className="font-bold text-right text-neutral-900">{metadata.span_loss}</div>
+
+                <div className="font-bold text-neutral-900">ORL:</div>
+                <div className="font-bold text-right text-neutral-900">{metadata.orl}</div>
               </div>
             </div>
           </div>
 
-          {/* Events List Table */}
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm print:border-neutral-300 print:bg-white print:text-black">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-white/10 pb-4 mb-4 flex items-center gap-1.5 print:text-black print:border-neutral-300">
-              <TableIcon className="h-4 w-4 text-primary print:text-black" />
-              Event Analysis Table
-            </h3>
+          {/* Page break for printing to separate the table onto page 2 */}
+          <div className="print:page-break-before" />
 
+          {/* Page 2 Container (Event Table) */}
+          <div className="bg-white text-black p-6 rounded-2xl border border-neutral-200 shadow-sm print:shadow-none print:border-none print:p-0">
+            {/* Header Banner (Page 2) */}
+            <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-neutral-800">{metadata.cable_id || "OTDR TRACE"} — EVENT ANALYSIS</h2>
+                <div className="text-[10px] text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
+              </div>
+              <div className="text-right">
+                <span className="text-lg font-black tracking-tighter text-blue-600">Ve<span className="text-neutral-800">EX</span></span>
+                <div className="h-1 bg-gradient-to-r from-blue-600 to-cyan-500 w-16 ml-auto mt-1" />
+              </div>
+            </div>
+
+            {/* Event Analysis Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
+              <table className="w-full text-xs text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-white/10 text-muted-foreground print:text-neutral-500 print:border-neutral-300">
-                    <th className="py-2.5 font-medium">#</th>
-                    <th className="py-2.5 font-medium">Event Type</th>
-                    <th className="py-2.5 font-medium">Distance (km)</th>
-                    <th className="py-2.5 font-medium">Step Loss (dB)</th>
-                    <th className="py-2.5 font-medium">Reflectance (dB)</th>
-                    <th className="py-2.5 font-medium">Fiber Slope (dB/km)</th>
-                    <th className="py-2.5 font-medium">Description</th>
+                  <tr className="border-b-2 border-neutral-300 text-neutral-600">
+                    <th className="py-2.5 font-semibold text-neutral-800">#</th>
+                    <th className="py-2.5 font-semibold text-neutral-800">Status</th>
+                    <th className="py-2.5 font-semibold text-neutral-800">Distance, km</th>
+                    <th className="py-2.5 font-semibold text-neutral-800">Splice loss, dB</th>
+                    <th className="py-2.5 font-semibold text-neutral-800">Reflectance, dB</th>
+                    <th className="py-2.5 font-semibold text-neutral-800">Of loss, dB/km</th>
+                    <th className="py-2.5 font-semibold text-neutral-800">Cumulative loss, dB</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5 print:divide-neutral-200">
-                  {events.map((evt) => (
-                    <tr key={evt.id} className="hover:bg-white/[0.01]">
-                      <td className="py-3 font-semibold text-foreground print:text-black">{evt.id}</td>
-                      <td className="py-3 font-medium text-foreground print:text-black">{evt.type}</td>
-                      <td className="py-3 font-mono">{evt.distance.toFixed(3)} km</td>
-                      <td className={`py-3 font-mono ${evt.loss > 0.1 ? "text-amber-400 font-semibold print:text-black" : "text-foreground print:text-black"}`}>
-                        {evt.loss > 0 ? `-${evt.loss.toFixed(2)} dB` : "0.00 dB"}
-                      </td>
-                      <td className="py-3 font-mono">{evt.reflectance !== 0 ? `${evt.reflectance.toFixed(1)} dB` : "—"}</td>
-                      <td className="py-3 font-mono">{evt.slope > 0 ? `${evt.slope.toFixed(2)} dB/km` : "—"}</td>
-                      <td className="py-3 text-muted-foreground print:text-neutral-600">{evt.description}</td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-neutral-200 text-neutral-700">
+                  {adjustedEvents.map((evt) => {
+                    const isBegin = evt.type === "BeginOfFiber"
+                    const isEnd = evt.type === "EndOfFiber"
+                    
+                    // Format index/labels
+                    let idLabel = `${evt.id}`
+                    if (isBegin) idLabel = "0 (A)"
+                    if (isEnd) idLabel = "1 (B)"
+
+                    return (
+                      <tr key={evt.id} className="hover:bg-neutral-50">
+                        <td className="py-3 font-semibold text-neutral-900">{idLabel}</td>
+                        <td className="py-3 font-medium text-neutral-900 font-mono">{evt.type}</td>
+                        <td className="py-3 font-mono">
+                          {evt.distance.toFixed(5).replace(".", ",")}
+                        </td>
+                        <td className="py-3 font-mono text-neutral-500">
+                          {(!isBegin && !isEnd && evt.loss > 0) ? `-${evt.loss.toFixed(3).replace(".", ",")}` : "—"}
+                        </td>
+                        <td className="py-3 font-mono">
+                          {evt.reflectance !== 0 ? `${evt.reflectance.toFixed(3).replace(".", ",")}` : "—"}
+                        </td>
+                        <td className="py-3 font-mono">
+                          {evt.slope > 0 ? `${evt.slope.toFixed(3).replace(".", ",")}` : "—"}
+                        </td>
+                        <td className="py-3 font-mono">
+                          {/* Calculate cumulative loss representation if EndOfFiber */}
+                          {isEnd ? metadata.span_loss : "—"}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
+            </div>
+            
+            {/* Report Footer */}
+            <div className="mt-12 pt-6 border-t border-neutral-200 text-[10px] text-neutral-400 font-mono text-center">
+              Acceptance Test Report Generated Automatically via ftthtools.my.id
             </div>
           </div>
         </motion.div>
