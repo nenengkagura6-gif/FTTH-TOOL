@@ -2,14 +2,16 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { Menu, X } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { Menu, X, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { mainNavItems, siteConfig } from "@/lib/site-config"
+import { siteConfig } from "@/lib/site-config"
+import { translations } from "@/lib/translations"
 
-function Logo() {
+function Logo({ locale = "en" }: { locale?: string }) {
   return (
     <Link
-      href="/"
+      href={`/${locale}`}
       className="flex items-center gap-2 group"
       aria-label={siteConfig.name}
     >
@@ -49,11 +51,24 @@ function AnimatedNavLink({
   )
 }
 
-export function SiteNavbar() {
+export function SiteNavbar({ locale = "en" }: { locale?: string }) {
+  const pathname = usePathname() || ""
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [shapeClass, setShapeClass] = useState("rounded-full")
   const shapeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const t = translations[locale as "en" | "id"] || translations.en
+
+  const localizedNavItems = [
+    { label: t.nav.home, href: `/${locale}` },
+    { label: t.nav.tools, href: `/${locale}#tools` },
+    { label: t.nav.blog, href: `/${locale}/blog` },
+    { label: t.nav.docs, href: `/${locale}/docs` },
+    { label: t.nav.pricing, href: `/${locale}/pricing` },
+    { label: t.nav.about, href: `/${locale}/about` },
+  ]
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -76,8 +91,19 @@ export function SiteNavbar() {
     }
   }, [isOpen])
 
+  const toggleLanguage = () => {
+    const segments = pathname.split("/")
+    if (segments[1] === "en" || segments[1] === "id") {
+      segments[1] = segments[1] === "en" ? "id" : "en"
+      router.push(segments.join("/"))
+    } else {
+      const nextLocale = locale === "en" ? "id" : "en"
+      router.push(`/${nextLocale}`)
+    }
+  }
+
   return (
-      <header
+    <header
       className={cn(
         "fixed top-4 left-1/2 -translate-x-1/2 z-50",
         "flex flex-col items-start",
@@ -91,13 +117,13 @@ export function SiteNavbar() {
       )}
     >
       <div className="flex items-start justify-between w-full gap-x-6 sm:gap-x-8">
-        <Logo />
+        <Logo locale={locale} />
 
         <nav
           className="hidden md:flex items-start gap-6 pt-0.5"
           aria-label="Main navigation"
         >
-          {mainNavItems.map((item) => (
+          {localizedNavItems.map((item) => (
             <AnimatedNavLink key={item.href} href={item.href}>
               {item.label}
             </AnimatedNavLink>
@@ -105,11 +131,21 @@ export function SiteNavbar() {
         </nav>
 
         <div className="hidden md:flex items-start gap-2">
+          {/* Language Switcher */}
+          <button
+            type="button"
+            onClick={toggleLanguage}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs border border-white/10 bg-white/[0.03] text-muted-foreground rounded-full hover:border-white/30 hover:text-foreground transition-colors font-medium cursor-pointer"
+          >
+            <Globe className="h-3 w-3" />
+            <span className="uppercase">{locale === "en" ? "ID" : "EN"}</span>
+          </button>
+
           <Link
             href="/login"
             className="px-4 py-1.5 text-sm border border-white/10 bg-white/[0.03] text-muted-foreground rounded-full hover:border-white/30 hover:text-foreground transition-colors"
           >
-            Login
+            {t.nav.login}
           </Link>
           <div className="relative group">
             <div className="absolute inset-0 -m-1 rounded-full bg-primary/40 opacity-50 blur-md pointer-events-none transition-all duration-300 group-hover:opacity-80 group-hover:blur-lg group-hover:-m-2" />
@@ -117,7 +153,7 @@ export function SiteNavbar() {
               href="/signup"
               className="relative z-10 inline-flex items-center px-4 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-full hover:bg-primary/90 transition-colors"
             >
-              Sign up
+              {t.nav.signup}
             </Link>
           </div>
         </div>
@@ -145,7 +181,7 @@ export function SiteNavbar() {
           className="flex flex-col gap-1 text-base"
           aria-label="Mobile navigation"
         >
-          {mainNavItems.map((item) => (
+          {localizedNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -157,19 +193,32 @@ export function SiteNavbar() {
           ))}
         </nav>
         <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-white/10">
+          {/* Mobile Language Switcher */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false)
+              toggleLanguage()
+            }}
+            className="flex items-center justify-center gap-1 px-4 py-2 text-sm text-center border border-white/10 bg-white/[0.03] text-foreground rounded-full hover:border-white/30 transition-colors cursor-pointer"
+          >
+            <Globe className="h-4 w-4" />
+            <span>Switch to {locale === "en" ? "Bahasa Indonesia (ID)" : "English (EN)"}</span>
+          </button>
+
           <Link
             href="/login"
             onClick={() => setIsOpen(false)}
             className="px-4 py-2 text-sm text-center border border-white/10 bg-white/[0.03] text-foreground rounded-full hover:border-white/30 transition-colors"
           >
-            Login
+            {t.nav.login}
           </Link>
           <Link
             href="/signup"
             onClick={() => setIsOpen(false)}
             className="px-4 py-2 text-sm text-center font-medium text-primary-foreground bg-primary rounded-full hover:bg-primary/90 transition-colors"
           >
-            Sign up
+            {t.nav.signup}
           </Link>
         </div>
       </div>

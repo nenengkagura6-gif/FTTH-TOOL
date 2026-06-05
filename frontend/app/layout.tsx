@@ -1,13 +1,18 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Plus_Jakarta_Sans, Space_Grotesk, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import Script from "next/script"
 import { AppProviders } from "@/components/app-providers"
 import "./globals.css"
 
-const geist = Geist({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-geist-sans",
+  variable: "--font-plus-jakarta",
+})
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
 })
 
 const geistMono = Geist_Mono({
@@ -46,11 +51,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${geist.variable} ${geistMono.variable} bg-background`}
+      className={`dark bg-background`}
       suppressHydrationWarning
     >
       <body 
-        className="font-sans antialiased min-h-screen bg-background text-foreground"
+        className={`${plusJakarta.variable} ${spaceGrotesk.variable} ${geistMono.variable} font-sans antialiased min-h-screen bg-background text-foreground`}
         suppressHydrationWarning
       >
         <AppProviders>{children}</AppProviders>

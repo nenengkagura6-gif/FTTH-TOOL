@@ -2,35 +2,46 @@
 
 import { motion } from "framer-motion"
 import { Zap, Lock, Globe, Code2 } from "lucide-react"
+import { translations } from "@/lib/translations"
 
-const reasons = [
-  {
-    icon: Zap,
-    title: "Built for speed",
-    description:
-      "Process thousands of points in under a minute. No more waiting for manual checks.",
-  },
-  {
-    icon: Lock,
-    title: "Privacy first",
-    description:
-      "Files are processed in isolated workers and removed after delivery. We never train on your data.",
-  },
-  {
-    icon: Globe,
-    title: "Telecom-native",
-    description:
-      "Designed by FTTH engineers who understand BOQ, HP, splitters, and PON architecture.",
-  },
-  {
-    icon: Code2,
-    title: "API ready",
-    description:
-      "Plug our tools into your CI/CD or planning systems with a documented HTTP API.",
-  },
-]
+export function WhyUs({ locale = "en" }: { locale?: string }) {
+  const t = translations[locale as "en" | "id"] || translations.en
 
-export function WhyUs() {
+  const reasons = [
+    {
+      icon: Zap,
+      title: locale === "en" ? "Built for speed" : "Dirancang Cepat",
+      description:
+        locale === "en"
+          ? "Process thousands of points in under a minute. No more waiting for manual checks."
+          : "Proses ribuan titik dalam hitungan detik. Hilangkan proses verifikasi manual.",
+    },
+    {
+      icon: Lock,
+      title: locale === "en" ? "Privacy first" : "Privasi Utama",
+      description:
+        locale === "en"
+          ? "Files are processed in isolated workers and removed after delivery. We never train on your data."
+          : "Berkas diproses secara terisolasi dan dihapus setelah selesai. Data Anda sepenuhnya aman.",
+    },
+    {
+      icon: Globe,
+      title: locale === "en" ? "Telecom-native" : "Standar Telekomunikasi",
+      description:
+        locale === "en"
+          ? "Designed by FTTH engineers who understand BOQ, HP, splitters, and PON architecture."
+          : "Dirancang oleh insinyur FTTH yang mengerti seluk-beluk BOQ, HP, splitter, dan arsitektur PON.",
+    },
+    {
+      icon: Code2,
+      title: locale === "en" ? "API ready" : "Dukungan API",
+      description:
+        locale === "en"
+          ? "Plug our tools into your CI/CD or planning systems with a documented HTTP API."
+          : "Hubungkan alat otomatisasi kami ke sistem perencanaan Anda dengan API HTTP terdokumentasi.",
+    },
+  ]
+
   return (
     <section className="relative isolate py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-6">
@@ -38,12 +49,14 @@ export function WhyUs() {
           <div>
             <p className="text-sm font-medium text-primary">Why FTTH Tool</p>
             <h2 className="mt-2 text-3xl sm:text-5xl font-semibold tracking-tight text-balance">
-              The fastest path from KML chaos to clean deliverables
+              {locale === "en"
+                ? "The fastest path from KML chaos to clean deliverables"
+                : "Jalur tercepat mengubah kekacauan KML menjadi dokumen bersih"}
             </h2>
             <p className="mt-5 text-muted-foreground leading-relaxed text-pretty">
-              We replace spreadsheet wizardry and one-off scripts with a
-              cohesive platform that scales from a single project to a national
-              rollout.
+              {locale === "en"
+                ? "We replace spreadsheet wizardry and one-off scripts with a cohesive platform that scales from a single project to a national rollout."
+                : "Kami menggantikan skrip sekali pakai dan kerumitan spreadsheet dengan satu platform otomatisasi terpadu."}
             </p>
 
             <dl className="mt-10 grid grid-cols-2 gap-6 max-w-md">
@@ -52,7 +65,7 @@ export function WhyUs() {
                   10x
                 </dt>
                 <dd className="mt-1 text-xs text-muted-foreground">
-                  Faster than manual review
+                  {locale === "en" ? "Faster than manual review" : "Lebih cepat dari pemeriksaan manual"}
                 </dd>
               </div>
               <div>
@@ -60,7 +73,7 @@ export function WhyUs() {
                   99.9%
                 </dt>
                 <dd className="mt-1 text-xs text-muted-foreground">
-                  Platform uptime
+                  {locale === "en" ? "Platform uptime" : "Waktu aktif sistem"}
                 </dd>
               </div>
               <div>
@@ -68,7 +81,7 @@ export function WhyUs() {
                   2.4M+
                 </dt>
                 <dd className="mt-1 text-xs text-muted-foreground">
-                  HP points processed
+                  {locale === "en" ? "HP points processed" : "Titik HP diproses"}
                 </dd>
               </div>
               <div>
@@ -76,7 +89,7 @@ export function WhyUs() {
                   120+
                 </dt>
                 <dd className="mt-1 text-xs text-muted-foreground">
-                  Engineering teams
+                  {locale === "en" ? "Engineering teams" : "Tim rekayasa aktif"}
                 </dd>
               </div>
             </dl>

@@ -26,6 +26,7 @@ const toolLabels: Record<string, string> = {
   shp_to_kml: "SHP to KML",
   kml_to_dxf: "KML to DXF",
   dxf_to_kml: "DXF to KML",
+  kml_folder_extractor: "Folder Extractor",
 }
 
 const toolColors: Record<string, string> = {
@@ -39,6 +40,7 @@ const toolColors: Record<string, string> = {
   shp_to_kml: "bg-teal-500",
   kml_to_dxf: "bg-orange-500",
   dxf_to_kml: "bg-lime-500",
+  kml_folder_extractor: "bg-yellow-500",
 }
 
 interface AnalyticsData {
