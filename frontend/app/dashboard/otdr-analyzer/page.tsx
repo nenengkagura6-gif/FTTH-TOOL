@@ -330,6 +330,26 @@ export default function OtdrAnalyzerPage() {
 
   return (
     <div className="space-y-8 max-w-6xl print:p-0 print:space-y-0 print:max-w-none print:bg-white print:text-black">
+      {/* HTML Injection of print stylesheets for page margins strip */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body, html {
+            background: white !important;
+            color: black !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 0 !important;
+          }
+          .print-container {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+        }
+      `}} />
+
       {/* Header (Web only) */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <div>
@@ -511,6 +531,7 @@ export default function OtdrAnalyzerPage() {
                               stroke="#2563eb" 
                               strokeWidth={1.5}
                               dot={false}
+                              isAnimationActive={false}
                             />
                             
                             {activeCompiled.mkrA && (
@@ -758,17 +779,28 @@ export default function OtdrAnalyzerPage() {
 
       {/* Batch Print View Only (Hidden on Web, Visible during window.print()) */}
       {traces.length > 0 && (
-        <div className="hidden print:block space-y-0 bg-white text-black p-0">
-          {traces.map((trace) => {
+        <div className="hidden print:block print-container space-y-0 bg-white text-black p-0 m-0">
+          {traces.map((trace, index) => {
             const compiled = compileTraceData(trace)
+            const isLast = index === traces.length - 1
             return (
               <div 
                 key={trace.filename} 
                 className="space-y-0 print:space-y-0"
-                style={{ pageBreakAfter: "always", breakAfter: "page" }}
+                style={{ 
+                  pageBreakAfter: isLast ? "avoid" : "always", 
+                  breakAfter: isLast ? "avoid" : "page" 
+                }}
               >
                 {/* Print Page 1 */}
-                <div className="p-0 bg-white text-black min-h-screen flex flex-col justify-between" style={{ pageBreakInside: "avoid" }}>
+                <div 
+                  className="p-8 bg-white text-black flex flex-col justify-between" 
+                  style={{ 
+                    height: "296mm", 
+                    pageBreakInside: "avoid", 
+                    boxSizing: "border-box" 
+                  }}
+                >
                   <div>
                     <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
                       <div>
@@ -782,79 +814,81 @@ export default function OtdrAnalyzerPage() {
                     </div>
 
                     <div className="grid grid-cols-[1.3fr_1fr] gap-4 items-start">
-                      {/* Graph */}
+                      {/* Graph with fixed width/height for printable container */}
                       <div className="space-y-4">
-                        <div className="relative border border-neutral-200 rounded-xl p-3 bg-white">
+                        <div className="relative border border-neutral-200 rounded-xl p-2 bg-white w-[380px]">
                           <div className="absolute top-2 right-4 text-[9px] font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded">
                             km
                           </div>
-                          <div className="h-72 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart data={compiled.adjDataPoints} margin={{ top: 15, right: 15, left: -25, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-                                <XAxis 
-                                  dataKey="distance" 
-                                  type="number" 
-                                  domain={[0, 'dataMax']} 
-                                  tick={{ fontSize: 9, fill: '#666', fontWeight: 600 }}
-                                  stroke="#ccc"
-                                />
-                                <YAxis 
-                                  domain={[-60, -10]}
-                                  tickCount={6}
-                                  tick={{ fontSize: 9, fill: '#666', fontWeight: 600 }}
-                                  stroke="#ccc"
-                                />
-                                <Line 
-                                  type="monotone" 
-                                  dataKey="db" 
-                                  stroke="#2563eb" 
-                                  strokeWidth={1.5}
-                                  dot={false}
-                                />
-                                
-                                {compiled.mkrA && (
-                                  <ReferenceLine 
-                                    x={compiled.mkrA.distance} 
-                                    stroke="#ef4444" 
-                                    strokeWidth={1}
-                                    label={{ value: 'A', position: 'bottom', fill: '#ef4444', fontSize: 10, fontWeight: 'bold', offset: 10 }}
-                                  />
-                                )}
+                          <LineChart 
+                            width={360} 
+                            height={245} 
+                            data={compiled.adjDataPoints} 
+                            margin={{ top: 15, right: 10, left: -25, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                            <XAxis 
+                              dataKey="distance" 
+                              type="number" 
+                              domain={[0, 'dataMax']} 
+                              tick={{ fontSize: 9, fill: '#666', fontWeight: 600 }}
+                              stroke="#ccc"
+                            />
+                            <YAxis 
+                              domain={[-60, -10]}
+                              tickCount={6}
+                              tick={{ fontSize: 9, fill: '#666', fontWeight: 600 }}
+                              stroke="#ccc"
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="db" 
+                              stroke="#2563eb" 
+                              strokeWidth={1.5}
+                              dot={false}
+                              isAnimationActive={false}
+                            />
+                            
+                            {compiled.mkrA && (
+                              <ReferenceLine 
+                                x={compiled.mkrA.distance} 
+                                stroke="#ef4444" 
+                                strokeWidth={1}
+                                label={{ value: 'A', position: 'bottom', fill: '#ef4444', fontSize: 10, fontWeight: 'bold', offset: 10 }}
+                              />
+                            )}
 
-                                {compiled.mkrB && (
-                                  <ReferenceLine 
-                                    x={compiled.mkrB.distance} 
-                                    stroke="#ef4444" 
-                                    strokeWidth={1}
-                                    label={{ value: 'B', position: 'bottom', fill: '#ef4444', fontSize: 10, fontWeight: 'bold', offset: 10 }}
-                                  />
-                                )}
+                            {compiled.mkrB && (
+                              <ReferenceLine 
+                                x={compiled.mkrB.distance} 
+                                stroke="#ef4444" 
+                                strokeWidth={1}
+                                label={{ value: 'B', position: 'bottom', fill: '#ef4444', fontSize: 10, fontWeight: 'bold', offset: 10 }}
+                              />
+                            )}
 
-                                {compiled.dtA && (
-                                  <ReferenceDot 
-                                    x={compiled.dtA.distance} 
-                                    y={compiled.dtA.db} 
-                                    r={3.5} 
-                                    fill="#eab308" 
-                                    stroke="#000" 
-                                    strokeWidth={1}
-                                  />
-                                )}
+                            {compiled.dtA && (
+                              <ReferenceDot 
+                                x={compiled.dtA.distance} 
+                                y={compiled.dtA.db} 
+                                r={3.5} 
+                                fill="#eab308" 
+                                stroke="#000" 
+                                strokeWidth={1}
+                              />
+                            )}
 
-                                {compiled.dtB && (
-                                  <ReferenceDot 
-                                    x={compiled.dtB.distance} 
-                                    y={compiled.dtB.db} 
-                                    r={3.5} 
-                                    fill="#eab308" 
-                                    stroke="#000" 
-                                    strokeWidth={1}
-                                  />
-                                )}
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
+                            {compiled.dtB && (
+                              <ReferenceDot 
+                                x={compiled.dtB.distance} 
+                                y={compiled.dtB.db} 
+                                r={3.5} 
+                                fill="#eab308" 
+                                stroke="#000" 
+                                strokeWidth={1}
+                              />
+                            )}
+                          </LineChart>
                           <div className="absolute bottom-12 left-4 text-[9px] font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded select-none">
                             dB
                           </div>
@@ -963,8 +997,13 @@ export default function OtdrAnalyzerPage() {
 
                 {/* Print Page 2 */}
                 <div 
-                  className="p-0 bg-white text-black min-h-screen flex flex-col justify-between" 
-                  style={{ pageBreakBefore: "always", breakBefore: "page", pageBreakInside: "avoid" }}
+                  className="p-8 bg-white text-black flex flex-col justify-between" 
+                  style={{ 
+                    height: "296mm", 
+                    pageBreakBefore: "always", 
+                    breakBefore: "page", 
+                    pageBreakInside: "avoid" 
+                  }}
                 >
                   <div>
                     <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
