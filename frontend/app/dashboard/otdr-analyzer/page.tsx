@@ -123,9 +123,8 @@ export default function OtdrAnalyzerPage() {
   const [dataPoints, setDataPoints] = useState<DataPoint[]>([])
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // Cable Length Edit Override States
+  // Cable Length Edit Override State
   const [overrideDistance, setOverrideDistance] = useState<string>("")
-  const [isEditingDistance, setIsEditingDistance] = useState<boolean>(false)
 
   // Reset all states
   const handleReset = () => {
@@ -135,7 +134,6 @@ export default function OtdrAnalyzerPage() {
     setDataPoints([])
     setErrorMsg(null)
     setOverrideDistance("")
-    setIsEditingDistance(false)
   }
 
   // Load demo data
@@ -143,7 +141,6 @@ export default function OtdrAnalyzerPage() {
     setLoading(true)
     setErrorMsg(null)
     setOverrideDistance("")
-    setIsEditingDistance(false)
     setTimeout(() => {
       setFileName("GDG06_A14.sor")
       setMetadata(demoMetadata)
@@ -162,7 +159,6 @@ export default function OtdrAnalyzerPage() {
     setErrorMsg(null)
     setFileName(file.name)
     setOverrideDistance("")
-    setIsEditingDistance(false)
 
     const formData = new FormData()
     formData.append("sor_file", file)
@@ -293,7 +289,7 @@ export default function OtdrAnalyzerPage() {
             OTDR Trace Analyzer
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Analyze, visualize, and generate professional PDF reports for standard `.sor` OTDR trace files.
+            Upload Bellcore/Telcordia `.sor` files to view traces, examine connection events, and export PDF acceptance reports.
           </p>
         </div>
         <div className="flex gap-2">
@@ -385,14 +381,14 @@ export default function OtdrAnalyzerPage() {
 
           {/* Page 1 Container (Visual + Metadata) */}
           <div className="bg-white text-black p-6 rounded-2xl border border-neutral-200 shadow-sm print:shadow-none print:border-none print:p-0">
-            {/* Header Banner (VeEX styled) */}
+            {/* Header Banner (VeEX layout replaced with ftools) */}
             <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
               <div>
                 <h2 className="text-xl font-bold tracking-tight text-neutral-800">{metadata.cable_id || "OTDR TRACE"}</h2>
                 <div className="text-[10px] text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
               </div>
               <div className="text-right">
-                <span className="text-lg font-black tracking-tighter text-blue-600">Ve<span className="text-neutral-800">EX</span></span>
+                <span className="text-lg font-black tracking-tighter text-blue-600">f<span className="text-neutral-800">tools</span></span>
                 <div className="h-1 bg-gradient-to-r from-blue-600 to-cyan-500 w-16 ml-auto mt-1" />
               </div>
             </div>
@@ -575,38 +571,10 @@ export default function OtdrAnalyzerPage() {
 
                 <div className="col-span-2 border-t border-neutral-200 border-dashed my-1" />
 
-                {/* Bold Key Metrics - Now Editable */}
+                {/* Bold Key Metrics */}
                 <div className="font-bold text-neutral-900">Span distance:</div>
-                <div className="font-bold text-right text-neutral-900 flex items-center justify-end gap-1.5">
-                  {isEditingDistance ? (
-                    <div className="flex items-center gap-1 print:hidden">
-                      <input
-                        type="text"
-                        value={overrideDistance}
-                        onChange={(e) => setOverrideDistance(e.target.value)}
-                        onBlur={() => setIsEditingDistance(false)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") setIsEditingDistance(false)
-                        }}
-                        className="w-20 px-1.5 py-0.5 border border-neutral-300 rounded text-[9.5px] font-mono text-right text-black focus:outline-none"
-                        autoFocus
-                      />
-                      <span className="text-[10px]">km</span>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOverrideDistance(spanDistanceOverride.toFixed(5))
-                        setIsEditingDistance(true)
-                      }}
-                      className="cursor-pointer hover:underline hover:text-primary flex items-center gap-1 group print:cursor-auto print:hover:no-underline text-left"
-                      title="Click to edit distance"
-                    >
-                      {spanDistanceOverride.toFixed(5).replace(".", ",")} km
-                      <span className="text-[9px] text-neutral-400 group-hover:text-primary print:hidden">✏️</span>
-                    </button>
-                  )}
+                <div className="font-bold text-right text-neutral-900">
+                  {spanDistanceOverride.toFixed(5).replace(".", ",")} km
                 </div>
 
                 <div className="font-bold text-neutral-900">Span loss:</div>
@@ -614,23 +582,49 @@ export default function OtdrAnalyzerPage() {
 
                 <div className="font-bold text-neutral-900">ORL:</div>
                 <div className="font-bold text-right text-neutral-900">{metadata.orl}</div>
+
+                <div className="col-span-2 border-t border-neutral-200 border-dashed my-2 print:hidden" />
+
+                {/* Interactive obvious input override box (Web only) */}
+                <div className="col-span-2 space-y-1.5 print:hidden">
+                  <label className="text-[9.5px] font-bold uppercase tracking-wider text-primary">Override Cable Length (km)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.00001"
+                      placeholder={parseFloat(metadata.span_distance.replace(",", ".")).toFixed(5)}
+                      value={overrideDistance}
+                      onChange={(e) => setOverrideDistance(e.target.value)}
+                      className="flex-1 h-8 px-2.5 rounded-lg border border-neutral-200 bg-neutral-50 text-[11px] font-mono text-black focus:outline-none focus:border-primary"
+                    />
+                    {overrideDistance && (
+                      <button
+                        type="button"
+                        onClick={() => setOverrideDistance("")}
+                        className="h-8 px-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-[10px] font-semibold text-neutral-600 transition-colors cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Page break for printing to separate the table onto page 2 */}
-          <div className="print:page-break-before" />
-
-          {/* Page 2 Container (Event Table) */}
-          <div className="bg-white text-black p-6 rounded-2xl border border-neutral-200 shadow-sm print:shadow-none print:border-none print:p-0">
-            {/* Header Banner (Page 2) */}
+          {/* Page 2 Container (Event Table) - Formatted specifically to break to Page 2 cleanly */}
+          <div 
+            style={{ pageBreakBefore: "always", breakBefore: "page" }}
+            className="bg-white text-black p-6 rounded-2xl border border-neutral-200 shadow-sm print:shadow-none print:border-none print:p-0 print:mt-0"
+          >
+            {/* Header Banner (Page 2) - Clean banner matching ftools theme, with NO event analysis title as per user request */}
             <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
               <div>
-                <h2 className="text-xl font-bold tracking-tight text-neutral-800">{metadata.cable_id || "OTDR TRACE"} — EVENT ANALYSIS</h2>
+                <h2 className="text-xl font-bold tracking-tight text-neutral-800">{metadata.cable_id || "OTDR TRACE"}</h2>
                 <div className="text-[10px] text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
               </div>
               <div className="text-right">
-                <span className="text-lg font-black tracking-tighter text-blue-600">Ve<span className="text-neutral-800">EX</span></span>
+                <span className="text-lg font-black tracking-tighter text-blue-600">f<span className="text-neutral-800">tools</span></span>
                 <div className="h-1 bg-gradient-to-r from-blue-600 to-cyan-500 w-16 ml-auto mt-1" />
               </div>
             </div>
