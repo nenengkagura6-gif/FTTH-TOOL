@@ -11,7 +11,7 @@ import { useAuth } from "@/components/auth/auth-provider"
 import { useRouter } from "next/navigation"
 
 const toolLabels: Record<string, string> = {
-  kml_to_boq: "BOQ", kml_to_database: "DB HP", kml_duplicate_checker: "Checker",
+  kml_to_boq: "BOQ", kml_to_database: "DB HP", kml_duplicate_checker: "Checker", kml_folder_extractor: "Extractor",
 }
 const planBadge: Record<string, string> = {
   free: "bg-gray-500/10 text-gray-400 border-gray-500/20",

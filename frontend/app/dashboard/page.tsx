@@ -35,6 +35,7 @@ const toolLabels: Record<string, string> = {
   shp_to_kml: "Shapefile to KML",
   kml_to_dxf: "KML to AutoCAD (DXF)",
   dxf_to_kml: "AutoCAD (DXF) to KML",
+  kml_folder_extractor: "KML Folder Extractor",
 }
 
 function timeAgo(dateStr: string): string {

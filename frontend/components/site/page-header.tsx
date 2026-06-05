@@ -20,7 +20,7 @@ export function PageHeader({
         {eyebrow && (
           <p className="text-sm font-medium text-primary">{eyebrow}</p>
         )}
-        <h1 className="mt-2 text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-balance leading-[1.05]">
+        <h1 className="mt-2 text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-balance leading-[1.05] font-display">
           {title}
         </h1>
         {description && (

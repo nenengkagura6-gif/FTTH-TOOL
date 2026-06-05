@@ -4,8 +4,11 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { ArrowRight, Sparkles } from "lucide-react"
 import { AnimatedBackground } from "@/components/site/animated-background"
+import { translations } from "@/lib/translations"
 
-export function Hero() {
+export function Hero({ locale = "en" }: { locale?: string }) {
+  const t = translations[locale as "en" | "id"] || translations.en
+
   return (
     <section className="relative isolate overflow-hidden pt-32 pb-24 sm:pt-40 sm:pb-32">
       <AnimatedBackground variant="grid" />
@@ -15,23 +18,35 @@ export function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm"
+          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm tech-border-glow"
         >
           <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span>New: KML Duplicate Checker now in beta</span>
+          <span>{t.hero.badge}</span>
         </motion.div>
 
         <motion.h1
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.1 }}
-          className="mt-6 text-4xl sm:text-6xl lg:text-7xl font-semibold tracking-tight text-balance leading-[1.05]"
+          className="mt-6 text-4xl sm:text-6xl lg:text-7xl font-semibold tracking-tight text-balance leading-[1.05] font-display"
         >
-          Modern{" "}
-          <span className="bg-gradient-to-br from-foreground via-foreground to-primary bg-clip-text text-transparent">
-            FTTH Tool
-          </span>{" "}
-          Automation Platform
+          {locale === "en" ? (
+            <>
+              Modern{" "}
+              <span className="bg-gradient-to-br from-foreground via-foreground to-primary bg-clip-text text-transparent">
+                FTTH Tool
+              </span>{" "}
+              Automation Platform
+            </>
+          ) : (
+            <>
+              Platform Otomatisasi{" "}
+              <span className="bg-gradient-to-br from-foreground via-foreground to-primary bg-clip-text text-transparent">
+                FTTH Tool
+              </span>{" "}
+              Modern
+            </>
+          )}
         </motion.h1>
 
         <motion.p
@@ -40,8 +55,7 @@ export function Hero() {
           transition={{ duration: 0.7, delay: 0.2 }}
           className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground leading-relaxed text-pretty"
         >
-          Automate KML, database, and document telecom workflows in seconds.
-          Built for fiber engineers, network planners, and field teams.
+          {t.hero.subtitle}
         </motion.p>
 
         <motion.div
@@ -56,7 +70,7 @@ export function Hero() {
               href="/signup"
               className="relative inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              Start Free
+              {t.hero.btnStart}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -64,7 +78,7 @@ export function Hero() {
             href="#tools"
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-6 py-3 text-sm font-medium text-foreground backdrop-blur-sm transition-colors hover:border-white/30 hover:bg-white/[0.06]"
           >
-            Explore Tools
+            {t.hero.btnExplore}
           </Link>
         </motion.div>
 
@@ -74,7 +88,7 @@ export function Hero() {
           transition={{ duration: 0.8, delay: 0.5 }}
           className="mt-16 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs text-muted-foreground"
         >
-          <span>Trusted by engineering teams worldwide</span>
+          <span>{t.hero.trusted}</span>
           <span className="hidden sm:block h-1 w-1 rounded-full bg-white/20" />
           <span>SOC2 ready</span>
           <span className="hidden sm:block h-1 w-1 rounded-full bg-white/20" />

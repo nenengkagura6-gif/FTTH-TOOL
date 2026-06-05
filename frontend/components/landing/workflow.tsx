@@ -2,39 +2,39 @@
 
 import { motion } from "framer-motion"
 import { Upload, Cpu, Download } from "lucide-react"
+import { translations } from "@/lib/translations"
 
-const steps = [
-  {
-    icon: Upload,
-    step: "01",
-    title: "Upload your KML",
-    description:
-      "Drag and drop KML or KMZ files. Optional Excel templates accepted for custom mapping.",
-  },
-  {
-    icon: Cpu,
-    step: "02",
-    title: "Process automatically",
-    description:
-      "Our engine validates, parses, and transforms your data with a transparent progress bar.",
-  },
-  {
-    icon: Download,
-    step: "03",
-    title: "Download results",
-    description:
-      "Get clean BOQ, structured databases, or duplicate reports ready for your stakeholders.",
-  },
-]
+export function Workflow({ locale = "en" }: { locale?: string }) {
+  const t = translations[locale as "en" | "id"] || translations.en
 
-export function Workflow() {
+  const steps = [
+    {
+      icon: Upload,
+      step: "01",
+      title: t.workflow.step1,
+      description: t.workflow.step1Desc,
+    },
+    {
+      icon: Cpu,
+      step: "02",
+      title: t.workflow.step2,
+      description: t.workflow.step2Desc,
+    },
+    {
+      icon: Download,
+      step: "03",
+      title: t.workflow.step3,
+      description: t.workflow.step3Desc,
+    },
+  ]
+
   return (
     <section className="relative isolate py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-medium text-primary">Workflow</p>
           <h2 className="mt-2 text-3xl sm:text-5xl font-semibold tracking-tight text-balance">
-            From file to deliverable in three steps
+            {locale === "en" ? "From file to deliverable in three steps" : "Dari file ke hasil akhir dalam tiga langkah"}
           </h2>
         </div>
 

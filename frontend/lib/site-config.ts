@@ -16,6 +16,7 @@ import {
   Palette,
   LineChart,
   Scissors,
+  FolderSearch,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -80,6 +81,13 @@ export const dashboardMenu: DashboardMenuItem[] = [
     icon: Map,
     description: "Convert KML files to Bill of Quantities",
     featureKey: "kml_to_boq",
+  },
+  {
+    title: "KML Folder Extractor",
+    href: "/dashboard/kml-extractor",
+    icon: FolderSearch,
+    description: "Extract elements and summarize counts by folder to Excel",
+    featureKey: "kml_folder_extractor",
   },
   {
     title: "KML to Database HP",

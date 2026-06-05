@@ -1,8 +1,28 @@
 import Link from "next/link"
 import { Github, Twitter, Linkedin } from "lucide-react"
-import { footerLinks, siteConfig } from "@/lib/site-config"
+import { siteConfig } from "@/lib/site-config"
+import { translations } from "@/lib/translations"
 
-export function SiteFooter() {
+export function SiteFooter({ locale = "en" }: { locale?: string }) {
+  const t = translations[locale as "en" | "id"] || translations.en
+
+  const localizedProductLinks = [
+    { label: t.nav.tools, href: `/${locale}#tools` },
+    { label: t.nav.pricing, href: `/${locale}/pricing` },
+    { label: t.nav.docs, href: `/${locale}/docs` },
+    { label: t.nav.blog, href: `/${locale}/blog` },
+  ]
+
+  const localizedCompanyLinks = [
+    { label: t.nav.about, href: `/${locale}/about` },
+    { label: "Contact", href: `/${locale}/about#contact` },
+  ]
+
+  const localizedLegalLinks = [
+    { label: "Privacy Policy", href: `/${locale}/privacy` },
+    { label: "Terms of Service", href: `/${locale}/terms` },
+  ]
+
   return (
     <footer className="relative border-t border-white/10 bg-background">
       <div className="mx-auto max-w-7xl px-6 py-16">
@@ -23,7 +43,9 @@ export function SiteFooter() {
               </span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-              {siteConfig.description}
+              {locale === "en"
+                ? siteConfig.description
+                : "Platform otomatisasi teknik FTTH dan telekomunikasi modern. Otomatiskan KML, database, dan dokumen dalam hitungan detik."}
             </p>
             <div className="flex items-center gap-3 mt-5">
               <a
@@ -51,9 +73,11 @@ export function SiteFooter() {
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-foreground mb-4">Product</h3>
+            <h3 className="text-sm font-medium text-foreground mb-4">
+              {locale === "en" ? "Product" : "Produk"}
+            </h3>
             <ul className="space-y-3">
-              {footerLinks.product.map((l) => (
+              {localizedProductLinks.map((l) => (
                 <li key={l.href}>
                   <Link
                     href={l.href}
@@ -67,9 +91,11 @@ export function SiteFooter() {
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-foreground mb-4">Company</h3>
+            <h3 className="text-sm font-medium text-foreground mb-4">
+              {locale === "en" ? "Company" : "Perusahaan"}
+            </h3>
             <ul className="space-y-3">
-              {footerLinks.company.map((l) => (
+              {localizedCompanyLinks.map((l) => (
                 <li key={l.href}>
                   <Link
                     href={l.href}
@@ -85,7 +111,7 @@ export function SiteFooter() {
           <div>
             <h3 className="text-sm font-medium text-foreground mb-4">Legal</h3>
             <ul className="space-y-3">
-              {footerLinks.legal.map((l) => (
+              {localizedLegalLinks.map((l) => (
                 <li key={l.href}>
                   <Link
                     href={l.href}
@@ -104,7 +130,9 @@ export function SiteFooter() {
             © {new Date().getFullYear()} {siteConfig.org}. All rights reserved.
           </p>
           <p className="text-xs text-muted-foreground">
-            Built for fiber engineers who ship faster.
+            {locale === "en"
+              ? "Built for fiber engineers who ship faster."
+              : "Dirancang khusus untuk insinyur fiber optik bekerja lebih cepat."}
           </p>
         </div>
       </div>
