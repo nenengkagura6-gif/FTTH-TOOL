@@ -12,6 +12,9 @@ import {
   Globe,
   DraftingCompass,
   Compass,
+  Activity,
+  Palette,
+  LineChart,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -120,6 +123,24 @@ export const dashboardMenu: DashboardMenuItem[] = [
     href: "/dashboard/dxf-kml",
     icon: Compass,
     description: "Convert AutoCAD DXF metric drawings back to KML/KMZ vector data",
+  },
+  {
+    title: "OPM Link Budget",
+    href: "/dashboard/opm-calculator",
+    icon: Activity,
+    description: "Calculate fiber path link loss and power budget",
+  },
+  {
+    title: "Fiber Color Code",
+    href: "/dashboard/fiber-color-code",
+    icon: Palette,
+    description: "Lookup tube and core colors (TIA-598-C & Telkom)",
+  },
+  {
+    title: "OTDR Trace Analyzer",
+    href: "/dashboard/otdr-analyzer",
+    icon: LineChart,
+    description: "Analyze SOR traces and generate reports",
   },
   {
     title: "Admin Panel",
