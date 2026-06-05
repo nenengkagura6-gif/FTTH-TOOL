@@ -61,6 +61,7 @@ export default function SpliceManagerPage() {
   const [standard, setStandard] = useState<"Telkom" | "TIA">("Telkom")
   const [startCore, setStartCore] = useState<number>(1)
   const [coresPerTube, setCoresPerTube] = useState<number>(12)
+  const [fatCoreScheme, setFatCoreScheme] = useState<"all_active" | "active_backup">("active_backup")
 
   // 2. Tab & Search Filter states
   const [activeTab, setActiveTab] = useState<"fdt" | "fat">("fdt")
@@ -100,7 +101,7 @@ export default function SpliceManagerPage() {
       const colors = getTubeAndCoreColors(c)
       let fatName = ""
       let fatCoreTarget = ""
-      let status: "Active" | "Spare" = "Spare"
+      let status: "Active" | "Backup" | "Spare" = "Spare"
 
       // Check if this FDT core is inside the range of active distribution splicing
       if (c >= startCore && c < startCore + totalAllocatedCores) {
@@ -110,8 +111,16 @@ export default function SpliceManagerPage() {
 
         const paddedFatIndex = fatIndex.toString().padStart(2, "0")
         fatName = `${fatBaseName}${paddedFatIndex}`
-        fatCoreTarget = `Core ${fatCoreIndex}`
-        status = "Active"
+        
+        if (coresPerFat === 2 && fatCoreScheme === "active_backup" && fatCoreIndex === 2) {
+          fatCoreTarget = "Core 2 (Idle/Backup)"
+          status = "Backup"
+        } else {
+          fatCoreTarget = coresPerFat === 2 && fatCoreScheme === "active_backup" && fatCoreIndex === 1
+            ? "Core 1 (Aktif/Splitter)"
+            : `Core ${fatCoreIndex}`
+          status = "Active"
+        }
       }
 
       rows.push({
@@ -124,7 +133,7 @@ export default function SpliceManagerPage() {
     }
 
     return rows
-  }, [capacity, numFat, coresPerFat, fatBaseName, startCore, coresPerTube, activeColors])
+  }, [capacity, numFat, coresPerFat, fatBaseName, startCore, coresPerTube, activeColors, fatCoreScheme])
 
   // 5. Splicing logic: FAT Box centric view data mapping
   const fatBoxesRows = useMemo(() => {
@@ -146,10 +155,16 @@ export default function SpliceManagerPage() {
           colorsInfo = getTubeAndCoreColors(globalFdtCore)
         }
 
+        let coreStatus: "Active" | "Backup" = "Active"
+        if (coresPerFat === 2 && fatCoreScheme === "active_backup" && k === 1) {
+          coreStatus = "Backup"
+        }
+
         allocatedCoresList.push({
           fatCoreIndex: k + 1,
           fdtCore: globalFdtCore,
           isExceedingCable,
+          coreStatus,
           ...colorsInfo,
         })
       }
@@ -162,7 +177,7 @@ export default function SpliceManagerPage() {
     }
 
     return rows
-  }, [capacity, numFat, coresPerFat, fatBaseName, startCore, coresPerTube, activeColors])
+  }, [capacity, numFat, coresPerFat, fatBaseName, startCore, coresPerTube, activeColors, fatCoreScheme])
 
   // 6. Filtering lists based on search query
   const filteredFdtRows = useMemo(() => {
@@ -220,6 +235,7 @@ export default function SpliceManagerPage() {
     setStandard("Telkom")
     setStartCore(1)
     setCoresPerTube(12)
+    setFatCoreScheme("active_backup")
     setSearchQuery("")
   }
 
@@ -485,6 +501,20 @@ export default function SpliceManagerPage() {
                 </div>
               </div>
 
+              {coresPerFat === 2 && (
+                <div className="space-y-1.5 animate-in fade-in duration-200">
+                  <label className="text-xs text-muted-foreground font-medium">Skema Core FAT (2 Core)</label>
+                  <select
+                    value={fatCoreScheme}
+                    onChange={(e) => setFatCoreScheme(e.target.value as "all_active" | "active_backup")}
+                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30 text-foreground bg-neutral-900"
+                  >
+                    <option value="active_backup" className="bg-neutral-900 text-foreground">1 Aktif (Splitter 1:16), 1 Idle (Backup)</option>
+                    <option value="all_active" className="bg-neutral-900 text-foreground">Semua Aktif (Misal: 2 Splitter)</option>
+                  </select>
+                </div>
+              )}
+
               {/* Splicing start core */}
               <div className="space-y-1.5">
                 <label className="text-xs text-muted-foreground font-medium">Mulai Dari Core FDT (Start Core)</label>
@@ -627,6 +657,8 @@ export default function SpliceManagerPage() {
                         className={`border-b border-white/5 transition-colors duration-150 ${
                           row.status === "Active"
                             ? "hover:bg-primary/[0.02] bg-primary/[0.01]"
+                            : row.status === "Backup"
+                            ? "hover:bg-amber-500/[0.02] bg-amber-500/[0.01]"
                             : "hover:bg-white/[0.01] opacity-75"
                         }`}
                       >
@@ -686,6 +718,11 @@ export default function SpliceManagerPage() {
                               <CheckCircle2 className="h-3 w-3" />
                               Active
                             </span>
+                          ) : row.status === "Backup" ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                              <Info className="h-3 w-3" />
+                              Idle/Backup
+                            </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-white/[0.02] border border-white/5 px-2 py-0.5 rounded-full">
                               Spare
@@ -730,8 +767,15 @@ export default function SpliceManagerPage() {
                                 key={ac.fatCoreIndex}
                                 className="flex flex-col sm:flex-row sm:items-center py-2 first:pt-0 last:pb-0 gap-4"
                               >
-                                <span className="text-xs font-medium text-muted-foreground w-20 shrink-0">
+                                <span className="text-xs font-medium text-muted-foreground w-24 shrink-0 flex items-center gap-1.5">
                                   Core #{ac.fatCoreIndex}
+                                  {!ac.isExceedingCable && (
+                                    ac.coreStatus === "Backup" ? (
+                                      <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold uppercase shrink-0">Idle</span>
+                                    ) : (
+                                      <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase shrink-0">Aktif</span>
+                                    )
+                                  )}
                                 </span>
                                 
                                 {ac.isExceedingCable ? (
