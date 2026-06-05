@@ -552,7 +552,7 @@ async def parse_otdr_trace(
     """
     try:
         content = await sor_file.read()
-        result = parse_sor_file(content)
+        result = parse_sor_file(content, filename=sor_file.filename)
         return JSONResponse(content=result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
