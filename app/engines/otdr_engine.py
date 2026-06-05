@@ -4,6 +4,18 @@ import math
 from typing import Dict, Any, List
 import otdrparser
 
+# Monkey patch read_zero_terminated_string to prevent infinite loops at EOF
+def safe_read_zero_terminated_string(fp):
+    s = b""
+    while True:
+        c = fp.read(1)
+        if c == b"\x00" or c == b"":
+            return s.decode(errors='ignore').strip()
+        s += c
+
+otdrparser.read_zero_terminated_string = safe_read_zero_terminated_string
+
+
 def parse_sor_file(file_content: bytes) -> Dict[str, Any]:
     """
     Parses a Bellcore/Telcordia GR-196 (.sor) binary file using the otdrparser library
@@ -13,17 +25,17 @@ def parse_sor_file(file_content: bytes) -> Dict[str, Any]:
         # Wrap bytes in a file-like object
         fp = io.BytesIO(file_content)
         
-        # Parse using otdrparser
-        blocks = otdrparser.parse2(fp)
+        # Parse using otdrparser.parse (returns a list of parsed blocks)
+        blocks = otdrparser.parse(fp)
         
-        # Get blocks
-        gen_params = blocks.get("GenParams")
-        fxp_params = blocks.get("FxpParams")
-        key_events = blocks.get("KeyEvents")
-        data_pts = blocks.get("DataPts")
+        # Locate blocks by scanning their parsed dictionary keys (extremely robust against null-terminators in block names)
+        gen_params = next((b for b in blocks if isinstance(b, dict) and "cable_id" in b), None)
+        fxp_params = next((b for b in blocks if isinstance(b, dict) and "index_of_refraction" in b), None)
+        key_events = next((b for b in blocks if isinstance(b, dict) and "events" in b), None)
+        data_pts = next((b for b in blocks if isinstance(b, dict) and "data_points" in b), None)
         
         if not gen_params or not fxp_params:
-            raise ValueError("File does not contain valid Telcordia SOR structure blocks.")
+            raise ValueError("Required Telcordia parameters (GenParams or FxdParams) not found in file.")
             
         # 1. Parse Metadata
         metadata = {}
@@ -54,7 +66,7 @@ def parse_sor_file(file_content: bytes) -> Dict[str, Any]:
         ref_index = fxp_params.get("index_of_refraction", 1.468)
         metadata["index_refraction"] = f"{ref_index:.5f}".replace(".", ",")
         
-        # Add new parameters matching the image:
+        # Standard settings
         metadata["device"] = "FC4000"
         metadata["fiber_type"] = "ConventionalSmf"
         metadata["line_status"] = "AsBuilt"
