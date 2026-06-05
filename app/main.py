@@ -558,6 +558,53 @@ async def parse_otdr_trace(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/otdr/parse-batch")
+async def parse_otdr_batch(
+    files: List[UploadFile] = File(..., description="One or more .sor files, or a .zip archive containing .sor files")
+):
+    """
+    Parse multiple standard OTDR SOR files, or files inside a ZIP archive,
+    and return a sorted list of trace results.
+    """
+    import zipfile
+    
+    parsed_results = []
+    
+    try:
+        for file in files:
+            filename = file.filename
+            content = await file.read()
+            
+            if filename.lower().endswith(".zip"):
+                # Handle ZIP archive
+                with zipfile.ZipFile(io.BytesIO(content)) as z:
+                    for name in z.namelist():
+                        # Skip directories or system files (like __MACOSX)
+                        if name.lower().endswith(".sor") and not name.startswith("__"):
+                            sor_bytes = z.read(name)
+                            res = parse_sor_file(sor_bytes, filename=name)
+                            # Ensure we set a clean filename for sorting
+                            res["filename"] = os.path.basename(name)
+                            parsed_results.append(res)
+            elif filename.lower().endswith(".sor"):
+                # Handle direct SOR file
+                res = parse_sor_file(content, filename=filename)
+                res["filename"] = filename
+                parsed_results.append(res)
+                
+        # Sort alphabetically (A-Z) by filename (case-insensitive)
+        parsed_results.sort(key=lambda x: x.get("filename", "").lower())
+        
+        return JSONResponse(content={
+            "status": "success",
+            "results": parsed_results
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Batch parsing failed: {str(e)}")
+
+
+
 # =========================
 # File Validation
 # =========================
