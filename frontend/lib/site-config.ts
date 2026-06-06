@@ -17,6 +17,7 @@ import {
   LineChart,
   Scissors,
   FolderSearch,
+  MapPin,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -150,6 +151,12 @@ export const dashboardMenu: DashboardMenuItem[] = [
     href: "/dashboard/otdr-analyzer",
     icon: LineChart,
     description: "Analyze SOR traces and generate reports",
+  },
+  {
+    title: "OTDR Distance-to-Fault",
+    href: "/dashboard/otdr-fault-locator",
+    icon: MapPin,
+    description: "Deteksi lokasi fisik kabel putus pada peta berdasarkan jarak OTDR",
   },
   {
     title: "Splice Manager",

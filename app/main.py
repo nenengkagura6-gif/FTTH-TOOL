@@ -550,6 +550,42 @@ async def check_duplicates_json(
 
 
 # =========================
+# KML Path Extractor
+# =========================
+from engines.otdr_fault_engine import extract_kml_geometries
+
+@app.post("/api/v1/kml/extract-path")
+async def extract_kml_path(
+    kml_file: UploadFile = File(..., description="KML or KMZ file containing the cable path")
+):
+    """
+    Extract paths and points from KML or KMZ for mapping.
+    """
+    try:
+        filename = kml_file.filename
+        is_kmz = filename.lower().endswith(".kmz")
+        
+        if not (filename.lower().endswith(".kml") or is_kmz):
+            raise HTTPException(
+                status_code=400, 
+                detail="File must be .kml or .kmz"
+            )
+            
+        content = await kml_file.read()
+        result = extract_kml_geometries(content, is_kmz=is_kmz)
+        
+        if result.get("status") == "error":
+            raise HTTPException(status_code=500, detail=result.get("message"))
+            
+        return JSONResponse(content=result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================
 # OTDR Parser
 # =========================
 from engines.otdr_engine import parse_sor_file
