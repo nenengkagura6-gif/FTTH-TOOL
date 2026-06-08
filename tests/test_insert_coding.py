@@ -16,6 +16,17 @@ def create_mock_kml() -> bytes:
   <Document>
     <name>Test Document</name>
     
+    <!-- Parent FDT folder with points -->
+    <Folder>
+      <name>FDT</name>
+      <Placemark>
+        <name>FDT 1</name>
+      </Placemark>
+      <Placemark>
+        <name>fdt 2</name>
+      </Placemark>
+    </Folder>
+
     <!-- FDT 01 Group -->
     <Folder>
       <name>LINE A FDT 01</name>
@@ -136,8 +147,8 @@ def create_mock_kml() -> bytes:
 def test_engine():
     kml_bytes = create_mock_kml()
     prefixes = {
-        1: "PGKB.032",
-        2: "PGKB.033"
+        1: "KJLP.1.035",
+        2: "KJLP.2.036"
     }
     
     print("Running process_insert_coding...")
