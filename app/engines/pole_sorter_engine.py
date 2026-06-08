@@ -208,6 +208,13 @@ def _detect_line_groups(doc_element) -> List[LineGroup]:
 # Main Engine Class
 # ---------------------------------------------------------------------------
 
+def _extract_fdt_id(name: str) -> str:
+    """Extract FDT identifier from group name (e.g., 'LINE A FDT 02' -> 'FDT 02')."""
+    m = re.search(r'(FDT\s*[\w\d]+)', name, re.IGNORECASE)
+    if m:
+        return m.group(1).upper()
+    return name.upper()
+
 class PoleSorterEngine:
     def __init__(self):
         self.doc: Optional[minidom.Document] = None
@@ -250,22 +257,36 @@ class PoleSorterEngine:
                            "new pole, np, tiang baru, existing pole, eksisting, dll.",
             }
 
+        # Gabungkan LineGroup yang memiliki FDT yang sama
+        fdt_groups = {}
+        for group in line_groups:
+            fdt_id = _extract_fdt_id(group.name)
+            if fdt_id not in fdt_groups:
+                fdt_groups[fdt_id] = {
+                    "names": [],
+                    "new_pole_folders": [],
+                    "existing_pole_folders": []
+                }
+            fdt_groups[fdt_id]["names"].append(group.name)
+            fdt_groups[fdt_id]["new_pole_folders"].extend(group.new_pole_folders)
+            fdt_groups[fdt_id]["existing_pole_folders"].extend(group.existing_pole_folders)
+
         report_groups: List[Dict] = []
 
-        for group in line_groups:
+        for fdt_id, data in fdt_groups.items():
             
             # Sort NEW POLE
             new_pole_report: Dict[str, Any] = {"found": 0, "sorted": 0, "unlinked": 0, "warnings": []}
-            if group.new_pole_folders:
-                new_pole_report = _sort_and_renumber_poles(group.new_pole_folders, self.doc)
+            if data["new_pole_folders"]:
+                new_pole_report = _sort_and_renumber_poles(data["new_pole_folders"], self.doc)
 
             # Sort EXISTING POLE
             existing_report: Dict[str, Any] = {"found": 0, "sorted": 0, "unlinked": 0, "warnings": []}
-            if group.existing_pole_folders:
-                existing_report = _sort_and_renumber_poles(group.existing_pole_folders, self.doc)
+            if data["existing_pole_folders"]:
+                existing_report = _sort_and_renumber_poles(data["existing_pole_folders"], self.doc)
 
             report_groups.append({
-                "group": group.name,
+                "group": " + ".join(data["names"]),
                 "sort_method": "name_order",
                 "new_pole": new_pole_report,
                 "existing_pole": existing_report,
