@@ -18,6 +18,7 @@ import {
   Scissors,
   FolderSearch,
   MapPin,
+  ArrowUpDown,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -135,6 +136,13 @@ export const dashboardMenu: DashboardMenuItem[] = [
     description: "Convert AutoCAD DXF metric drawings back to KML/KMZ vector data",
   },
   {
+    title: "Pole Auto-Sorter",
+    href: "/dashboard/pole-sorter",
+    icon: ArrowUpDown,
+    description: "Urutkan penomoran tiang (New Pole & Existing Pole) secara otomatis berdasarkan posisi kabel dari FDT",
+    featureKey: "kml_to_boq",
+  },
+  {
     title: "OPM Link Budget",
     href: "/dashboard/opm-calculator",
     icon: Activity,
@@ -182,10 +190,11 @@ export const footerLinks = {
   ],
   company: [
     { label: "About", href: "/about" },
-    { label: "Contact", href: "/about#contact" },
+    { label: "Contact", href: "/contact" },
   ],
   legal: [
     { label: "Privacy Policy", href: "/privacy" },
     { label: "Terms of Service", href: "/terms" },
+    { label: "Refund Policy", href: "/refund" },
   ],
 }

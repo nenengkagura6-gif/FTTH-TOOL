@@ -14,6 +14,7 @@ from engines.kml_engine import process_kml_to_excel
 from engines.apd_engine import process_apd_hpdb
 from engines.duplikat_engine import check_duplicates_kml, DuplikatEngine
 from engines.kml_extractor_engine import process_kml_extractor
+from engines.pole_sorter_engine import process_pole_sorter
 import sentry_sdk
 
 sentry_dsn = os.environ.get("SENTRY_DSN_PYTHON")
@@ -378,6 +379,16 @@ def _process_job_sync(
                 "content": kml_content,
                 "content_type": "application/vnd.google-earth.kml+xml"
             }
+        elif tool_name == "pole_sorter":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Mengurutkan pole berdasarkan kabel..."
+            })
+            result = process_pole_sorter(
+                kml_content=file_bytes,
+                filename=original_filename,
+                is_kmz=is_kmz
+            )
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
 
@@ -453,7 +464,8 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
     """
     supported_tools = (
         "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
-        "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor"
+        "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor",
+        "pole_sorter"
     )
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     

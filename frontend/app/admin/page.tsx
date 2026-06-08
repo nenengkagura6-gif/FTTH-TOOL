@@ -224,7 +224,7 @@ export default function AdminPage() {
                   <td className="px-3 py-3">
                     <select
                       value={u.plan}
-                      onChange={e => handleUpdateUser(u.id, { plan: e.target.value, quota_limit: e.target.value === 'pro' ? 500 : e.target.value === 'enterprise' ? 9999 : 50 })}
+                      onChange={e => handleUpdateUser(u.id, { plan: e.target.value, quota_limit: e.target.value === 'pro' ? 99999 : e.target.value === 'enterprise' ? 99999 : e.target.value === 'basic' ? 500 : 50 })}
                       className="bg-transparent text-xs border border-white/10 rounded-md px-2 py-1 cursor-pointer"
                     >
                       <option value="free" className="bg-card">Free</option>
@@ -233,7 +233,7 @@ export default function AdminPage() {
                     </select>
                   </td>
                   <td className="px-3 py-3 text-xs text-muted-foreground font-mono">
-                    {u.quota_used}/{u.quota_limit}
+                    {u.quota_used}/{u.quota_limit >= 99999 ? '∞' : u.quota_limit}
                   </td>
                   <td className="px-3 py-3">
                     <span className={cn("text-xs px-1.5 py-0.5 rounded border",
