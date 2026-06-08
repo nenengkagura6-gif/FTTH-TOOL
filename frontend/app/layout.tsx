@@ -1,23 +1,23 @@
 import type { Metadata } from "next"
-import { Plus_Jakarta_Sans, Space_Grotesk, Geist_Mono } from "next/font/google"
+import { Outfit, Syne, JetBrains_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import Script from "next/script"
 import { AppProviders } from "@/components/app-providers"
 import "./globals.css"
 
-const plusJakarta = Plus_Jakarta_Sans({
+const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-plus-jakarta",
+  variable: "--font-outfit",
 })
 
-const spaceGrotesk = Space_Grotesk({
+const syne = Syne({
   subsets: ["latin"],
-  variable: "--font-space-grotesk",
+  variable: "--font-syne",
 })
 
-const geistMono = Geist_Mono({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-geist-mono",
+  variable: "--font-jetbrains-mono",
 })
 
 export const metadata: Metadata = {
@@ -51,11 +51,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark bg-background`}
       suppressHydrationWarning
     >
       <body 
-        className={`${plusJakarta.variable} ${spaceGrotesk.variable} ${geistMono.variable} font-sans antialiased min-h-screen bg-background text-foreground`}
+        className={`${outfit.variable} ${syne.variable} ${jetbrainsMono.variable} font-sans antialiased min-h-screen bg-background text-foreground`}
         suppressHydrationWarning
       >
         <AppProviders>{children}</AppProviders>

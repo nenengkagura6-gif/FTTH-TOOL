@@ -4,40 +4,40 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Dark futuristic SaaS palette - black/gray dominant with cyan accent */
-  --background: oklch(0.08 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.12 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.1 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.78 0.15 200);
-  --primary-foreground: oklch(0.08 0 0);
-  --secondary: oklch(0.18 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.16 0 0);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.78 0.15 200);
-  --accent-foreground: oklch(0.08 0 0);
-  --destructive: oklch(0.6 0.22 25);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 0.08);
-  --input: oklch(1 0 0 / 0.08);
-  --ring: oklch(0.78 0.15 200);
-  --chart-1: oklch(0.78 0.15 200);
-  --chart-2: oklch(0.7 0.12 180);
-  --chart-3: oklch(0.6 0.1 220);
-  --chart-4: oklch(0.5 0.08 200);
-  --chart-5: oklch(0.4 0.06 200);
+  /* Light theme - white/gray dominant with cyan/teal accent */
+  --background: oklch(0.985 0.002 200);
+  --foreground: oklch(0.15 0.01 200);
+  --card: oklch(0.97 0.005 200);
+  --card-foreground: oklch(0.15 0.01 200);
+  --popover: oklch(0.98 0.005 200);
+  --popover-foreground: oklch(0.15 0.01 200);
+  --primary: oklch(0.60 0.14 200);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.005 200);
+  --secondary-foreground: oklch(0.15 0.01 200);
+  --muted: oklch(0.93 0.005 200);
+  --muted-foreground: oklch(0.48 0.01 200);
+  --accent: oklch(0.60 0.14 200);
+  --accent-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.55 0.20 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0 0 0 / 0.08);
+  --input: oklch(0 0 0 / 0.06);
+  --ring: oklch(0.60 0.14 200);
+  --chart-1: oklch(0.60 0.14 200);
+  --chart-2: oklch(0.55 0.12 180);
+  --chart-3: oklch(0.50 0.1 220);
+  --chart-4: oklch(0.45 0.08 200);
+  --chart-5: oklch(0.40 0.06 200);
   --radius: 0.75rem;
-  --sidebar: oklch(0.1 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.78 0.15 200);
-  --sidebar-primary-foreground: oklch(0.08 0 0);
-  --sidebar-accent: oklch(0.16 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 0.08);
-  --sidebar-ring: oklch(0.78 0.15 200);
+  --sidebar: oklch(0.97 0.005 200);
+  --sidebar-foreground: oklch(0.15 0.01 200);
+  --sidebar-primary: oklch(0.60 0.14 200);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.94 0.005 200);
+  --sidebar-accent-foreground: oklch(0.15 0.01 200);
+  --sidebar-border: oklch(0 0 0 / 0.08);
+  --sidebar-ring: oklch(0.60 0.14 200);
 }
 
 .dark {
@@ -71,9 +71,9 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-plus-jakarta), 'Plus Jakarta Sans Fallback', sans-serif;
-  --font-display: var(--font-space-grotesk), 'Space Grotesk Fallback', sans-serif;
-  --font-mono: var(--font-geist-mono), 'Geist Mono Fallback', monospace;
+  --font-sans: var(--font-outfit), 'Outfit Fallback', sans-serif;
+  --font-display: var(--font-syne), 'Syne Fallback', sans-serif;
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono Fallback', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -118,6 +118,7 @@
   }
   html {
     color-scheme: dark;
+    @apply bg-background;
   }
   body {
     @apply bg-background text-foreground;
@@ -126,18 +127,26 @@
 
 @layer utilities {
   .font-display {
-    font-family: var(--font-space-grotesk), sans-serif;
+    font-family: var(--font-syne), sans-serif;
   }
   .glass {
-    background: oklch(0.12 0 0 / 0.6);
+    background: oklch(0.97 0 0 / 0.6);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    border: 1px solid oklch(0 0 0 / 0.08);
+  }
+  .dark .glass {
+    background: oklch(0.12 0 0 / 0.6);
     border: 1px solid oklch(1 0 0 / 0.08);
   }
   .glass-strong {
-    background: oklch(0.1 0 0 / 0.8);
+    background: oklch(0.98 0 0 / 0.8);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
+    border: 1px solid oklch(0 0 0 / 0.10);
+  }
+  .dark .glass-strong {
+    background: oklch(0.1 0 0 / 0.8);
     border: 1px solid oklch(1 0 0 / 0.1);
   }
   .glow-cyan {
