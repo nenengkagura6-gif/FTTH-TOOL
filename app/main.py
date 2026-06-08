@@ -15,6 +15,7 @@ from engines.apd_engine import process_apd_hpdb
 from engines.duplikat_engine import check_duplicates_kml, DuplikatEngine
 from engines.kml_extractor_engine import process_kml_extractor
 from engines.pole_sorter_engine import process_pole_sorter
+from engines.insert_coding_engine import process_insert_coding
 import sentry_sdk
 
 sentry_dsn = os.environ.get("SENTRY_DSN_PYTHON")
@@ -389,6 +390,37 @@ def _process_job_sync(
                 filename=original_filename,
                 is_kmz=is_kmz
             )
+        elif tool_name == "insert_coding":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Menyisipkan kode prefix FDT/FAT/Kabel/Pole..."
+            })
+            from supabase_client import get_job_config
+            job_config = get_job_config(job_id)
+            
+            # Extract FDT prefixes from job config
+            prefix_1 = job_config.get("prefix_fdt_01", "").strip()
+            prefix_2 = job_config.get("prefix_fdt_02", "").strip()
+            prefix_3 = job_config.get("prefix_fdt_03", "").strip()
+            
+            prefixes_dict = {}
+            if prefix_1:
+                prefixes_dict[1] = prefix_1
+            if prefix_2:
+                prefixes_dict[2] = prefix_2
+            if prefix_3:
+                prefixes_dict[3] = prefix_3
+                
+            # Fallback if dictionary is empty
+            if not prefixes_dict:
+                prefixes_dict[1] = "DEFAULT"
+                
+            result = process_insert_coding(
+                kml_content=file_bytes,
+                filename=original_filename,
+                prefixes=prefixes_dict,
+                is_kmz=is_kmz
+            )
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
 
@@ -465,7 +497,7 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
     supported_tools = (
         "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
         "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor",
-        "pole_sorter"
+        "pole_sorter", "insert_coding"
     )
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     
