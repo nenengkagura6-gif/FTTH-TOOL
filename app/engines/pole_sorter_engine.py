@@ -53,8 +53,14 @@ def _name_of(elem) -> str:
     """Get the text content of the first <name> child."""
     for child in elem.childNodes:
         if getattr(child, "tagName", None) == "name":
-            if child.firstChild:
-                return child.firstChild.nodeValue.strip()
+            text = []
+            def get_text(node):
+                if node.nodeType in (node.TEXT_NODE, node.CDATA_SECTION_NODE):
+                    text.append(node.nodeValue)
+                for c in getattr(node, "childNodes", []):
+                    get_text(c)
+            get_text(child)
+            return "".join(text).strip()
     return ""
 
 
@@ -76,19 +82,19 @@ def _is_cable_folder_or_name(name: str) -> bool:
 
 
 def _get_direct_child_folders(elem) -> List:
-    """Return only direct child Folder elements."""
+    """Return only direct child Folder or Document elements."""
     folders = []
     for child in elem.childNodes:
-        if getattr(child, "tagName", None) == "Folder":
+        if getattr(child, "tagName", None) in ("Folder", "Document"):
             folders.append(child)
     return folders
 
 
 def _get_all_folders_recursive(elem) -> List:
-    """Recursively collect all Folder elements."""
+    """Recursively collect all Folder and Document elements."""
     result = []
     for child in elem.childNodes:
-        if getattr(child, "tagName", None) == "Folder":
+        if getattr(child, "tagName", None) in ("Folder", "Document"):
             result.append(child)
             result.extend(_get_all_folders_recursive(child))
     return result
@@ -518,21 +524,23 @@ def _detect_line_groups(doc_element) -> List[LineGroup]:
     """
     groups: List[LineGroup] = []
 
-    def _scan(folder, depth=0):
-        child_folders = _get_direct_child_folders(folder)
+    def _scan(node, depth=0):
+        child_folders = _get_direct_child_folders(node)
         new_pole_subs = [f for f in child_folders if _is_new_pole_folder(_name_of(f))]
         existing_subs = [f for f in child_folders if _is_existing_pole_folder(_name_of(f))]
 
-        if new_pole_subs or existing_subs:
-            g = LineGroup(folder, _name_of(folder))
+        if getattr(node, "tagName", None) in ("Folder", "Document") and (new_pole_subs or existing_subs):
+            g = LineGroup(node, _name_of(node))
             g.new_pole_folders = new_pole_subs
             g.existing_pole_folders = existing_subs
             groups.append(g)
             # Don't recurse further into this group's children for group detection
             return
 
-        for child in child_folders:
-            _scan(child, depth + 1)
+        for child in node.childNodes:
+            tag = getattr(child, "tagName", None)
+            if tag in ("Folder", "Document"):
+                _scan(child, depth + 1)
 
     _scan(doc_element)
     return groups
