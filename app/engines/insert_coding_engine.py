@@ -221,10 +221,19 @@ class InsertCodingEngine:
             if "FDT" in folder_name.upper():
                 for pm in placemarks:
                     try:
-                        fdt_num = _get_fdt_number(pm)
-                        prefix = prefixes.get(fdt_num) or prefixes.get(1) or "DEFAULT"
                         orig_name = _name_of(pm)
-                        new_name = re.sub(r'\bFDT\b|FDT', prefix, orig_name, flags=re.IGNORECASE)
+                        # Detect FDT number from placemark name itself
+                        m = re.search(r"FDT\s*0*(\d+)", orig_name, re.IGNORECASE)
+                        if m:
+                            fdt_num = int(m.group(1))
+                        else:
+                            fdt_num = _get_fdt_number(pm)
+                            
+                        prefix = prefixes.get(fdt_num) or prefixes.get(1) or "DEFAULT"
+                        
+                        # Replace FDT followed by a number, or just FDT, with uppercase prefix
+                        new_name = re.sub(r'FDT\s*0*' + str(fdt_num), prefix.upper(), orig_name, flags=re.IGNORECASE)
+                        new_name = re.sub(r'\bFDT\b|FDT', prefix.upper(), new_name, flags=re.IGNORECASE)
                         _set_placemark_name(pm, new_name, doc)
                     except Exception:
                         continue
