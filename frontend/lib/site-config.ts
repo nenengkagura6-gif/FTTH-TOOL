@@ -143,6 +143,13 @@ export const dashboardMenu: DashboardMenuItem[] = [
     featureKey: "kml_to_boq",
   },
   {
+    title: "Insert Coding KML",
+    href: "/dashboard/insert-coding",
+    icon: Layers,
+    description: "Rename FDT, FAT, Kabel, dan New Pole dalam KML/KMZ secara otomatis",
+    featureKey: "kml_to_boq",
+  },
+  {
     title: "OPM Link Budget",
     href: "/dashboard/opm-calculator",
     icon: Activity,
