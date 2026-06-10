@@ -121,10 +121,11 @@ export function Features({ locale = "en" }: { locale?: string }) {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-50px" }}
               transition={{ duration: 0.4, delay: i * 0.05 }}
+              whileTap={{ scale: 0.97 }}
             >
               <Link
                 href={feature.href}
-                className="group relative block h-full overflow-hidden rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:bg-card/60 hover:tech-border-glow"
+                className="group relative block h-full overflow-hidden rounded-2xl border border-border bg-card/90 p-5 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/40 hover:bg-card/95 hover:shadow-xl hover:shadow-primary/10 hover:tech-border-glow active:border-primary/60 active:bg-card/95"
               >
                 {/* Hardware blueprint corner brackets */}
                 <div className="tech-bracket-tl opacity-30 group-hover:opacity-100 transition-opacity" />
@@ -133,10 +134,10 @@ export function Features({ locale = "en" }: { locale?: string }) {
                 <div className="tech-bracket-br opacity-30 group-hover:opacity-100 transition-opacity" />
 
                 {/* Glow effect */}
-                <div className="pointer-events-none absolute -top-32 -right-32 h-64 w-64 rounded-full bg-primary/10 opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
+                <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary/20 opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
 
                 <div className="relative flex items-start justify-between">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 transition-all duration-300 group-hover:bg-primary group-hover:text-primary-foreground group-hover:scale-105 group-hover:ring-primary/40 group-active:bg-primary group-active:text-primary-foreground">
                     <feature.icon className="h-4 w-4" />
                   </div>
                   <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground transition-all duration-300 group-hover:text-foreground group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />

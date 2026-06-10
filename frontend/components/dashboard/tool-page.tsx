@@ -14,6 +14,7 @@ import {
   Lock,
   Crown,
   Zap,
+  ShieldAlert,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useFeatureAccess } from "@/hooks/use-feature-access"
@@ -21,6 +22,7 @@ import { useUpgradeModal } from "@/components/upgrade-modal"
 import type { FeatureKey } from "@/lib/features"
 import { getSupabaseClient } from "@/lib/supabase/client"
 import { jobApi } from "@/lib/api"
+import { getDeviceFingerprint } from "@/lib/fingerprint"
 
 interface ToolPageProps {
   title: string
@@ -73,6 +75,50 @@ export function ToolPage({
   const { canAccess } = useFeatureAccess()
   const { showUpgradeModal } = useUpgradeModal()
   const isLocked = featureKey ? !canAccess(featureKey) : false
+
+  const [deviceBlocked, setDeviceBlocked] = useState(false)
+  const [checkingDevice, setCheckingDevice] = useState(true)
+  const [locale, setLocale] = useState<"en" | "id">("en")
+
+  React.useEffect(() => {
+    const stored = localStorage.getItem("locale")
+    if (stored === "id" || stored === "en") {
+      setLocale(stored)
+    }
+
+    async function verifyDevice() {
+      try {
+        const supabase = getSupabaseClient()
+        const { data: userData } = await supabase.auth.getUser()
+        if (!userData?.user) {
+          setCheckingDevice(false)
+          return
+        }
+
+        const fp = getDeviceFingerprint()
+        const { data: isAllowed, error } = await supabase.rpc('check_device_registration', {
+          p_device_hash: fp,
+          p_user_id: userData.user.id
+        })
+
+        if (error) {
+          console.error("Device registration check failed:", error)
+          setDeviceBlocked(false)
+        } else if (isAllowed === false) {
+          setDeviceBlocked(true)
+        } else {
+          setDeviceBlocked(false)
+        }
+      } catch (err) {
+        console.error("Failed to verify device registration:", err)
+        setDeviceBlocked(false)
+      } finally {
+        setCheckingDevice(false)
+      }
+    }
+
+    verifyDevice()
+  }, [])
 
   // Cleanup polling on unmount
   React.useEffect(() => {
@@ -282,6 +328,107 @@ export function ToolPage({
     if (resultUrl) {
        window.open(resultUrl, '_blank')
     }
+  }
+
+  // ============================================
+  // DEVICE VERIFICATION & BLOCKED STATE
+  // ============================================
+  if (checkingDevice) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary animate-pulse" />
+        <p className="text-sm text-muted-foreground font-medium animate-pulse">
+          {locale === "id" ? "Memverifikasi perangkat..." : "Verifying device..."}
+        </p>
+      </div>
+    )
+  }
+
+  if (deviceBlocked) {
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6 lg:gap-8 max-w-6xl">
+        {/* Left side - description */}
+        <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-balance">
+                {title}
+              </h1>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                <ShieldAlert className="h-3 w-3" />
+                {locale === "id" ? "TERBATAS" : "RESTRICTED"}
+              </span>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground leading-relaxed text-pretty">
+              {description}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm">
+            <h2 className="text-sm font-medium">{locale === "id" ? "Format didukung" : "Supported formats"}</h2>
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {acceptedFormats.map((f) => (
+                <li
+                  key={f}
+                  className="font-mono text-xs px-2 py-1 rounded-md border border-white/10 bg-white/[0.03] text-muted-foreground"
+                >
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+
+        {/* Main — Locked overlay */}
+        <div className="space-y-5">
+          <div className="relative rounded-2xl border border-red-500/20 bg-card/40 backdrop-blur-sm overflow-hidden">
+            {/* Blurred mock content */}
+            <div className="p-5 border-b border-white/10 opacity-20 blur-[2px] pointer-events-none select-none">
+              <h2 className="text-base font-medium">Upload files</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Drag and drop or click to browse
+              </p>
+            </div>
+
+            <div className="p-5 opacity-10 blur-[3px] pointer-events-none select-none">
+              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-white/10 px-6 py-12">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-background">
+                  <Upload className="h-5 w-5 text-primary" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium">Drop your KML/KMZ file here</p>
+                  <p className="mt-1 text-xs text-muted-foreground">or click to browse — max 50MB</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Upgrade CTA overlay */}
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-[1.5px] p-6">
+              <div className="text-center max-w-md">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500/20 to-rose-600/20 ring-1 ring-red-500/30 mb-4 animate-pulse">
+                  <ShieldAlert className="h-8 w-8 text-red-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-red-400">
+                  {locale === "id" ? "Batas Perangkat Tercapai" : "Device Limit Reached"}
+                </h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                  {locale === "id" 
+                    ? "Perangkat ini telah dikaitkan dengan beberapa akun gratis. Untuk mencegah penyalahgunaan, silakan upgrade akun Anda ke paket Basic atau Pro untuk menghapus batasan ini." 
+                    : "This device has been associated with multiple free accounts. To prevent abuse, please upgrade your account to a Basic or Pro plan to lift this restriction."}
+                </p>
+                <button
+                  onClick={() => showUpgradeModal(featureKey)}
+                  className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 px-6 py-3 text-sm font-semibold text-white hover:from-red-400 hover:to-rose-500 transition-all shadow-lg shadow-red-500/20 cursor-pointer"
+                >
+                  <Zap className="h-4 w-4" />
+                  {locale === "id" ? "Upgrade Akun Sekarang" : "Upgrade Account Now"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // ============================================

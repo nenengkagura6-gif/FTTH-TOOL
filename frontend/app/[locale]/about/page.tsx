@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { SiteNavbar } from "@/components/site/navbar"
 import { SiteFooter } from "@/components/site/footer"
 import { PageHeader } from "@/components/site/page-header"
@@ -171,19 +172,24 @@ export default async function AboutPage({ params }: PageProps) {
           id="contact"
           className="relative mx-auto max-w-4xl px-6 py-16 scroll-mt-24"
         >
-          <div className="rounded-3xl border border-white/10 bg-card/40 p-8 sm:p-12 backdrop-blur-sm text-center">
+          <div className="relative group rounded-3xl border border-white/10 bg-card/40 p-8 sm:p-12 backdrop-blur-sm text-center transition-all duration-300 hover:border-white/20">
+            <div className="tech-bracket-tl opacity-30 group-hover:opacity-100 transition-opacity" />
+            <div className="tech-bracket-tr opacity-30 group-hover:opacity-100 transition-opacity" />
+            <div className="tech-bracket-bl opacity-30 group-hover:opacity-100 transition-opacity" />
+            <div className="tech-bracket-br opacity-30 group-hover:opacity-100 transition-opacity" />
+            
             <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">
               {locale === "en" ? "Want to talk to the team?" : "Ingin berbicara dengan tim kami?"}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
               {locale === "en" ? "We love hearing from FTTH engineering teams. Drop us a line." : "Kami senang mendengar dari tim rekayasa FTTH. Silakan hubungi kami."}
             </p>
-            <a
-              href="mailto:hello@nusahytoria.com"
-              className="mt-6 inline-flex items-center justify-center rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            <Link
+              href={`/${locale}/contact`}
+              className="mt-6 inline-flex items-center justify-center rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-all duration-300"
             >
-              hello@nusahytoria.com
-            </a>
+              {locale === "en" ? "Contact Us" : "Hubungi Kami"}
+            </Link>
           </div>
         </section>
       </main>

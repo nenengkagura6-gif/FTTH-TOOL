@@ -103,9 +103,10 @@ export function WhyUs({ locale = "en" }: { locale?: string }) {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: i * 0.08 }}
-                className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm"
+                whileTap={{ scale: 0.98 }}
+                className="group relative rounded-2xl border border-border bg-card/90 p-5 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 transition-all duration-300 group-hover:scale-105 group-hover:bg-primary group-hover:text-primary-foreground group-active:bg-primary group-active:text-primary-foreground">
                   <r.icon className="h-4 w-4" />
                 </div>
                 <h3 className="mt-4 text-sm font-medium text-foreground">

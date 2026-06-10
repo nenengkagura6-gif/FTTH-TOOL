@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { AuthProvider } from '@/components/auth/auth-provider'
 import { UpgradeModalProvider } from '@/components/upgrade-modal'
+import { ThemeProvider } from '@/components/theme-provider'
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -12,8 +13,10 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthProvider>
-      <UpgradeModalProvider>{children}</UpgradeModalProvider>
-    </AuthProvider>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+      <AuthProvider>
+        <UpgradeModalProvider>{children}</UpgradeModalProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

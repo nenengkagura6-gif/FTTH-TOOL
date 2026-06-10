@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Palette, Info, HelpCircle } from "lucide-react"
+import { Palette, Info } from "lucide-react"
 
 // Standard 12 color coding sequence
 const colorSequenceEn = [
@@ -37,11 +37,74 @@ const colorSequenceId = [
 
 const capacities = [12, 24, 48, 96, 144, 288]
 
+const fccTranslations = {
+  en: {
+    title: "Fiber Color Code Finder",
+    subtitle: "Quickly identify tube and core colors for fiber optic splicing and planning. Supports TIA-598-C and Telkom Indonesia standard mnemonics.",
+    configTitle: "Color Configuration",
+    labelStandard: "Color Code Standard",
+    labelCapacity: "Cable Capacity",
+    labelCoresPerTube: "Cores per Tube",
+    labelEnterCore: "Enter Core Number",
+    coresText: "Cores",
+    coresStandard: "Cores (Standard)",
+    coresLegacy: "Cores (Legacy)",
+    coresHighDensity: "Cores (High Density)",
+    sliderCore: "Core",
+    tubeOuter: "TUBE OUTER",
+    coreCenter: "CORE CENTER",
+    resultForCore: "Result for Core",
+    tubeBunch: "TUBE (BUNCH)",
+    coreFiber: "CORE (FIBER)",
+    tubeNum: "Tube #",
+    coreNum: "Core #",
+    totalCoresParsed: "Total cores parsed",
+    tubesCount: "Tubes count",
+    mnemonicLabel: "Mnemonic",
+    refTitle: "Standard 12-Color Sequence Reference",
+  },
+  id: {
+    title: "Pencari Kode Warna Fiber",
+    subtitle: "Identifikasi warna tube (selongsong) dan core (serat) secara instan untuk penyambungan dan perencanaan kabel fiber optik. Mendukung standar Telkom Indonesia dan TIA-598-C internasional.",
+    configTitle: "Konfigurasi Warna",
+    labelStandard: "Standar Kode Warna",
+    labelCapacity: "Kapasitas Kabel",
+    labelCoresPerTube: "Jumlah Core per Tube",
+    labelEnterCore: "Masukkan Nomor Core",
+    coresText: "Core",
+    coresStandard: "Core (Standar)",
+    coresLegacy: "Core (Lama/Legacy)",
+    coresHighDensity: "Core (Kerapatan Tinggi)",
+    sliderCore: "Core",
+    tubeOuter: "TUBE LUAR",
+    coreCenter: "CORE DALAM",
+    resultForCore: "Hasil untuk Core",
+    tubeBunch: "TUBE (SELONGSONG)",
+    coreFiber: "CORE (SERAT)",
+    tubeNum: "Tube ke-",
+    coreNum: "Core ke-",
+    totalCoresParsed: "Total core terhitung",
+    tubesCount: "Jumlah tube",
+    mnemonicLabel: "Jembatan Keledai",
+    refTitle: "Referensi Urutan 12 Kode Warna Standar",
+  }
+} as const
+
 export default function FiberColorCodePage() {
   const [standard, setStandard] = useState<"TIA" | "Telkom">("Telkom")
   const [coreNumber, setCoreNumber] = useState<number>(1)
   const [capacity, setCapacity] = useState<number>(96)
   const [coresPerTube, setCoresPerTube] = useState<number>(12)
+  const [locale, setLocale] = useState<"en" | "id">("en")
+
+  useEffect(() => {
+    const stored = localStorage.getItem("locale")
+    if (stored === "id" || stored === "en") {
+      setLocale(stored)
+    }
+  }, [])
+
+  const t = fccTranslations[locale]
 
   const activeColors = useMemo(() => {
     return standard === "TIA" ? colorSequenceEn : colorSequenceId
@@ -79,10 +142,10 @@ export default function FiberColorCodePage() {
     <div className="space-y-8 max-w-6xl">
       <div>
         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-          Fiber Color Code Finder
+          {t.title}
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Quickly identify tube and core colors for fiber optic splicing and planning. Supports TIA-598-C and Telkom Indonesia standard mnemonics.
+          {t.subtitle}
         </p>
       </div>
 
@@ -91,13 +154,13 @@ export default function FiberColorCodePage() {
         <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm space-y-6">
           <h2 className="text-lg font-medium flex items-center gap-2">
             <Palette className="h-5 w-5 text-primary" />
-            Color Configuration
+            {t.configTitle}
           </h2>
 
           <div className="space-y-4">
             {/* Standard Selection */}
             <div className="space-y-2">
-              <label className="text-xs text-muted-foreground font-medium">Color Code Standard</label>
+              <label className="text-xs text-muted-foreground font-medium">{t.labelStandard}</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -127,7 +190,7 @@ export default function FiberColorCodePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Cable Capacity */}
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground font-medium">Cable Capacity</label>
+                <label className="text-xs text-muted-foreground font-medium">{t.labelCapacity}</label>
                 <select
                   value={capacity}
                   onChange={(e) => {
@@ -139,7 +202,7 @@ export default function FiberColorCodePage() {
                 >
                   {capacities.map((c) => (
                     <option key={c} value={c} className="bg-neutral-900">
-                      {c} Core
+                      {c} {t.coresText}
                     </option>
                   ))}
                 </select>
@@ -147,21 +210,21 @@ export default function FiberColorCodePage() {
 
               {/* Cores Per Tube */}
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground font-medium">Cores per Tube</label>
+                <label className="text-xs text-muted-foreground font-medium">{t.labelCoresPerTube}</label>
                 <select
                   value={coresPerTube}
                   onChange={(e) => setCoresPerTube(Number(e.target.value))}
                   className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
                 >
-                  <option value={12} className="bg-neutral-900">12 Cores (Standard)</option>
-                  <option value={6} className="bg-neutral-900">6 Cores (Legacy)</option>
-                  <option value={24} className="bg-neutral-900">24 Cores (High Density)</option>
+                  <option value={12} className="bg-neutral-900">12 {t.coresStandard}</option>
+                  <option value={6} className="bg-neutral-900">6 {t.coresLegacy}</option>
+                  <option value={24} className="bg-neutral-900">24 {t.coresHighDensity}</option>
                 </select>
               </div>
 
               {/* Core Number Input */}
               <div className="space-y-1.5">
-                <label className="text-xs text-muted-foreground font-medium">Enter Core Number</label>
+                <label className="text-xs text-muted-foreground font-medium">{t.labelEnterCore}</label>
                 <input
                   type="number"
                   min="1"
@@ -184,8 +247,8 @@ export default function FiberColorCodePage() {
           {/* Quick Slider */}
           <div className="space-y-2 pt-2">
             <div className="flex justify-between items-center text-xs text-muted-foreground">
-              <span>Core 1</span>
-              <span>Core {capacity}</span>
+              <span>{t.sliderCore} 1</span>
+              <span>{t.sliderCore} {capacity}</span>
             </div>
             <input
               type="range"
@@ -231,18 +294,18 @@ export default function FiberColorCodePage() {
               </svg>
               {/* Labels overlay */}
               <div className="absolute inset-0 flex flex-col justify-between p-1.5 pointer-events-none text-[8px] text-muted-foreground">
-                <div className="text-center">TUBE OUTER</div>
-                <div className="text-center mt-auto">CORE CENTER</div>
+                <div className="text-center">{t.tubeOuter}</div>
+                <div className="text-center mt-auto">{t.coreCenter}</div>
               </div>
             </div>
 
-            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Result for Core {calculation.core}</span>
+            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{t.resultForCore} {calculation.core}</span>
             
             <div className="mt-4 w-full grid grid-cols-2 gap-4">
               {/* Tube Result */}
               <div className="rounded-xl border border-white/5 bg-white/[0.01] p-3 text-center">
-                <span className="text-[10px] text-muted-foreground font-medium block mb-1">TUBE (BUNCH)</span>
-                <div className="text-sm font-semibold mb-2">Tube #{calculation.tubeIndex}</div>
+                <span className="text-[10px] text-muted-foreground font-medium block mb-1">{t.tubeBunch}</span>
+                <div className="text-sm font-semibold mb-2">{t.tubeNum}{calculation.tubeIndex}</div>
                 <div
                   className="h-7 rounded-lg flex items-center justify-center text-xs font-semibold px-2 transition-all duration-300 border border-white/10"
                   style={{ backgroundColor: calculation.tubeHex, color: calculation.tubeTextHex }}
@@ -253,8 +316,8 @@ export default function FiberColorCodePage() {
 
               {/* Core Result */}
               <div className="rounded-xl border border-white/5 bg-white/[0.01] p-3 text-center">
-                <span className="text-[10px] text-muted-foreground font-medium block mb-1">CORE (FIBER)</span>
-                <div className="text-sm font-semibold mb-2">Core #{calculation.coreIndex}</div>
+                <span className="text-[10px] text-muted-foreground font-medium block mb-1">{t.coreFiber}</span>
+                <div className="text-sm font-semibold mb-2">{t.coreNum}{calculation.coreIndex}</div>
                 <div
                   className="h-7 rounded-lg flex items-center justify-center text-xs font-semibold px-2 transition-all duration-300 border border-white/10"
                   style={{ backgroundColor: calculation.coreHex, color: calculation.coreTextHex }}
@@ -265,11 +328,11 @@ export default function FiberColorCodePage() {
             </div>
 
             <div className="mt-5 text-xs text-muted-foreground leading-relaxed text-left w-full border-t border-white/10 pt-4 space-y-1">
-              <div>• Total cores parsed: <span className="font-semibold text-foreground">{capacity} Cores</span></div>
-              <div>• Tubes count: <span className="font-semibold text-foreground">{Math.ceil(capacity / coresPerTube)} Tubes</span></div>
+              <div>• {t.totalCoresParsed}: <span className="font-semibold text-foreground">{capacity} {t.coresText}</span></div>
+              <div>• {t.tubesCount}: <span className="font-semibold text-foreground">{Math.ceil(capacity / coresPerTube)} Tubes</span></div>
               {standard === "Telkom" && (
                 <div className="text-[11px] text-primary/80 mt-2 font-mono">
-                  Mnemonic: Biru, Jingga, Hijau, Cokelat, Abu-abu, Putih, Merah, Hitam, Kuning, Ungu, Pink, Toska.
+                  {t.mnemonicLabel}: Biru, Jingga, Hijau, Cokelat, Abu-abu, Putih, Merah, Hitam, Kuning, Ungu, Pink, Toska.
                 </div>
               )}
             </div>
@@ -281,7 +344,7 @@ export default function FiberColorCodePage() {
       <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm">
         <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
           <Info className="h-4 w-4 text-primary" />
-          Standard 12-Color Sequence Reference
+          {t.refTitle}
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
           {activeColors.map((c) => (

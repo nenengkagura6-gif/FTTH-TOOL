@@ -76,6 +76,10 @@ export default function OtdrFaultLocatorPage() {
   const [distanceUnit, setDistanceUnit] = useState<"m" | "km">("m")
   const [slackFactor, setSlackFactor] = useState<number>(0.97) // default 0.97 (fiber distance to map distance ratio)
   
+  // Slack node states
+  const [slackLoopLength, setSlackLoopLength] = useState<number>(20) // default 20 meters of slack per loop
+  const [enabledSlackNodes, setEnabledSlackNodes] = useState<Record<number, boolean>>({})
+
   // Leaflet loading state
   const [isMapScriptLoaded, setIsMapScriptLoaded] = useState(false)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -179,6 +183,7 @@ export default function OtdrFaultLocatorPage() {
     setFile(null)
     setPaths([])
     setPoints([])
+    setEnabledSlackNodes({})
     setStatus("idle")
     setErrorMsg(null)
     setFaultDistance(500)
@@ -231,43 +236,139 @@ export default function OtdrFaultLocatorPage() {
     return pathDistances[pathDistances.length - 1]
   }, [pathDistances])
 
-  // Fiber distance (estimated based on slack factor)
-  // Fiber Distance = Geo Distance / Slack Factor
-  // Map target distance (geographical) = OTDR Distance * Slack Factor
-  const targetGeoDistance = useMemo(() => {
+  // Match KML points to nearest vertices on the path and identify slack loops
+  const pathSlackMap = useMemo(() => {
+    const map: Record<number, { name: string; distance: number; type: string }> = {}
+    if (!activePath || points.length === 0) return map
+
+    points.forEach((pt) => {
+      let minDistance = Infinity
+      let closestVertexIdx = -1
+
+      activePath.coords.forEach((coord, idx) => {
+        const dist = calculateHaversineDistance(pt.lat, pt.lng, coord.lat, coord.lng)
+        if (dist < minDistance) {
+          minDistance = dist
+          closestVertexIdx = idx
+        }
+      })
+
+      // If the point is within 15 meters of a path vertex, we associate it
+      if (closestVertexIdx !== -1 && minDistance < 15) {
+        const nameUpper = pt.name.toUpperCase()
+        const isSlack = nameUpper.includes("ODP") ||
+                        nameUpper.includes("ODC") ||
+                        nameUpper.includes("JB") ||
+                        nameUpper.includes("LOOP") ||
+                        nameUpper.includes("SLACK") ||
+                        nameUpper.includes("CLOSURE") ||
+                        nameUpper.includes("JOINT") ||
+                        nameUpper.includes("SPLICE")
+
+        if (!map[closestVertexIdx] || minDistance < map[closestVertexIdx].distance) {
+          map[closestVertexIdx] = {
+            name: pt.name,
+            distance: minDistance,
+            type: isSlack ? "slack" : "normal"
+          }
+        }
+      }
+    })
+
+    return map
+  }, [activePath, points])
+
+  // Automatically enable slack loops when map is parsed
+  useEffect(() => {
+    const initialSlack: Record<number, boolean> = {}
+    Object.keys(pathSlackMap).forEach((key) => {
+      const idx = Number(key)
+      if (pathSlackMap[idx].type === "slack") {
+        initialSlack[idx] = true
+      }
+    })
+    setEnabledSlackNodes(initialSlack)
+  }, [pathSlackMap])
+
+  // Cumulative fiber distances calculated segment-by-segment incorporating slack loops
+  const fiberPathSegments = useMemo(() => {
+    if (!activePath || pathDistances.length === 0) return []
+    
+    const segments = []
+    let accumulatedSlack = 0
+
+    for (let i = 0; i < activePath.coords.length; i++) {
+      const geoDist = pathDistances[i]
+      const slack = enabledSlackNodes[i] ? slackLoopLength : 0
+      
+      // Fiber distance just before adding this vertex's slack loop
+      const fiberDistBefore = geoDist / slackFactor + accumulatedSlack
+      
+      // Add this vertex's slack to accumulator
+      accumulatedSlack += slack
+      
+      // Fiber distance just after adding this vertex's slack loop
+      const fiberDistAfter = geoDist / slackFactor + accumulatedSlack
+
+      segments.push({
+        idx: i,
+        coord: activePath.coords[i],
+        geoDist,
+        slack,
+        fiberDistBefore,
+        fiberDistAfter
+      })
+    }
+
+    return segments
+  }, [activePath, pathDistances, slackFactor, enabledSlackNodes, slackLoopLength])
+
+  // Calculated fault coordinate with slack loop zone mapping
+  const estimatedFault = useMemo((): (Coordinate & { isOut: boolean; inSlackNode: string | null }) | null => {
+    if (fiberPathSegments.length === 0) return null
+    
     const inputMeters = distanceUnit === "km" ? faultDistance * 1000 : faultDistance
-    return inputMeters * slackFactor
-  }, [faultDistance, distanceUnit, slackFactor])
+    const totalFiberLength = fiberPathSegments[fiberPathSegments.length - 1].fiberDistAfter
 
-  // Calculated fault coordinate
-  const estimatedFault = useMemo((): (Coordinate & { isOut: boolean }) | null => {
-    if (!activePath || pathDistances.length === 0) return null
-    const coords = activePath.coords
-    const target = targetGeoDistance
-
-    if (target <= 0) {
-      return { ...coords[0], isOut: false }
+    if (inputMeters <= 0) {
+      return { ...fiberPathSegments[0].coord, isOut: false, inSlackNode: null }
     }
 
-    if (target >= totalPathLengthGeo) {
-      return { ...coords[coords.length - 1], isOut: true }
+    if (inputMeters >= totalFiberLength) {
+      return { ...fiberPathSegments[fiberPathSegments.length - 1].coord, isOut: true, inSlackNode: null }
     }
 
-    // Interpolate
-    for (let i = 0; i < pathDistances.length - 1; i++) {
-      const d1 = pathDistances[i]
-      const d2 = pathDistances[i + 1]
-      if (target >= d1 && target <= d2) {
-        const segLen = d2 - d1
-        const t = segLen > 0 ? (target - d1) / segLen : 0
-        const lat = coords[i].lat + t * (coords[i + 1].lat - coords[i].lat)
-        const lng = coords[i].lng + t * (coords[i + 1].lng - coords[i].lng)
-        return { lat, lng, isOut: false }
+    // Traverse segments to locate the fault position
+    for (let i = 0; i < fiberPathSegments.length; i++) {
+      const current = fiberPathSegments[i]
+      
+      // Check if fault is exactly inside this node's slack loop
+      if (inputMeters >= current.fiberDistBefore && inputMeters <= current.fiberDistAfter) {
+        const nodeName = pathSlackMap[current.idx]?.name || `Node #${current.idx + 1}`
+        return {
+          ...current.coord,
+          isOut: false,
+          inSlackNode: nodeName
+        }
+      }
+
+      // Check if fault lies in the span between current node and next node
+      if (i < fiberPathSegments.length - 1) {
+        const next = fiberPathSegments[i + 1]
+        if (inputMeters > current.fiberDistAfter && inputMeters < next.fiberDistBefore) {
+          const spanFiberLen = next.fiberDistBefore - current.fiberDistAfter
+          const t = spanFiberLen > 0 ? (inputMeters - current.fiberDistAfter) / spanFiberLen : 0
+          
+          const lat = current.coord.lat + t * (next.coord.lat - current.coord.lat)
+          const lng = current.coord.lng + t * (next.coord.lng - current.coord.lng)
+          
+          return { lat, lng, isOut: false, inSlackNode: null }
+        }
       }
     }
 
     return null
-  }, [activePath, pathDistances, targetGeoDistance, totalPathLengthGeo])
+  }, [fiberPathSegments, faultDistance, distanceUnit, pathSlackMap])
 
   // Find closest pole/point
   const closestPointResult = useMemo(() => {
@@ -342,19 +443,32 @@ export default function OtdrFaultLocatorPage() {
 
     // Add normal points (poles, joint closure etc.)
     points.forEach((pt) => {
+      let isSlackEnabled = false
+      
+      // Match this point to active path slack nodes
+      Object.keys(pathSlackMap).forEach(key => {
+        const idx = Number(key)
+        if (enabledSlackNodes[idx] && pathSlackMap[idx].name === pt.name) {
+          isSlackEnabled = true
+        }
+      })
+
       L.circleMarker([pt.lat, pt.lng], {
-        radius: 4,
-        fillColor: "#fbbf24", // Amber
+        radius: isSlackEnabled ? 6 : 4,
+        fillColor: isSlackEnabled ? "#10b981" : "#fbbf24", // Green if slack enabled, Amber if normal
         color: "#1e293b",
         weight: 1.5,
         opacity: 0.9,
         fillOpacity: 0.9,
       })
         .addTo(map)
-        .bindTooltip(pt.name, {
-          direction: "top",
-          className: "leaflet-tooltip-dark bg-neutral-900 border-neutral-800 text-white font-mono text-[10px] px-2 py-0.5 rounded shadow-lg",
-        })
+        .bindTooltip(
+          `${pt.name}${isSlackEnabled ? ` (Slack: ${slackLoopLength}m)` : ""}`,
+          {
+            direction: "top",
+            className: "leaflet-tooltip-dark bg-neutral-900 border-neutral-800 text-white font-mono text-[10px] px-2 py-0.5 rounded shadow-lg",
+          }
+        )
     })
 
     // Fault marker
@@ -387,6 +501,7 @@ export default function OtdrFaultLocatorPage() {
           <div class="text-neutral-900 font-sans p-1">
             <h4 class="font-bold text-red-600 text-sm mb-1">Titik Kerusakan (Fault)</h4>
             <p class="text-xs mb-1">Jarak Serat: <b>${faultDistance} ${distanceUnit}</b></p>
+            ${estimatedFault.inSlackNode ? `<p class="text-xs text-red-500 font-semibold mb-1">⚠️ Di dalam Slack Loop: ${estimatedFault.inSlackNode}</p>` : ""}
             <p class="text-[10px] text-muted-foreground">${estimatedFault.lat.toFixed(6)}, ${estimatedFault.lng.toFixed(6)}</p>
           </div>
           `,
@@ -404,7 +519,7 @@ export default function OtdrFaultLocatorPage() {
         mapInstanceRef.current = null
       }
     }
-  }, [isMapScriptLoaded, activePath, points, estimatedFault, distanceUnit]) // Listen to estimatedFault change to pan map
+  }, [isMapScriptLoaded, activePath, points, estimatedFault, distanceUnit, enabledSlackNodes, slackLoopLength, pathSlackMap]) // Listen to estimatedFault change to pan map
 
   // Sync marker location manually when fault distance updates without reloading map completely
   useEffect(() => {
@@ -578,10 +693,10 @@ export default function OtdrFaultLocatorPage() {
                         const newLen = calculatePathLength(paths[idx].coords)
                         setFaultDistance(Math.min(faultDistance, Math.round(newLen)))
                       }}
-                      className="w-full h-9 px-3 rounded-lg border border-white/10 bg-white/[0.03] text-xs focus:outline-none focus:border-white/30 text-foreground bg-neutral-900"
+                      className="w-full h-9 px-3 rounded-lg border border-white/10 bg-neutral-900 text-xs focus:outline-none focus:border-white/30 text-white"
                     >
                       {paths.map((p, idx) => (
-                        <option key={idx} value={idx}>
+                        <option key={idx} value={idx} className="bg-neutral-950 text-white font-sans text-xs">
                           {p.name || `Rute ${idx + 1}`} ({p.coords.length} Node)
                         </option>
                       ))}
@@ -726,6 +841,66 @@ export default function OtdrFaultLocatorPage() {
                     *Membantu menyamakan perbedaan panjang serat optik (OTDR) dengan jarak geografis riil di peta.
                   </p>
                 </div>
+
+                {/* Slack Loop Configuration */}
+                <div className="border-t border-white/10 pt-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                      <Sliders className="h-3.5 w-3.5 text-primary" /> Panjang Slack per Tiang/ODP
+                    </label>
+                    <span className="text-xs font-mono font-semibold text-primary">{slackLoopLength} m</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    step="5"
+                    value={slackLoopLength}
+                    onChange={(e) => setSlackLoopLength(Number(e.target.value))}
+                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+
+                  {/* Slack points toggle checklist */}
+                  {Object.keys(pathSlackMap).length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
+                        <ListOrdered className="h-3.5 w-3.5" /> Titik Slack Terdeteksi ({Object.values(pathSlackMap).filter(p => p.type === "slack").length})
+                      </label>
+                      <div className="max-h-36 overflow-y-auto rounded-lg border border-white/5 bg-white/[0.01] p-2 space-y-1.5">
+                        {Object.keys(pathSlackMap).map((key) => {
+                          const idx = Number(key)
+                          const pt = pathSlackMap[idx]
+                          const isEnabled = !!enabledSlackNodes[idx]
+
+                          return (
+                            <label key={idx} className="flex items-center justify-between p-1.5 rounded hover:bg-white/[0.02] cursor-pointer text-[10px]">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={isEnabled}
+                                  onChange={(e) => {
+                                    setEnabledSlackNodes(prev => ({
+                                      ...prev,
+                                      [idx]: e.target.checked
+                                    }))
+                                  }}
+                                  className="rounded border-white/10 bg-white/5 text-primary focus:ring-0 cursor-pointer h-3.5 w-3.5"
+                                />
+                                <span className={cn(
+                                  "font-medium truncate max-w-[140px]",
+                                  isEnabled ? "text-foreground font-semibold" : "text-muted-foreground"
+                                )}>
+                                  {pt.name}
+                                </span>
+                              </div>
+                              <span className="text-muted-foreground font-mono">Node #{idx + 1}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -806,6 +981,13 @@ export default function OtdrFaultLocatorPage() {
                     </div>
                   )}
 
+                  {estimatedFault?.inSlackNode && (
+                    <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-2.5 text-xs text-green-400 flex items-start gap-2 animate-pulse">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-green-400 mt-0.5" />
+                      <span>Kabel putus terdeteksi di dalam gulungan slack loop pada objek: <b>{estimatedFault.inSlackNode}</b></span>
+                    </div>
+                  )}
+
                   {estimatedFault?.isOut && (
                     <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-2.5 text-xs text-yellow-300 flex items-start gap-2">
                       <AlertCircle className="h-4 w-4 shrink-0 text-yellow-400 mt-0.5" />
@@ -821,7 +1003,12 @@ export default function OtdrFaultLocatorPage() {
                     </div>
                     <div>
                       <span className="text-[9px] text-muted-foreground block">Estimasi Serat Optik</span>
-                      <span className="font-semibold">{(totalPathLengthGeo / slackFactor).toFixed(1)} m</span>
+                      <span className="font-semibold">
+                        {fiberPathSegments.length > 0 
+                          ? fiberPathSegments[fiberPathSegments.length - 1].fiberDistAfter.toFixed(1)
+                          : (totalPathLengthGeo / slackFactor).toFixed(1)
+                        } m
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -849,41 +1036,66 @@ export default function OtdrFaultLocatorPage() {
                     <thead>
                       <tr className="text-muted-foreground border-b border-white/5 pb-1">
                         <th className="py-2 px-2">No. Node</th>
+                        <th className="py-2 px-2">Objek</th>
                         <th className="py-2 px-2">Koordinat (Lat, Lng)</th>
+                        <th className="py-2 px-2 text-center">Slack</th>
                         <th className="py-2 px-2">Jarak Kumulatif (Geografis)</th>
                         <th className="py-2 px-2">Estimasi Serat</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {activePath.coords.map((c, idx) => {
-                        const geoDist = pathDistances[idx] || 0
-                        const fiberDist = geoDist / slackFactor
+                      {fiberPathSegments.map((seg) => {
+                        const ptInfo = pathSlackMap[seg.idx]
                         const inputMeters = distanceUnit === "km" ? faultDistance * 1000 : faultDistance
-                        const isAfterFault = geoDist > inputMeters * slackFactor
+                        const isAfterFault = seg.fiberDistBefore > inputMeters
+                        const isAtFault = inputMeters >= seg.fiberDistBefore && inputMeters <= seg.fiberDistAfter && seg.slack > 0
 
                         return (
                           <tr
-                            key={idx}
+                            key={seg.idx}
                             className={cn(
-                              "hover:bg-white/[0.02]",
-                              isAfterFault ? "text-muted-foreground/60" : "text-foreground font-semibold"
+                              "hover:bg-white/[0.02] transition-colors",
+                              isAtFault 
+                                ? "bg-red-500/10 text-red-400 font-bold border-y border-red-500/20" 
+                                : isAfterFault 
+                                  ? "text-muted-foreground/60" 
+                                  : "text-foreground font-semibold"
                             )}
                           >
-                            <td className="py-2 px-2 flex items-center gap-1.5">
+                            <td className="py-2.5 px-2 flex items-center gap-1.5">
                               <span className={cn(
                                 "h-1.5 w-1.5 rounded-full",
-                                isAfterFault ? "bg-neutral-600" : "bg-primary"
+                                isAtFault 
+                                  ? "bg-red-500 animate-ping" 
+                                  : isAfterFault 
+                                    ? "bg-neutral-600" 
+                                    : "bg-primary"
                               )} />
-                              #{idx + 1}
+                              #{seg.idx + 1}
                             </td>
-                            <td className="py-2 px-2">
-                              {c.lat.toFixed(6)}, {c.lng.toFixed(6)}
+                            <td className="py-2.5 px-2 font-sans truncate max-w-[120px]" title={ptInfo?.name}>
+                              {ptInfo?.name || "-"}
                             </td>
-                            <td className="py-2 px-2">
-                              {geoDist.toFixed(1)} m
+                            <td className="py-2.5 px-2">
+                              {seg.coord.lat.toFixed(6)}, {seg.coord.lng.toFixed(6)}
                             </td>
-                            <td className="py-2 px-2">
-                              {fiberDist.toFixed(1)} m
+                            <td className="py-2.5 px-2 text-center">
+                              {seg.slack > 0 ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">
+                                  {seg.slack}m
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/30">-</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2">
+                              {seg.geoDist.toFixed(1)} m
+                            </td>
+                            <td className="py-2.5 px-2 font-mono">
+                              {seg.slack > 0 
+                                ? `${seg.fiberDistBefore.toFixed(1)} → ${seg.fiberDistAfter.toFixed(1)}` 
+                                : seg.fiberDistBefore.toFixed(1)
+                              } m
                             </td>
                           </tr>
                         )

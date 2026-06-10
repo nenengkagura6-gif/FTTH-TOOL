@@ -32,67 +32,93 @@ class DuplikatEngine:
         tree = etree.parse(io.BytesIO(content), parser)
         root = tree.getroot()
         
+        # Check if the KML has any folder containing target keywords
+        has_target_folders = False
+        for folder in root.iter():
+            if safe_localname(folder) == "Folder":
+                folder_name = ""
+                for child in folder:
+                    if safe_localname(child) == "name" and child.text:
+                        folder_name = child.text.strip()
+                        break
+                if folder_name:
+                    upper = folder_name.upper()
+                    if any(k in upper for k in self.target_keywords):
+                        has_target_folders = True
+                        break
+        
         results = []
         
-        for folder in root.iter():
-            if safe_localname(folder) != "Folder":
+        # Iterate over all placemarks anywhere in the KML tree
+        for placemark in root.iter():
+            if safe_localname(placemark) != "Placemark":
                 continue
-            
-            # Get folder name
-            folder_name = ""
-            for child in folder:
-                if safe_localname(child) == "name":
-                    if child.text:
-                        folder_name = child.text.strip()
+                
+            # Verify if it has a Point element (we only check point duplicates, not lines/cables)
+            has_point = False
+            for child in placemark.iter():
+                if safe_localname(child) == "Point":
+                    has_point = True
                     break
-            
-            if not folder_name:
+            if not has_point:
                 continue
+                
+            # Find the parent folder name
+            folder_name = "Root"
+            parent = placemark.getparent()
+            while parent is not None:
+                if safe_localname(parent) == "Folder":
+                    for child in parent:
+                        if safe_localname(child) == "name" and child.text:
+                            folder_name = child.text.strip()
+                            break
+                    break
+                parent = parent.getparent()
+                
+            # If target folders exist, filter by them
+            if has_target_folders:
+                upper_folder = folder_name.upper()
+                if not any(k in upper_folder for k in self.target_keywords):
+                    continue
             
-            # Check if folder matches target keywords
-            upper = folder_name.upper()
-            if not any(k in upper for k in self.target_keywords):
+            try:
+                placemark_name = ""
+                lat = None
+                lon = None
+                
+                for item in placemark.iter():
+                    tag = safe_localname(item)
+                    
+                    if tag == "name":
+                        if item.text and not placemark_name:
+                            placemark_name = item.text.strip()
+                    
+                    elif tag == "coordinates":
+                        if item.text:
+                            coord = item.text.strip()
+                            try:
+                                # Split by comma first, then strip each part
+                                parts = [p.strip() for p in coord.split(",") if p.strip()]
+                                if len(parts) >= 2:
+                                    lon = float(parts[0])
+                                    lat = float(parts[1])
+                            except ValueError:
+                                continue
+                
+                # Valid placemark coordinates
+                if lat is not None and lon is not None:
+                    if not placemark_name:
+                        placemark_name = f"Point ({lat}, {lon})"
+                    results.append({
+                        "name": placemark_name,
+                        "lat": lat,
+                        "lon": lon,
+                        "folder": folder_name,
+                        "file": Path(filename).name
+                    })
+            
+            except Exception:
                 continue
-            
-            # Process placemarks
-            for child in folder:
-                if safe_localname(child) != "Placemark":
-                    continue
-                
-                try:
-                    placemark_name = ""
-                    lat = None
-                    lon = None
-                    
-                    for item in child.iter():
-                        tag = safe_localname(item)
-                        
-                        if tag == "name":
-                            if item.text and not placemark_name:
-                                placemark_name = item.text.strip()
-                        
-                        elif tag == "coordinates":
-                            if item.text:
-                                coord = item.text.strip()
-                                try:
-                                    lon_str, lat_str, *_ = coord.split(",")
-                                    lon = float(lon_str)
-                                    lat = float(lat_str)
-                                except ValueError:
-                                    continue
-                    
-                    # Valid placemark
-                    if placemark_name and lat is not None and lon is not None:
-                        results.append({
-                            "name": placemark_name,
-                            "lat": lat,
-                            "lon": lon,
-                            "folder": folder_name,
-                            "file": Path(filename).name
-                        })
-                
-                except Exception:
-                    continue
         
         return results
     
