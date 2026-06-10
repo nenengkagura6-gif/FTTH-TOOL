@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Menu, X, Globe } from "lucide-react"
+import { Menu, X, Globe, Sun, Moon } from "lucide-react"
+import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { siteConfig } from "@/lib/site-config"
 import { translations } from "@/lib/translations"
@@ -24,7 +25,7 @@ function Logo({ locale = "en" }: { locale?: string }) {
           <span className="absolute w-1.5 h-1.5 rounded-full bg-primary bottom-0 left-1/2 -translate-x-1/2" />
         </div>
       </div>
-      <span className="font-semibold tracking-tight text-foreground">
+      <span className="font-semibold tracking-tight text-foreground whitespace-nowrap">
         {siteConfig.name}
       </span>
     </Link>
@@ -41,11 +42,11 @@ function AnimatedNavLink({
   return (
     <Link
       href={href}
-      className="group relative inline-flex items-start overflow-hidden text-sm pt-0.5"
+      className="group relative inline-flex items-start h-5 overflow-hidden text-sm whitespace-nowrap"
     >
       <div className="flex flex-col transition-transform duration-300 ease-out group-hover:-translate-y-1/2">
-        <span className="text-muted-foreground">{children}</span>
-        <span className="text-foreground">{children}</span>
+        <span className="text-muted-foreground h-5 flex items-center">{children}</span>
+        <span className="text-foreground h-5 flex items-center">{children}</span>
       </div>
     </Link>
   )
@@ -59,6 +60,9 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
   const [shapeClass, setShapeClass] = useState("rounded-full")
   const shapeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
   const t = translations[locale as "en" | "id"] || translations.en
 
   const localizedNavItems = [
@@ -71,11 +75,18 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
   ]
 
   useEffect(() => {
+    setMounted(true)
     const onScroll = () => setScrolled(window.scrollY > 8)
     onScroll()
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
+
+  useEffect(() => {
+    if (mounted && typeof window !== "undefined" && locale) {
+      localStorage.setItem("locale", locale)
+    }
+  }, [locale, mounted])
 
   useEffect(() => {
     if (shapeTimeoutRef.current) clearTimeout(shapeTimeoutRef.current)
@@ -116,11 +127,11 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
         shapeClass,
       )}
     >
-      <div className="flex items-start justify-between w-full gap-x-6 sm:gap-x-8">
+      <div className="flex items-center justify-between w-full gap-x-6 sm:gap-x-8">
         <Logo locale={locale} />
 
         <nav
-          className="hidden md:flex items-start gap-6 pt-0.5"
+          className="hidden md:flex items-center gap-6"
           aria-label="Main navigation"
         >
           {localizedNavItems.map((item) => (
@@ -130,7 +141,7 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
           ))}
         </nav>
 
-        <div className="hidden md:flex items-start gap-2">
+        <div className="hidden md:flex items-center gap-2">
           {/* Language Switcher */}
           <button
             type="button"
@@ -139,6 +150,20 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
           >
             <Globe className="h-3 w-3" />
             <span className="uppercase">{locale === "en" ? "ID" : "EN"}</span>
+          </button>
+
+          {/* Theme Toggle */}
+          <button
+            type="button"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="flex items-center justify-center w-8 h-8 border border-white/10 bg-white/[0.03] text-muted-foreground rounded-full hover:border-white/30 hover:text-foreground transition-colors cursor-pointer"
+            aria-label="Toggle theme"
+          >
+            {mounted && theme === "dark" ? (
+              <Sun className="h-3.5 w-3.5" />
+            ) : (
+              <Moon className="h-3.5 w-3.5" />
+            )}
           </button>
 
           <Link
@@ -204,6 +229,28 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
           >
             <Globe className="h-4 w-4" />
             <span>Switch to {locale === "en" ? "Bahasa Indonesia (ID)" : "English (EN)"}</span>
+          </button>
+
+          {/* Mobile Theme Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false)
+              setTheme(theme === "dark" ? "light" : "dark")
+            }}
+            className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm text-center border border-white/10 bg-white/[0.03] text-foreground rounded-full hover:border-white/30 transition-colors cursor-pointer"
+          >
+            {mounted && theme === "dark" ? (
+              <>
+                <Sun className="h-4 w-4" />
+                <span>{locale === "en" ? "Switch to Light Mode" : "Ubah ke Mode Terang"}</span>
+              </>
+            ) : (
+              <>
+                <Moon className="h-4 w-4" />
+                <span>{locale === "en" ? "Switch to Dark Mode" : "Ubah ke Mode Gelap"}</span>
+              </>
+            )}
           </button>
 
           <Link

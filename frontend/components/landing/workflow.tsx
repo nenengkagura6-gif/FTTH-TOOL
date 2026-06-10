@@ -42,7 +42,7 @@ export function Workflow({ locale = "en" }: { locale?: string }) {
           {/* Connecting line on desktop */}
           <div
             aria-hidden="true"
-            className="hidden md:block absolute top-12 left-[16%] right-[16%] h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"
+            className="hidden md:block absolute top-12 left-[16%] right-[16%] h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"
           />
 
           {steps.map((step, i) => (
@@ -52,10 +52,11 @@ export function Workflow({ locale = "en" }: { locale?: string }) {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.15 }}
-              className="relative rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm"
+              whileTap={{ scale: 0.98 }}
+              className="group relative rounded-2xl border border-border bg-card/90 p-6 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-background text-primary">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-primary transition-all duration-300 group-hover:scale-105 group-hover:bg-primary group-hover:text-primary-foreground group-active:bg-primary group-active:text-primary-foreground">
                   <step.icon className="h-4 w-4" />
                 </div>
                 <span className="font-mono text-xs text-muted-foreground">

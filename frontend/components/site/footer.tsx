@@ -15,12 +15,13 @@ export function SiteFooter({ locale = "en" }: { locale?: string }) {
 
   const localizedCompanyLinks = [
     { label: t.nav.about, href: `/${locale}/about` },
-    { label: "Contact", href: `/${locale}/about#contact` },
+    { label: "Contact", href: `/${locale}/contact` },
   ]
 
   const localizedLegalLinks = [
-    { label: "Privacy Policy", href: `/${locale}/privacy` },
-    { label: "Terms of Service", href: `/${locale}/terms` },
+    { label: locale === "en" ? "Privacy Policy" : "Kebijakan Privasi", href: `/${locale}/privacy` },
+    { label: locale === "en" ? "Terms of Service" : "Syarat & Ketentuan", href: `/${locale}/terms` },
+    { label: locale === "en" ? "Refund Policy" : "Kebijakan Refund", href: `/${locale}/refund` },
   ]
 
   return (

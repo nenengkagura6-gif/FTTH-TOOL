@@ -9,7 +9,7 @@ interface PageProps {
   }>
 }
 
-const sections: LegalSection[] = [
+const sectionsEn: LegalSection[] = [
   {
     id: "usage",
     title: "1. Usage policy",
@@ -67,17 +67,77 @@ const sections: LegalSection[] = [
   },
 ]
 
+const sectionsId: LegalSection[] = [
+  {
+    id: "usage",
+    title: "1. Kebijakan penggunaan",
+    body: [
+      "Dengan mengakses FTTH Tool, Anda setuju untuk menggunakan platform ini hanya untuk tujuan yang sah dan sesuai dengan syarat-syarat ini.",
+      "Anda bertanggung jawab untuk menjaga kerahasiaan kredensial akun Anda.",
+    ],
+  },
+  {
+    id: "files",
+    title: "2. Batasan file",
+    body: [
+      "File yang diunggah tidak boleh mengandung malware, konten ilegal, atau data pribadi yang Anda tidak memiliki hak untuk memprosesnya.",
+      "Kami berhak menghapus file yang melanggar kebijakan ini dan menangguhkan akun yang berulang kali melanggar.",
+    ],
+  },
+  {
+    id: "fair-use",
+    title: "3. Penggunaan wajar",
+    body: [
+      "Batas paket gratis ada untuk memastikan kualitas layanan bagi semua pengguna. Permintaan otomatis yang berlebihan dapat dikenakan pembatasan tarif (rate-limiting).",
+      "Paket Pro mencakup batas yang murah hati dan akses prioritas antrean.",
+    ],
+  },
+  {
+    id: "liability",
+    title: "4. Batasan tanggung jawab",
+    body: [
+      "FTTH Tool disediakan apa adanya. Kami tidak memberikan jaminan tentang keakuratan hasil otomatis dan merekomendasikan peninjauan manual untuk hasil akhir yang penting.",
+      "Sejauh yang diizinkan oleh hukum, tanggung jawab kami untuk klaim apa pun terbatas pada biaya yang dibayarkan dalam 12 bulan sebelumnya.",
+    ],
+  },
+  {
+    id: "suspension",
+    title: "5. Penangguhan akun",
+    body: [
+      "Kami dapat menangguhkan atau menghentikan akun yang melanggar syarat-syarat ini, mencoba mengompromikan keamanan platform, atau terlibat dalam perilaku kasar.",
+      "Pengguna yang ditangguhkan dapat mengekspor data mereka dalam waktu 30 hari sejak pemberitahuan.",
+    ],
+  },
+  {
+    id: "ip",
+    title: "6. Kekayaan intelektual",
+    body: [
+      "Anda mempertahankan semua hak atas file dan hasil yang Anda hasilkan di platform.",
+      "FTTH Tool, termasuk platform, merek, dan perangkat lunak, tetap merupakan kekayaan intelektual dari Nusa Hytoria.",
+    ],
+  },
+  {
+    id: "changes",
+    title: "7. Perubahan syarat ketentuan",
+    body: [
+      "Kami dapat memperbarui syarat-syarat ini secara berkala. Perubahan material akan dikomunikasikan melalui email atau pemberitahuan di dalam produk setidaknya 30 hari sebelum berlaku.",
+    ],
+  },
+]
+
 export default async function TermsPage({ params }: PageProps) {
   const { locale } = await params
+  const isId = locale === "id"
+  const sections = isId ? sectionsId : sectionsEn
 
   return (
     <>
       <SiteNavbar locale={locale} />
       <main className="relative">
         <PageHeader
-          eyebrow="Legal"
-          title="Terms of Service"
-          description="Last updated: May 1, 2026"
+          eyebrow={isId ? "Hukum" : "Legal"}
+          title={isId ? "Syarat dan Ketentuan Layanan" : "Terms of Service"}
+          description={isId ? "Terakhir diperbarui: 1 Mei 2026" : "Last updated: May 1, 2026"}
         />
         <LegalContent sections={sections} />
       </main>

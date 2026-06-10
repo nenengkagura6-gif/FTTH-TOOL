@@ -2,10 +2,11 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   ChevronLeft,
+  ChevronDown,
   Settings,
   HelpCircle,
   LogOut,
@@ -14,29 +15,194 @@ import {
   Crown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { dashboardMenu, siteConfig } from "@/lib/site-config"
+import {
+  systemMenuItems,
+  toolMenuItems,
+  siteConfig,
+  TOOL_CATEGORIES,
+  getToolsByCategory,
+  type ToolCategory,
+  type DashboardMenuItem,
+} from "@/lib/site-config"
 import { useAuth } from "@/components/auth/auth-provider"
 import { useFeatureAccess } from "@/hooks/use-feature-access"
 import { useUpgradeModal } from "@/components/upgrade-modal"
-import { PLAN_INFO } from "@/lib/features"
+import { dashboardTranslations } from "./dashboard-translations"
 
 interface SidebarProps {
   mobileOpen?: boolean
   onMobileClose?: () => void
 }
 
+const STORAGE_KEY = "sidebar-collapsed-categories"
+
+// Category accent color map for dynamic class resolution
+const categoryAccentMap: Record<string, {
+  dot: string
+  barGradient: string
+  activeBg: string
+  activeBorder: string
+  activeText: string
+}> = {
+  violet: {
+    dot: "bg-gradient-to-br from-violet-500 to-blue-500",
+    barGradient: "from-violet-500/60 to-blue-500/60",
+    activeBg: "bg-violet-500/10",
+    activeBorder: "border-l-violet-500",
+    activeText: "text-violet-400",
+  },
+  cyan: {
+    dot: "bg-gradient-to-br from-cyan-500 to-teal-500",
+    barGradient: "from-cyan-500/60 to-teal-500/60",
+    activeBg: "bg-cyan-500/10",
+    activeBorder: "border-l-cyan-500",
+    activeText: "text-cyan-400",
+  },
+  amber: {
+    dot: "bg-gradient-to-br from-amber-500 to-orange-500",
+    barGradient: "from-amber-500/60 to-orange-500/60",
+    activeBg: "bg-amber-500/10",
+    activeBorder: "border-l-amber-500",
+    activeText: "text-amber-400",
+  },
+  emerald: {
+    dot: "bg-gradient-to-br from-emerald-500 to-green-500",
+    barGradient: "from-emerald-500/60 to-green-500/60",
+    activeBg: "bg-emerald-500/10",
+    activeBorder: "border-l-emerald-500",
+    activeText: "text-emerald-400",
+  },
+}
+
 export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const [locale, setLocale] = useState<"en" | "id">("en")
   const { user, profile, signOut } = useAuth()
   const { canAccess, plan, planInfo } = useFeatureAccess()
   const { showUpgradeModal } = useUpgradeModal()
 
+  // Category collapse state
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    const stored = localStorage.getItem("locale")
+    if (stored === "id" || stored === "en") {
+      setLocale(stored)
+    }
+  }, [])
+
+  // Load collapsed categories from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        setCollapsedCategories(JSON.parse(stored))
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, [])
+
+  const toggleCategory = useCallback((categoryId: string) => {
+    setCollapsedCategories((prev) => {
+      const next = { ...prev, [categoryId]: !prev[categoryId] }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const dt = dashboardTranslations[locale]
   const displayName = profile?.full_name || user?.email?.split("@")[0] || "User"
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard"
     return pathname === href || pathname.startsWith(href + "/")
+  }
+
+  // Check if any tool in a category is active
+  const isCategoryActive = (categoryId: ToolCategory) => {
+    return getToolsByCategory(categoryId).some((item) => isActive(item.href))
+  }
+
+  // Render a single menu item (shared by system items and tool items)
+  const renderMenuItem = (item: DashboardMenuItem, accent?: typeof categoryAccentMap.violet) => {
+    if (item.adminOnly && profile?.role !== "admin") return null
+
+    const active = isActive(item.href)
+    const isLocked = item.featureKey ? !canAccess(item.featureKey) : false
+    const translatedTitle = dt.menuTitle[item.title as keyof typeof dt.menuTitle] || item.title
+
+    if (isLocked) {
+      return (
+        <li key={item.href}>
+          <button
+            type="button"
+            onClick={() => {
+              if (item.featureKey) showUpgradeModal(item.featureKey)
+              onMobileClose?.()
+            }}
+            className={cn(
+              "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all w-full text-left",
+              "text-muted-foreground/50 hover:bg-white/5 hover:text-muted-foreground",
+            )}
+          >
+            <item.icon className="h-4 w-4 flex-shrink-0 opacity-40" />
+            {!collapsed && (
+              <>
+                <span className="truncate flex-1 opacity-60">{translatedTitle}</span>
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400/80 border border-amber-500/20">
+                  <Lock className="h-2.5 w-2.5" />
+                  PRO
+                </span>
+              </>
+            )}
+            {collapsed && (
+              <Lock className="absolute top-1 right-1 h-2.5 w-2.5 text-amber-400/60" />
+            )}
+          </button>
+        </li>
+      )
+    }
+
+    return (
+      <li key={item.href}>
+        <Link
+          href={item.href}
+          onClick={onMobileClose}
+          className={cn(
+            "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all",
+            active
+              ? cn(
+                  "text-foreground",
+                  accent ? accent.activeBg : "bg-primary/10",
+                )
+              : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+          )}
+          aria-current={active ? "page" : undefined}
+        >
+          {active && (
+            <motion.span
+              layoutId="sidebar-active-indicator"
+              className={cn(
+                "absolute left-0 top-1/2 -translate-y-1/2 h-6 w-0.5 rounded-r-full",
+                accent ? accent.activeText.replace("text-", "bg-") : "bg-primary",
+              )}
+              aria-hidden="true"
+            />
+          )}
+          <item.icon
+            className={cn(
+              "h-4 w-4 flex-shrink-0 transition-colors",
+              active && (accent ? accent.activeText : "text-primary"),
+            )}
+          />
+          {!collapsed && (
+            <span className="truncate">{translatedTitle}</span>
+          )}
+        </Link>
+      </li>
+    )
   }
 
   return (
@@ -100,90 +266,113 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
           {/* Nav */}
           <nav
-            className="flex-1 overflow-y-auto p-3"
+            className="flex-1 overflow-y-auto p-3 sidebar-scroll"
             aria-label="Dashboard navigation"
           >
-            <p
-              className={cn(
-                "px-3 mb-2 text-[11px] uppercase tracking-wider text-muted-foreground/70 font-medium",
-                collapsed && "lg:hidden",
-              )}
-            >
-              Tools
-            </p>
+            {/* System items (flat list) */}
             <ul className="flex flex-col gap-1">
-              {dashboardMenu.map((item) => {
-                if (item.adminOnly && profile?.role !== "admin") return null
+              {systemMenuItems.map((item) => renderMenuItem(item))}
+            </ul>
 
-                const active = isActive(item.href)
-                const isLocked = item.featureKey ? !canAccess(item.featureKey) : false
+            {/* Divider between system & tools */}
+            <div className="my-3 h-px bg-white/[0.06]" />
+
+            {/* Tool categories */}
+            <div className="flex flex-col gap-1">
+              {TOOL_CATEGORIES.map((category) => {
+                const tools = getToolsByCategory(category.id)
+                const isExpanded = !collapsedCategories[category.id]
+                const hasActiveChild = isCategoryActive(category.id)
+                const accent = categoryAccentMap[category.accentColor]
+                const categoryLabel = category.label[locale]
+                const categorySubtitle = category.subtitle[locale]
 
                 return (
-                  <li key={item.href}>
-                    {isLocked ? (
-                      // Locked item — show upgrade modal on click
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (item.featureKey) {
-                            showUpgradeModal(item.featureKey)
-                          }
-                          onMobileClose?.()
-                        }}
+                  <div key={category.id} className="mb-1">
+                    {/* Category Header */}
+                    <button
+                      type="button"
+                      onClick={() => toggleCategory(category.id)}
+                      className={cn(
+                        "group flex items-center gap-2 w-full rounded-lg px-3 py-2 transition-all",
+                        "hover:bg-white/[0.04]",
+                        hasActiveChild && !isExpanded && "bg-white/[0.03]",
+                        collapsed && "lg:justify-center lg:px-0",
+                      )}
+                      aria-expanded={isExpanded}
+                      aria-controls={`category-${category.id}`}
+                    >
+                      {/* Gradient accent dot */}
+                      <span
                         className={cn(
-                          "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all w-full text-left",
-                          "text-muted-foreground/50 hover:bg-white/5 hover:text-muted-foreground",
+                          "w-2 h-2 rounded-full flex-shrink-0 transition-shadow",
+                          accent.dot,
+                          hasActiveChild && "shadow-[0_0_6px_1px] shadow-current",
                         )}
-                      >
-                        <item.icon className="h-4 w-4 flex-shrink-0 opacity-40" />
-                        {!collapsed && (
-                          <>
-                            <span className="truncate flex-1 opacity-60">{item.title}</span>
-                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400/80 border border-amber-500/20">
-                              <Lock className="h-2.5 w-2.5" />
-                              PRO
+                      />
+
+                      {!collapsed && (
+                        <>
+                          <div className="flex-1 text-left min-w-0">
+                            <span className="text-xs font-semibold text-foreground/95 block leading-tight">
+                              {categoryLabel}
                             </span>
-                          </>
-                        )}
-                        {collapsed && (
-                          <Lock className="absolute top-1 right-1 h-2.5 w-2.5 text-amber-400/60" />
-                        )}
-                      </button>
-                    ) : (
-                      // Accessible item — normal link
-                      <Link
-                        href={item.href}
-                        onClick={onMobileClose}
-                        className={cn(
-                          "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all",
-                          active
-                            ? "bg-primary/10 text-foreground"
-                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-                        )}
-                        aria-current={active ? "page" : undefined}
-                      >
-                        {active && (
-                          <motion.span
-                            layoutId="sidebar-active-indicator"
-                            className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-0.5 rounded-r-full bg-primary"
-                            aria-hidden="true"
+                            {isExpanded && (
+                              <span className="text-[11px] text-muted-foreground/50 block leading-tight mt-0.5 font-normal">
+                                {categorySubtitle}
+                              </span>
+                            )}
+                            {!isExpanded && (
+                              <span className="text-[10px] text-muted-foreground/40 block leading-tight mt-0.5">
+                                {tools.length} {locale === "id" ? "alat" : "tools"}
+                              </span>
+                            )}
+                          </div>
+
+                          <ChevronDown
+                            className={cn(
+                              "h-3 w-3 text-muted-foreground/40 transition-transform duration-200 flex-shrink-0",
+                              !isExpanded && "-rotate-90",
+                            )}
                           />
-                        )}
-                        <item.icon
-                          className={cn(
-                            "h-4 w-4 flex-shrink-0 transition-colors",
-                            active && "text-primary",
-                          )}
-                        />
-                        {!collapsed && (
-                          <span className="truncate">{item.title}</span>
-                        )}
-                      </Link>
-                    )}
-                  </li>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Category Items */}
+                    <AnimatePresence initial={false}>
+                      {isExpanded && (
+                        <motion.div
+                          id={`category-${category.id}`}
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2, ease: "easeInOut" }}
+                          className="overflow-hidden"
+                        >
+                          <div className="relative">
+                            {/* Gradient left accent bar */}
+                            {!collapsed && (
+                              <div
+                                className={cn(
+                                  "absolute left-[18px] top-1 bottom-1 w-[2px] rounded-full bg-gradient-to-b opacity-20",
+                                  accent.barGradient,
+                                )}
+                                aria-hidden="true"
+                              />
+                            )}
+
+                            <ul className="flex flex-col gap-0.5 py-1 pl-1">
+                              {tools.map((item) => renderMenuItem(item, accent))}
+                            </ul>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 )
               })}
-            </ul>
+            </div>
           </nav>
 
           {/* Footer */}
@@ -191,11 +380,11 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             <ul className="flex flex-col gap-1">
               <li>
                 <Link
-                  href="/docs"
+                  href={`/${locale}/docs`}
                   className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
                 >
                   <HelpCircle className="h-4 w-4 flex-shrink-0" />
-                  {!collapsed && <span>Docs</span>}
+                  {!collapsed && <span>{locale === "id" ? "Dokumentasi" : "Docs"}</span>}
                 </Link>
               </li>
               <li>
@@ -204,7 +393,7 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                   className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
                 >
                   <Settings className="h-4 w-4 flex-shrink-0" />
-                  {!collapsed && <span>Settings</span>}
+                  {!collapsed && <span>{locale === "id" ? "Pengaturan" : "Settings"}</span>}
                 </Link>
               </li>
               <li>
@@ -214,7 +403,7 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                   className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-red-400 transition-colors"
                 >
                   <LogOut className="h-4 w-4 flex-shrink-0" />
-                  {!collapsed && <span>Sign out</span>}
+                  {!collapsed && <span>{locale === "id" ? "Keluar" : "Sign out"}</span>}
                 </button>
               </li>
             </ul>
@@ -233,6 +422,11 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+                {profile && (
+                  <p className="text-[9px] text-muted-foreground mt-1 font-mono">
+                    {profile.quota_used}/{profile.quota_limit} {locale === "id" ? "terpakai" : "used"}
+                  </p>
+                )}
               </div>
             )}
 

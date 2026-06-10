@@ -26,7 +26,7 @@ export default function SettingsPage() {
           <div>
             <label className="text-xs text-muted-foreground">Email</label>
             <input
-              defaultValue="engineer@nusahytoria.com"
+              defaultValue="engineer@ftthtools.my.id"
               className="mt-1.5 w-full h-9 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm focus:outline-none focus:border-white/30 transition-colors"
             />
           </div>
