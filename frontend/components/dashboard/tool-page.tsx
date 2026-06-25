@@ -37,6 +37,8 @@ interface ToolPageProps {
   featureKey?: FeatureKey
   /** Explicit tool name to process */
   toolName?: string
+  /** Optional client-side processor function */
+  clientProcessor?: (file: File) => Promise<{ blob: Blob; filename: string }>
 }
 
 type Status = "idle" | "uploading" | "processing" | "success" | "error"
@@ -55,6 +57,7 @@ export function ToolPage({
   supportsExcelTemplate = true,
   featureKey,
   toolName,
+  clientProcessor,
 }: ToolPageProps) {
   const [primary, setPrimary] = useState<UploadFile | null>(null)
   const [template, setTemplate] = useState<UploadFile | null>(null)
@@ -65,6 +68,7 @@ export function ToolPage({
   const [jobId, setJobId] = useState<string | null>(null)
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [progressMessage, setProgressMessage] = useState<string>("")
+  const [outputFilename, setOutputFilename] = useState<string | null>(null)
   
   const primaryInputRef = useRef<HTMLInputElement>(null)
   const templateInputRef = useRef<HTMLInputElement>(null)
@@ -161,6 +165,22 @@ export function ToolPage({
     setErrorMsg(null)
 
     try {
+      if (clientProcessor) {
+        setStatus("processing")
+        setProgress(20)
+        setProgressMessage("Processing file locally...")
+        
+        const result = await clientProcessor(primary.file)
+        
+        setProgress(100)
+        setStatus("success")
+        setProgressMessage("Selesai!")
+        setOutputFilename(result.filename)
+        
+        const url = URL.createObjectURL(result.blob)
+        setResultUrl(url)
+        return
+      }
       const supabase = getSupabaseClient()
       const { data: userData } = await supabase.auth.getUser()
       if (!userData.user) throw new Error("User not authenticated")
@@ -292,6 +312,7 @@ export function ToolPage({
           setStatus("success")
           setProgress(100)
           setProgressMessage('Selesai!')
+          setOutputFilename(job.output_filename)
           
           const finalUrl = job.output_file_url
           if (finalUrl) {
@@ -321,12 +342,22 @@ export function ToolPage({
     setJobId(null)
     setResultUrl(null)
     setProgressMessage("")
+    setOutputFilename(null)
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
   }
 
   const handleDownload = () => {
     if (resultUrl) {
-       window.open(resultUrl, '_blank')
+      if (resultUrl.startsWith('blob:')) {
+        const a = document.createElement('a')
+        a.href = resultUrl
+        a.download = outputFilename || "result.csv"
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      } else {
+        window.open(resultUrl, '_blank')
+      }
     }
   }
 
