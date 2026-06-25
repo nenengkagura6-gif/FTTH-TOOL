@@ -1,10 +1,10 @@
-# Render Blueprint for FTTH Tool Backend (FastAPI + Celery + Redis)
+# Render Blueprint for FTTH Tool Backend (FastAPI + BackgroundTasks)
 services:
-  # 1. FastAPI Web Server
+  # 1. FastAPI Web Server (Free Tier)
   - type: web
     name: ftth-api
     env: python
-    plan: starter
+    plan: free
     region: singapore
     branch: main
     healthCheckPath: /health
@@ -17,60 +17,3 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: ftth-redis
-          property: connectionString
-
-  # 2. Celery Background Worker (Processing Engine)
-  - type: worker
-    name: ftth-worker
-    env: python
-    plan: starter
-    region: singapore
-    branch: main
-    buildCommand: pip install -r requirements.txt
-    startCommand: cd app && celery -A celery_app worker --loglevel=info
-    envVars:
-      - key: PYTHONUNBUFFERED
-        value: "1"
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: ftth-redis
-          property: connectionString
-
-  # 3. Redis Message Broker
-  - type: redis
-    name: ftth-redis
-    plan: starter
-    region: singapore
-    maxmemoryPolicy: noeviction
-    ipAllowList: [] # Allows internal connections by default
-
-  # 4. Celery Beat (Periodic Scheduler)
-  - type: worker
-    name: ftth-beat
-    env: python
-    plan: starter
-    region: singapore
-    branch: main
-    buildCommand: pip install -r requirements.txt
-    startCommand: cd app && celery -A celery_app beat --loglevel=info
-    envVars:
-      - key: PYTHONUNBUFFERED
-        value: "1"
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: ftth-redis
-          property: connectionString
