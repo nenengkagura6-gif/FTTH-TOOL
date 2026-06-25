@@ -20,9 +20,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY main.py .
-COPY engines/ ./engines/
-COPY utils/ ./utils/
+COPY app/ .
 
 # Create upload directory
 RUN mkdir -p /tmp/uploads
