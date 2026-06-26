@@ -3,6 +3,11 @@
 
 FROM python:3.11-slim
 
+# Set up environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PORT=7860 \
+    HOME=/home/user
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -10,33 +15,32 @@ RUN apt-get update && apt-get install -y \
     libxslt1-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user (Hugging Face Spaces runs as user 1000)
-RUN useradd -m -u 1000 user
-USER user
-ENV HOME=/home/user \
-    PATH=/home/user/.local/bin:$PATH
+# Set working directory for requirements installation
+WORKDIR /build
 
-# Set working directory
-WORKDIR $HOME/app
-
-# Copy requirements first (for better caching)
-COPY --chown=user requirements.txt .
-
-# Install Python dependencies
+# Copy requirements and install packages globally (as root)
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY --chown=user app/ .
+# Create a non-root user (Hugging Face Spaces runs as user 1000)
+RUN useradd -m -u 1000 user
+
+# Set up application directory
+WORKDIR $HOME/app
+
+# Copy application code and set ownership
+COPY app/ .
+RUN chown -R user:user $HOME/app
 
 # Create upload directory (writable by user)
-RUN mkdir -p $HOME/app/uploads
+RUN mkdir -p $HOME/app/uploads && chown -R user:user $HOME/app/uploads
 
 # Expose port
 EXPOSE 7860
 
-# Environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PORT=7860
+# Switch to non-root user
+USER user
+ENV PATH=/home/user/.local/bin:$PATH
 
 # Run application
 CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT
