@@ -404,7 +404,7 @@ export default function PricingPage({ params }: PageProps) {
         </section>
       </main>
 
-      {/* Simulated Checkout Modal (Xendit Mock) */}
+      {/* Simulated Checkout Modal (iPaymu Mock) */}
       <AnimatePresence>
         {showCheckout && selectedPlan && (
           <>
@@ -588,7 +588,7 @@ export default function PricingPage({ params }: PageProps) {
                             <div className="space-y-4">
                               <div className="flex justify-between items-center text-xs">
                                 <span className="text-muted-foreground">{locale === "en" ? "Bank Name" : "Nama Bank"}</span>
-                                <span className="font-bold text-foreground">XENDIT BNI VA</span>
+                                <span className="font-bold text-foreground">iPaymu BNI VA</span>
                               </div>
                               <div className="flex justify-between items-center text-xs">
                                 <span className="text-muted-foreground">{locale === "en" ? "Account Name" : "Nama Rekening"}</span>

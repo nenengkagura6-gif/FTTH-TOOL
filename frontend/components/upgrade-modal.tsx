@@ -151,15 +151,15 @@ export function UpgradeModalProvider({ children }: { children: ReactNode }) {
                                         onClick={async () => {
                                             setIsProcessing(true)
                                             try {
-                                                // Mock payment integration since backend is not available
-                                                alert("Payment integration is currently unavailable in this static export. Please contact support to upgrade your account.")
+                                                const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
+                                                const locale = pathname.startsWith('/id') ? 'id' : 'en'
+                                                window.location.href = `/${locale}/pricing`
+                                            } catch (error) {
+                                                console.error(error)
+                                            } finally {
                                                 setIsProcessing(false)
-					} catch (error) {
-        					console.error(error)
-    					} finally {
-        					setIsProcessing(false)
-    						}
-                                   	}}
+                                            }
+                                        }}
                                         className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3 text-sm font-semibold text-black hover:from-amber-400 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50"
                                     >
                                         {isProcessing ? (
