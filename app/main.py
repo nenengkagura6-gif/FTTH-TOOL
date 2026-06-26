@@ -36,16 +36,11 @@ app = FastAPI(
     version=APP_VERSION
 )
 
-# CORS Configuration - Restrict origins in production, support localhost
-frontend_url = os.environ.get("FRONTEND_URL") or os.environ.get("NEXT_PUBLIC_APP_URL") or "https://ftthtools.my.id"
-allow_origins = [frontend_url] if frontend_url else []
-# Add common localhost ports for local development
-if "localhost" not in frontend_url:
-    allow_origins.extend(["http://localhost:3000", "http://localhost:5173"])
-
+# CORS Configuration - Dynamically allow any origin (localhost, custom domains, Cloudflare Pages previews)
+# to avoid CORS preflight failures across various deployment environments.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
