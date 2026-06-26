@@ -1,18 +1,11 @@
 # Dockerfile for KML Processing API
 # Optimized for Hugging Face Spaces deployment
 
-FROM python:3.11-slim
+FROM python:3.11
 
 # Set up environment variables
 ENV PYTHONUNBUFFERED=1 \
     PORT=7860
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libxml2-dev \
-    libxslt1-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user (Hugging Face Spaces runs as user 1000)
 RUN useradd -m -u 1000 user
