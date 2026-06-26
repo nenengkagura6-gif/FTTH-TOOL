@@ -62,8 +62,31 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
 
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const [user, setUser] = useState<any>(null)
 
   const t = translations[locale as "en" | "id"] || translations.en
+
+  useEffect(() => {
+    let subscription: any = null
+    
+    import("@/lib/supabase/client").then(({ getSupabaseClient }) => {
+      const supabase = getSupabaseClient()
+      supabase.auth.getSession().then(({ data }) => {
+        setUser(data.session?.user || null)
+      })
+      
+      const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user || null)
+      })
+      subscription = authSub.subscription
+    }).catch(() => {})
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe()
+      }
+    }
+  }, [])
 
   const localizedNavItems = [
     { label: t.nav.home, href: `/${locale}` },
@@ -166,21 +189,32 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
             )}
           </button>
 
-          <Link
-            href="/login"
-            className="px-4 py-1.5 text-sm border border-white/10 bg-white/[0.03] text-muted-foreground rounded-full hover:border-white/30 hover:text-foreground transition-colors"
-          >
-            {t.nav.login}
-          </Link>
-          <div className="relative group">
-            <div className="absolute inset-0 -m-1 rounded-full bg-primary/40 opacity-50 blur-md pointer-events-none transition-all duration-300 group-hover:opacity-80 group-hover:blur-lg group-hover:-m-2" />
+          {mounted && user ? (
             <Link
-              href="/signup"
-              className="relative z-10 inline-flex items-center px-4 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-full hover:bg-primary/90 transition-colors"
+              href="/dashboard"
+              className="px-5 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-full hover:bg-primary/90 transition-colors shadow-md shadow-primary/10"
             >
-              {t.nav.signup}
+              Dashboard
             </Link>
-          </div>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="px-4 py-1.5 text-sm border border-white/10 bg-white/[0.03] text-muted-foreground rounded-full hover:border-white/30 hover:text-foreground transition-colors"
+              >
+                {t.nav.login}
+              </Link>
+              <div className="relative group">
+                <div className="absolute inset-0 -m-1 rounded-full bg-primary/40 opacity-50 blur-md pointer-events-none transition-all duration-300 group-hover:opacity-80 group-hover:blur-lg group-hover:-m-2" />
+                <Link
+                  href="/signup"
+                  className="relative z-10 inline-flex items-center px-4 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-full hover:bg-primary/90 transition-colors"
+                >
+                  {t.nav.signup}
+                </Link>
+              </div>
+            </>
+          )}
         </div>
 
         <button
@@ -253,20 +287,32 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
             )}
           </button>
 
-          <Link
-            href="/login"
-            onClick={() => setIsOpen(false)}
-            className="px-4 py-2 text-sm text-center border border-white/10 bg-white/[0.03] text-foreground rounded-full hover:border-white/30 transition-colors"
-          >
-            {t.nav.login}
-          </Link>
-          <Link
-            href="/signup"
-            onClick={() => setIsOpen(false)}
-            className="px-4 py-2 text-sm text-center font-medium text-primary-foreground bg-primary rounded-full hover:bg-primary/90 transition-colors"
-          >
-            {t.nav.signup}
-          </Link>
+          {mounted && user ? (
+            <Link
+              href="/dashboard"
+              onClick={() => setIsOpen(false)}
+              className="px-4 py-2 text-sm text-center font-medium text-primary-foreground bg-primary rounded-full hover:bg-primary/90 transition-colors shadow-md shadow-primary/10"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                onClick={() => setIsOpen(false)}
+                className="px-4 py-2 text-sm text-center border border-white/10 bg-white/[0.03] text-foreground rounded-full hover:border-white/30 transition-colors"
+              >
+                {t.nav.login}
+              </Link>
+              <Link
+                href="/signup"
+                onClick={() => setIsOpen(false)}
+                className="px-4 py-2 text-sm text-center font-medium text-primary-foreground bg-primary rounded-full hover:bg-primary/90 transition-colors"
+              >
+                {t.nav.signup}
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>
