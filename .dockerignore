@@ -43,6 +43,9 @@ uploads/
 *.kml
 *.kmz
 *.txt
+!requirements.txt
+!app/requirements.txt
+!app/requirements-render.txt
 !BOQ_Template.xlsx
 !APD_HPDB_.xlsx
 
