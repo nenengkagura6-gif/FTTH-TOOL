@@ -15,32 +15,31 @@ RUN apt-get update && apt-get install -y \
     libxslt1-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory for requirements installation
+# Create a non-root user (Hugging Face Spaces runs as user 1000)
+RUN useradd -m -u 1000 user
+
+# Set working directory for requirements installation (run as root)
 WORKDIR /build
 
 # Copy requirements and install packages globally (as root)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create a non-root user (Hugging Face Spaces runs as user 1000)
-RUN useradd -m -u 1000 user
-
 # Set up application directory
 WORKDIR $HOME/app
 
-# Copy application code and set ownership
-COPY app/ .
-RUN chown -R user:user $HOME/app
+# Switch to non-root user (subsequent commands run as user 1000)
+USER user
+ENV PATH=/home/user/.local/bin:$PATH
 
-# Create upload directory (writable by user)
-RUN mkdir -p $HOME/app/uploads && chown -R user:user $HOME/app/uploads
+# Copy application code with correct ownership (1000:1000)
+COPY --chown=1000:1000 app/ .
+
+# Create upload directory (owned by user since we are running as user)
+RUN mkdir -p uploads
 
 # Expose port
 EXPOSE 7860
-
-# Switch to non-root user
-USER user
-ENV PATH=/home/user/.local/bin:$PATH
 
 # Run application
 CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT
