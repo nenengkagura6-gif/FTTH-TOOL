@@ -413,6 +413,8 @@ export const SignInPage = ({
   onSuccessHref = "/dashboard",
 }: SignInPageProps) => {
   const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [isPasswordMode, setIsPasswordMode] = useState(false)
   const [step, setStep] = useState<"email" | "sent" | "success">("email")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -445,6 +447,13 @@ export const SignInPage = ({
         }
       })
     }).catch(() => {})
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get("type") === "password" || params.get("mode") === "password" || params.get("demo") === "true") {
+        setIsPasswordMode(true)
+      }
+    }
   }, [onSuccessHref])
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
@@ -455,6 +464,23 @@ export const SignInPage = ({
     setError(null)
 
     try {
+      if (isPasswordMode) {
+        const { error: authError } = await supabaseClient.auth.signInWithPassword({
+          email,
+          password,
+        })
+
+        if (authError) {
+          setError(authError.message)
+          setIsSubmitting(false)
+          return
+        }
+
+        // Successfully signed in with password
+        window.location.href = onSuccessHref
+        return
+      }
+
       const { error: authError } = await supabaseClient.auth.signInWithOtp({
         email,
         options: {
@@ -634,8 +660,8 @@ export const SignInPage = ({
                         <div className="h-px bg-white/10 flex-1" />
                       </div>
 
-                      <form onSubmit={handleEmailSubmit}>
-                        <div className="relative">
+                      {isPasswordMode ? (
+                        <form onSubmit={handleEmailSubmit} className="space-y-3">
                           <input
                             type="email"
                             placeholder="you@company.com"
@@ -645,27 +671,61 @@ export const SignInPage = ({
                             className="w-full backdrop-blur-[1px] text-foreground border border-white/10 rounded-full py-3 px-4 focus:outline-none focus:border-white/30 text-center bg-transparent disabled:opacity-50"
                             required
                           />
+                          <input
+                            type="password"
+                            placeholder="Password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            disabled={isSubmitting}
+                            className="w-full backdrop-blur-[1px] text-foreground border border-white/10 rounded-full py-3 px-4 focus:outline-none focus:border-white/30 text-center bg-transparent disabled:opacity-50"
+                            required
+                          />
                           <button
                             type="submit"
-                            aria-label="Continue"
                             disabled={isSubmitting}
-                            className="absolute right-1.5 top-1.5 text-foreground w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors group overflow-hidden disabled:opacity-50"
+                            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-foreground py-3 text-sm font-semibold transition-all disabled:opacity-50"
                           >
                             {isSubmitting ? (
                               <span className="h-4 w-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
                             ) : (
-                              <span className="relative w-full h-full block overflow-hidden">
-                                <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:translate-x-full">
-                                  {"â†’"}
-                                </span>
-                                <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 -translate-x-full group-hover:translate-x-0">
-                                  {"â†’"}
-                                </span>
-                              </span>
+                              "Sign In"
                             )}
                           </button>
-                        </div>
-                      </form>
+                        </form>
+                      ) : (
+                        <form onSubmit={handleEmailSubmit}>
+                          <div className="relative">
+                            <input
+                              type="email"
+                              placeholder="you@company.com"
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                              disabled={isSubmitting}
+                              className="w-full backdrop-blur-[1px] text-foreground border border-white/10 rounded-full py-3 px-4 focus:outline-none focus:border-white/30 text-center bg-transparent disabled:opacity-50"
+                              required
+                            />
+                            <button
+                              type="submit"
+                              aria-label="Continue"
+                              disabled={isSubmitting}
+                              className="absolute right-1.5 top-1.5 text-foreground w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors group overflow-hidden disabled:opacity-50"
+                            >
+                              {isSubmitting ? (
+                                <span className="h-4 w-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
+                              ) : (
+                                <span className="relative w-full h-full block overflow-hidden">
+                                  <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:translate-x-full">
+                                    {"→"}
+                                  </span>
+                                  <span className="absolute inset-0 flex items-center justify-center transition-transform duration-300 -translate-x-full group-hover:translate-x-0">
+                                    {"→"}
+                                  </span>
+                                </span>
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      )}
 
                       {error && (
                         <motion.p
