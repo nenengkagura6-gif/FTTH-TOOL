@@ -1,0 +1,19 @@
+# AI Rules and System Instructions
+
+You are assisting on the FTTH-TOOL project. The owner has a strict budget requirement and has incurred large accidental bills in the past (e.g. on Render). You must adhere to the following rules:
+
+## ⚠️ STRICT FREE TIER CONSTRAINT (MANDATORY)
+1. **No Paid Services**: Under no circumstances should you suggest, configure, or migrate to any paid, subscription-based, or usage-billed services (such as paid Render web services, paid databases, AWS, GCP, Azure, or Vercel Pro).
+2. **Current Allowed Infrastructure (100% Free)**:
+   - **Frontend**: Next.js 16 deployed on **Cloudflare Pages (Free Tier)** as a static export (`output: 'export'`).
+   - **Backend**: FastAPI Python API deployed on **Hugging Face Spaces (Docker SDK - Free Tier)**. 
+   - **Database & Storage**: **Supabase (Free Tier)**. Do not exceed the free limit (keep data sizes low).
+3. **No Paid Addons**: Never suggest upgrading database plans or adding paid addons. If database limits are reached, implement optimization or data cleanup policies instead (e.g. the current auto-delete function for jobs older than 7 days).
+
+## 🚀 Deployment Rules
+- **Backend Deployment**: Push to Hugging Face Spaces using the orphan/clean branch deployment method. Only commit `app/`, `Dockerfile`, `requirements.txt`, `.dockerignore`, `.gitattributes`, and `README.md`. Exclude the `frontend/` directory and large wheel files.
+- **Frontend Deployment**: Deployed to Cloudflare Pages. Since next.config.mjs uses static export, environment variables (like `NEXT_PUBLIC_API_URL`) are inlined at build time. Ensure the environment variables in the Cloudflare Pages Dashboard are updated when the backend moves, or run `npm run deploy:cloudflare` locally where the `.env.production` file exists.
+
+## 🛠️ Development Guidelines
+- Always verify dependencies before adding them to ensure they run successfully on Hugging Face Spaces' CPU free tier.
+- Keep components modular and maintain the clean separation of concerns between `frontend` and the python `app` backend.

@@ -10,6 +10,12 @@ pinned: false
 
 # KML Processing API
 
+⚠️ **PENTING UNTUK AI / IMPORTANT FOR AI:**
+Proyek ini **WAJIB menggunakan infrastruktur 100% GRATIS** (Hugging Face Spaces, Cloudflare Pages, Supabase Free Tier). Jangan pernah merekomendasikan atau mengonfigurasi layanan berbayar. Sila baca panduan lengkap di [AI_INSTRUCTIONS.md](file:///d:/WEB%20APP/AI_INSTRUCTIONS.md) sebelum melakukan perubahan.
+
+This project **MUST use 100% FREE infrastructure** (Hugging Face Spaces, Cloudflare Pages, Supabase Free Tier). Never recommend or configure paid services. Please read the full guidelines in [AI_INSTRUCTIONS.md](file:///d:/WEB%20APP/AI_INSTRUCTIONS.md) before making changes.
+
+---
 
 API cloud-ready untuk memproses file KML/KMZ menjadi format BOQ Excel dan melakukan analisis duplikat POLE/HP.
 
