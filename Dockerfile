@@ -5,8 +5,7 @@ FROM python:3.11-slim
 
 # Set up environment variables
 ENV PYTHONUNBUFFERED=1 \
-    PORT=7860 \
-    HOME=/home/user
+    PORT=7860
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -26,17 +25,21 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Set up application directory
-WORKDIR $HOME/app
+WORKDIR /home/user/app
 
-# Switch to non-root user (subsequent commands run as user 1000)
-USER user
-ENV PATH=/home/user/.local/bin:$PATH
+# Copy application code (initially as root)
+COPY app/ .
 
-# Copy application code with correct ownership (1000:1000)
-COPY --chown=1000:1000 app/ .
-
-# Create upload directory (owned by user since we are running as user)
+# Create uploads folder (initially as root)
 RUN mkdir -p uploads
+
+# Change ownership of the entire /home/user directory to user 1000 (numeric IDs are safe)
+RUN chown -R 1000:1000 /home/user
+
+# Switch to non-root user 1000
+USER 1000
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
 
 # Expose port
 EXPOSE 7860
