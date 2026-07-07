@@ -71,7 +71,7 @@ export interface Database {
                 Row: {
                     id: string
                     user_id: string
-                    tool_name: 'kml_to_boq' | 'kml_to_database' | 'kml_duplicate_checker' | 'otdr_analyzer' | 'opm_calculator'
+                    tool_name: 'kml_to_boq' | 'kml_to_database_hp' | 'kml_to_database' | 'kml_duplicate_checker' | 'otdr_analyzer' | 'opm_calculator' | 'kml_to_csv' | 'kml_to_shp' | 'shp_to_kml' | 'kml_to_dxf' | 'dxf_to_kml' | 'kml_extractor' | 'pole_sorter' | 'insert_coding' | 'kml_apd'
                     job_type: string
                     original_filename: string
                     original_file_url: string | null
@@ -100,7 +100,7 @@ export interface Database {
                 Insert: {
                     id?: string
                     user_id: string
-                    tool_name: 'kml_to_boq' | 'kml_to_database' | 'kml_duplicate_checker' | 'otdr_analyzer' | 'opm_calculator'
+                    tool_name: 'kml_to_boq' | 'kml_to_database_hp' | 'kml_to_database' | 'kml_duplicate_checker' | 'otdr_analyzer' | 'opm_calculator' | 'kml_to_csv' | 'kml_to_shp' | 'shp_to_kml' | 'kml_to_dxf' | 'dxf_to_kml' | 'kml_extractor' | 'pole_sorter' | 'insert_coding' | 'kml_apd'
                     job_type?: string
                     original_filename: string
                     original_file_url?: string | null
@@ -129,7 +129,7 @@ export interface Database {
                 Update: {
                     id?: string
                     user_id?: string
-                    tool_name?: 'kml_to_boq' | 'kml_to_database' | 'kml_duplicate_checker' | 'otdr_analyzer' | 'opm_calculator'
+                    tool_name?: 'kml_to_boq' | 'kml_to_database_hp' | 'kml_to_database' | 'kml_duplicate_checker' | 'otdr_analyzer' | 'opm_calculator' | 'kml_to_csv' | 'kml_to_shp' | 'shp_to_kml' | 'kml_to_dxf' | 'dxf_to_kml' | 'kml_extractor' | 'pole_sorter' | 'insert_coding' | 'kml_apd'
                     job_type?: string
                     original_filename?: string
                     original_file_url?: string | null

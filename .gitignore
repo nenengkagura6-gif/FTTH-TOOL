@@ -63,3 +63,8 @@ uploads/
 # Coverage
 .coverage
 htmlcov/
+
+# Python Wheels & Local Dev Files
+*.whl
+new tool/
+temp/

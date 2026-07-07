@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
     
     tool_name TEXT NOT NULL CHECK (tool_name IN (
         'kml_to_boq',
+        'kml_to_database_hp',
         'kml_to_database',
         'kml_duplicate_checker',
         'otdr_analyzer',
@@ -103,7 +104,11 @@ CREATE TABLE IF NOT EXISTS processing_jobs (
         'kml_to_shp',
         'shp_to_kml',
         'kml_to_dxf',
-        'dxf_to_kml'
+        'dxf_to_kml',
+        'kml_extractor',
+        'pole_sorter',
+        'insert_coding',
+        'kml_apd'
     )),
     job_type TEXT NOT NULL DEFAULT 'single',
     

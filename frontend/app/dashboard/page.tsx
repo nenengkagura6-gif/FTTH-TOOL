@@ -46,6 +46,7 @@ const toolLabelsEn: Record<string, string> = {
   kml_extractor: "KML Extractor",
   pole_sorter: "Pole Auto-Sorter",
   insert_coding: "Insert Coding KML",
+  kml_apd: "KML - APD",
 }
 
 const toolLabelsId: Record<string, string> = {
@@ -62,6 +63,7 @@ const toolLabelsId: Record<string, string> = {
   kml_extractor: "Ekstraktor KML",
   pole_sorter: "Pengurut Tiang Otomatis",
   insert_coding: "Insert Coding KML",
+  kml_apd: "KML - APD",
 }
 
 // Category accent colors matching sidebar

@@ -185,6 +185,14 @@ export const toolMenuItems: DashboardMenuItem[] = [
     featureKey: "kml_to_boq",
     category: "survey",
   },
+  {
+    title: "KML - APD",
+    href: "/dashboard/kml-apd",
+    icon: Map,
+    description: "Auto-draft KML: generate FAT, cable, sling wire, HP coverage, pole numbering & styles",
+    featureKey: "kml_to_boq",
+    category: "survey",
+  },
 
   // ── Format Conversion (All Roles) ──
   {

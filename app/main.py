@@ -416,6 +416,17 @@ def _process_job_sync(
                 prefixes=prefixes_dict,
                 is_kmz=is_kmz
             )
+        elif tool_name == "kml_apd":
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Memproses KML APD (FAT, Cable, Pole, HP)..."
+            })
+            from engines.kml_apd_engine import process_kml_apd
+            result = process_kml_apd(
+                kml_content=file_bytes,
+                filename=original_filename,
+                is_kmz=is_kmz
+            )
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
 
@@ -492,7 +503,7 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
     supported_tools = (
         "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
         "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor",
-        "pole_sorter", "insert_coding"
+        "pole_sorter", "insert_coding", "kml_apd"
     )
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     
