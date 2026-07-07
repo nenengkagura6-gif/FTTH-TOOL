@@ -1329,8 +1329,8 @@ def process_kml_apd(
 
         # Write output
         output_buffer = io.BytesIO()
-        tree.write(output_buffer, encoding="unicode", xml_declaration=True)
-        output_kml_bytes = output_buffer.getvalue().encode("utf-8")
+        tree.write(output_buffer, encoding="utf-8", xml_declaration=True)
+        output_kml_bytes = output_buffer.getvalue()
 
         base = os.path.splitext(filename)[0]
 
