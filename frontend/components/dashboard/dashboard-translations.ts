@@ -36,6 +36,7 @@ export const dashboardTranslations = {
       "Splice Manager": "Splice Manager",
       "GPON Splitter Estimator": "GPON Splitter Estimator",
       "DMS ↔ DD Converter": "DMS ↔ DD Converter",
+      "Auto Placemark Frontage": "Auto Placemark Frontage",
       "Admin Panel": "Admin Panel",
     },
     menuDesc: {
@@ -62,6 +63,7 @@ export const dashboardTranslations = {
       "Generate fiber distribution core splicing tables": "Generate fiber distribution core splicing tables",
       "Model complex optical splitter loss, cascading configurations, and unbalanced daisy chain paths.": "Model complex optical splitter loss, cascading configurations, and unbalanced daisy chain paths.",
       "Convert single or batch coordinates between Degrees/Minutes/Seconds (DMS) and Decimal Degrees (DD).": "Convert single or batch coordinates between Degrees/Minutes/Seconds (DMS) and Decimal Degrees (DD).",
+      "Generate house placemarks from boundary using OSM building & road data": "Generate house placemarks from boundary using OSM building & road data",
       "System administration": "System administration",
     },
     categoryLabel: {
@@ -114,6 +116,7 @@ export const dashboardTranslations = {
       "Splice Manager": "Splice Manager",
       "GPON Splitter Estimator": "Estimator Splitter GPON",
       "DMS ↔ DD Converter": "Konverter DMS ↔ DD",
+      "Auto Placemark Frontage": "Auto Placemark Frontage",
       "Admin Panel": "Panel Admin",
     },
     menuDesc: {
@@ -140,6 +143,7 @@ export const dashboardTranslations = {
       "Generate fiber distribution core splicing tables": "Buat tabel penyambungan core serat optik (splicing diagram)",
       "Model complex optical splitter loss, cascading configurations, and unbalanced daisy chain paths.": "Simulasikan redaman splitter optik, konfigurasi bertingkat, dan jalur daisy-chain tidak seimbang.",
       "Convert single or batch coordinates between Degrees/Minutes/Seconds (DMS) and Decimal Degrees (DD).": "Konversi koordinat tunggal atau massal antara Degrees/Minutes/Seconds (DMS) dan Desimal Derajat (DD).",
+      "Generate house placemarks from boundary using OSM building & road data": "Buat titik placemark rumah dari boundary menggunakan data bangunan & jalan OpenStreetMap",
       "System administration": "Administrasi sistem internal",
     },
     categoryLabel: {

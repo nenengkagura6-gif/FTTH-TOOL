@@ -193,6 +193,14 @@ export const toolMenuItems: DashboardMenuItem[] = [
     featureKey: "kml_to_boq",
     category: "survey",
   },
+  {
+    title: "Auto Placemark Frontage",
+    href: "/dashboard/auto-placemark",
+    icon: MapPin,
+    description: "Generate house placemarks from boundary using OSM building & road data",
+    featureKey: "kml_to_boq",
+    category: "survey",
+  },
 
   // ── Format Conversion (All Roles) ──
   {

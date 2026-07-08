@@ -427,6 +427,23 @@ def _process_job_sync(
                 filename=original_filename,
                 is_kmz=is_kmz
             )
+        elif tool_name == "auto_placemark":
+            def _ap_progress(msg: str):
+                update_job_status(job_id, "processing", {
+                    "progress_percent": 40,
+                    "progress_message": msg
+                })
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Mengambil data bangunan & jalan dari OSM..."
+            })
+            from engines.auto_placemark_engine import process_auto_placemark
+            result = process_auto_placemark(
+                boundary_content=file_bytes,
+                filename=original_filename,
+                is_kmz=is_kmz,
+                progress_cb=_ap_progress
+            )
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
 
@@ -503,7 +520,7 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
     supported_tools = (
         "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
         "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor",
-        "pole_sorter", "insert_coding", "kml_apd"
+        "pole_sorter", "insert_coding", "kml_apd", "auto_placemark"
     )
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     
