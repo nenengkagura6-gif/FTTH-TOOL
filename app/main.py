@@ -27,7 +27,7 @@ if sentry_dsn:
     )
     print("Sentry initialized for FastAPI")
 
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 APP_BUILD_DATE = "2026-05-23"
 
 app = FastAPI(
