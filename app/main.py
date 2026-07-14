@@ -4,7 +4,30 @@ Supports Render + Cloudflare deployment
 """
 import os
 import io
+import sys
+import tempfile
 from typing import List, Optional
+
+# Redirect stdout and stderr to a file for debugging
+class LoggerWriter:
+    def __init__(self, filepath):
+        self.terminal = sys.stdout
+        self.log = open(filepath, "a", encoding="utf-8")
+
+    def write(self, message):
+        if self.terminal:
+            self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush()
+
+    def flush(self):
+        if self.terminal:
+            self.terminal.flush()
+        self.log.flush()
+
+log_file_path = os.path.join(tempfile.gettempdir(), "app_debug.log")
+sys.stdout = LoggerWriter(log_file_path)
+sys.stderr = sys.stdout
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form, BackgroundTasks
 from fastapi.responses import Response, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,7 +50,7 @@ if sentry_dsn:
     )
     print("Sentry initialized for FastAPI")
 
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.2.3"
 APP_BUILD_DATE = "2026-05-23"
 
 app = FastAPI(
@@ -60,6 +83,21 @@ async def root():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "version": APP_VERSION}
+
+
+@app.get("/debug-logs")
+async def get_debug_logs(lines: int = 200):
+    """Retrieve the latest stdout/stderr logs for debugging."""
+    import tempfile
+    log_file_path = os.path.join(tempfile.gettempdir(), "app_debug.log")
+    if not os.path.exists(log_file_path):
+        return {"error": "Log file not found"}
+    try:
+        with open(log_file_path, "r", encoding="utf-8", errors="ignore") as f:
+            log_lines = f.readlines()
+        return {"logs": log_lines[-lines:]}
+    except Exception as e:
+        return {"error": f"Failed to read log file: {e}"}
 
 
 @app.get("/api/v1/version")
