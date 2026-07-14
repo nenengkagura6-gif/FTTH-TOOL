@@ -887,8 +887,10 @@ def process_poles(doc, fdts, tol_m=5.0):
                 owner = "PARTNER" if "PARTNER" in pm_str else "EMR"
 
                 is_fdt = False
-                if fallback_lat is not None and haversine(lat, lon, fallback_lat, fallback_lon) <= 5.0:
-                    is_fdt = True
+                for fdt_lat, fdt_lon in fdts.values():
+                    if haversine(lat, lon, fdt_lat, fdt_lon) <= 5.0:
+                        is_fdt = True
+                        break
 
                 is_fat = False
                 for flat, flon in fat_coords:
