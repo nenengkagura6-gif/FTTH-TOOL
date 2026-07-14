@@ -1440,8 +1440,12 @@ def _process_kml_tree(tree):
         if n is not None and n.text:
             pm_name = n.text.strip().upper()
             if "FDT" in pm_name and "DEBUG" not in pm_name:
+                # Remove existing styleUrl and inline Styles
                 for st in pm.findall("styleUrl"):
                     pm.remove(st)
+                for st in pm.findall("Style"):
+                    pm.remove(st)
+                    
                 st_el = ET.Element("styleUrl")
                 if "96" in pm_name:
                     st_el.text = "#style_fdt_96c"
