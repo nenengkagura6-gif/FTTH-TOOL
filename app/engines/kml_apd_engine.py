@@ -269,7 +269,7 @@ def inject_custom_styles(doc):
         <LabelStyle><color>ffffffff</color><scale>0.0</scale></LabelStyle>
     </Style>
     <Style id="style_sling_wire">
-        <LineStyle><color>fffff000</color><width>3.0</width></LineStyle>
+        <LineStyle><color>ffffff00</color><width>3.0</width></LineStyle>
     </Style>
     <Style id="style_cable_24c">
         <LineStyle><color>ff00ff00</color><width>3.0</width></LineStyle>
@@ -279,6 +279,10 @@ def inject_custom_styles(doc):
     </Style>
     <Style id="style_cable_48c">
         <LineStyle><color>ffff00aa</color><width>3.0</width></LineStyle>
+    </Style>
+    <Style id="style_fdt_96c">
+        <IconStyle><color>ff0000ff</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/cross-hairs.png</href></Icon></IconStyle>
+        <LabelStyle><color>ff0000ff</color><scale>0.8</scale></LabelStyle>
     </Style>
     <Style id="style_fdt_72c">
         <IconStyle><color>ff000055</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/cross-hairs.png</href></Icon></IconStyle>
@@ -1427,6 +1431,26 @@ def _process_kml_tree(tree):
 
     print(f"[KML-APD] Total FAT: {total_fat_count}, Total HP Cover: {total_hp_count}")
     print(f"[KML-APD] Total LINE folders: {len(line_folders)}")
+
+    # =====================================================================
+    # Style Original FDTs
+    # =====================================================================
+    for pm in doc.findall(".//Placemark"):
+        n = pm.find("name")
+        if n is not None and n.text:
+            pm_name = n.text.strip().upper()
+            if "FDT" in pm_name and "DEBUG" not in pm_name:
+                for st in pm.findall("styleUrl"):
+                    pm.remove(st)
+                st_el = ET.Element("styleUrl")
+                if "96" in pm_name:
+                    st_el.text = "#style_fdt_96c"
+                elif "48" in pm_name:
+                    st_el.text = "#style_fdt_48c"
+                else:
+                    # Default to 72 if not specified, or match 72 explicitly
+                    st_el.text = "#style_fdt_72c"
+                pm.append(st_el)
 
     return tree
 
