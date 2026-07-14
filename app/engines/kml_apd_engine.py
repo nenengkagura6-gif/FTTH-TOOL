@@ -1334,20 +1334,19 @@ def _process_kml_tree(tree):
             kept_poles.append(p)
     global_poles = kept_poles
 
-    # Step 4: Get FDT info for cable/sling processing
+    # Step 4: Get FDT info for cable/sling processing by searching all placemarks
     fdts = {}
     fdt_count = 0
-    for f in doc.findall("Folder"):
-        nm = f.find("name")
-        if nm is not None and (nm.text or "").upper().startswith("FDT"):
-            for pm in f.findall("Placemark"):
-                fdt_nm_el = pm.find("name")
-                fdt_name = (fdt_nm_el.text or "").strip() if fdt_nm_el is not None else "FDT"
-                coords = pm.find("Point/coordinates")
+    for pm in doc.findall(".//Placemark"):
+        fdt_nm_el = pm.find("name")
+        if fdt_nm_el is not None:
+            pm_name = (fdt_nm_el.text or "").strip().upper()
+            if pm_name.startswith("FDT"):
+                coords = pm.find(".//coordinates")
                 if coords is not None and coords.text:
                     try:
                         lon, lat, *_ = coords.text.strip().split(",")
-                        fdts[fdt_name.upper()] = (float(lat), float(lon))
+                        fdts[pm_name] = (float(lat), float(lon))
                         fdt_count += 1
                     except Exception:
                         pass
