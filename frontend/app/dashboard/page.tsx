@@ -47,7 +47,7 @@ const toolLabelsEn: Record<string, string> = {
   pole_sorter: "Pole Auto-Sorter",
   insert_coding: "Insert Coding KML",
   kml_apd: "KML - APD",
-  auto_placemark: "Auto Placemark Frontage",
+  auto_placemark: "Auto Tagging HP",
 }
 
 const toolLabelsId: Record<string, string> = {
@@ -65,7 +65,7 @@ const toolLabelsId: Record<string, string> = {
   pole_sorter: "Pengurut Tiang Otomatis",
   insert_coding: "Insert Coding KML",
   kml_apd: "KML - APD",
-  auto_placemark: "Auto Placemark Frontage",
+  auto_placemark: "Auto Tagging HP",
 }
 
 // Category accent colors matching sidebar

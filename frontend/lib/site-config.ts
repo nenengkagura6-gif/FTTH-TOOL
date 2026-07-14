@@ -140,6 +140,13 @@ export const systemMenuItems: DashboardMenuItem[] = [
     icon: Key,
     description: "Manage API access",
   },
+  {
+    title: "Admin Panel",
+    href: "/admin",
+    icon: Shield,
+    description: "System administration",
+    adminOnly: true,
+  },
 ]
 
 // Tool items (grouped by category)
@@ -194,7 +201,7 @@ export const toolMenuItems: DashboardMenuItem[] = [
     category: "survey",
   },
   {
-    title: "Auto Placemark Frontage",
+    title: "Auto Tagging HP",
     href: "/dashboard/auto-placemark",
     icon: MapPin,
     description: "Generate house placemarks from boundary using OSM building & road data",
@@ -305,13 +312,6 @@ export const toolMenuItems: DashboardMenuItem[] = [
 export const dashboardMenu: DashboardMenuItem[] = [
   ...systemMenuItems,
   ...toolMenuItems,
-  {
-    title: "Admin Panel",
-    href: "/admin",
-    icon: Shield,
-    description: "System administration",
-    adminOnly: true,
-  },
 ]
 
 // Helper: get tools by category

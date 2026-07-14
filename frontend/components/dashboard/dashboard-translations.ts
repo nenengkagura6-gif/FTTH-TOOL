@@ -36,7 +36,7 @@ export const dashboardTranslations = {
       "Splice Manager": "Splice Manager",
       "GPON Splitter Estimator": "GPON Splitter Estimator",
       "DMS ↔ DD Converter": "DMS ↔ DD Converter",
-      "Auto Placemark Frontage": "Auto Placemark Frontage",
+      "Auto Tagging HP": "Auto Tagging HP",
       "Admin Panel": "Admin Panel",
     },
     menuDesc: {
@@ -116,7 +116,7 @@ export const dashboardTranslations = {
       "Splice Manager": "Splice Manager",
       "GPON Splitter Estimator": "Estimator Splitter GPON",
       "DMS ↔ DD Converter": "Konverter DMS ↔ DD",
-      "Auto Placemark Frontage": "Auto Placemark Frontage",
+      "Auto Tagging HP": "Auto Tagging HP",
       "Admin Panel": "Panel Admin",
     },
     menuDesc: {
