@@ -219,7 +219,7 @@ def inject_custom_styles(doc):
         "style_pole_9m_4inch", "style_pole_7m_4inch", "style_pole_7m_3inch", "style_pole_7m_2_5inch",
         "style_pole_existing", "style_fat", "style_homepass", "style_homepass_not_cover",
         "style_slack_cable", "style_slack_existing", "style_sling_wire", "style_cable_24c",
-        "style_cable_36c", "style_cable_48c", "style_fdt_72c", "style_fdt_48c"
+        "style_cable_36c", "style_cable_48c", "style_fdt_96c", "style_fdt_72c", "style_fdt_48c"
     }
     for el in list(doc):
         if el.tag in ("Style", "StyleMap"):
@@ -753,17 +753,17 @@ def process_poles(doc, fdts, tol_m=5.0):
         if lname.upper().startswith("LINE "):
             line_folders.append(line_folder)
 
+    # Group line folders by FDT name
+    line_folders.sort(key=lambda lf: get_fdt_name_from_line((lf.find("name").text or "").strip()).upper())
+
     visited_coords = set()
     global_new_counter = 1
     global_ext_counter = 1
+    last_fdt = None
 
     for line_folder in line_folders:
         nm_el = line_folder.find("name")
         line_name = (nm_el.text or "").strip().upper()
-
-        if "LINE A" in line_name:
-            global_new_counter = 1
-            global_ext_counter = 1
 
         distribution_coords_list = []
         sling_coords_list = []
@@ -858,6 +858,12 @@ def process_poles(doc, fdts, tol_m=5.0):
                         fdt_name = fname
             
         fdt_lat, fdt_lon = fdts.get(fdt_name, (None, None))
+        
+        resolved_fdt_name = fdt_name.upper()
+        if resolved_fdt_name != last_fdt:
+            global_new_counter = 1
+            global_ext_counter = 1
+            last_fdt = resolved_fdt_name
         
         # Normalize direction: distribution from FDT to end
         if fdt_lat is not None and dist_mapped:
@@ -1114,11 +1120,11 @@ def process_poles(doc, fdts, tol_m=5.0):
             new_pm = ET.Element("Placemark")
             nn = ET.Element("name")
             if is_exist:
-                nn.text = f"EXT.MR.P{existing_pole_counter:03d}"
-                existing_pole_counter += 1
+                nn.text = f"EXT.MR.P{global_ext_counter:03d}"
+                global_ext_counter += 1
             else:
-                nn.text = f"MR.XXX.P{new_pole_counter:03d}"
-                new_pole_counter += 1
+                nn.text = f"MR.XXX.P{global_new_counter:03d}"
+                global_new_counter += 1
             pt = ET.Element("Point")
             cc = ET.Element("coordinates")
             cc.text = f"{lon},{lat},0"
