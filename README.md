@@ -8,7 +8,7 @@ app_port: 7860
 pinned: false
 ---
 
-# KML Processing API
+# KML Processing API (v1.2.2)
 
 ⚠️ **PENTING UNTUK AI / IMPORTANT FOR AI:**
 Proyek ini **WAJIB menggunakan infrastruktur 100% GRATIS** (Hugging Face Spaces, Cloudflare Pages, Supabase Free Tier). Jangan pernah merekomendasikan atau mengonfigurasi layanan berbayar. Sila baca panduan lengkap di [AI_INSTRUCTIONS.md](file:///d:/WEB%20APP/AI_INSTRUCTIONS.md) sebelum melakukan perubahan.
