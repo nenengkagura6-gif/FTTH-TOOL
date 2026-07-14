@@ -271,6 +271,14 @@ def inject_custom_styles(doc):
 # Per-LINE: BOUNDARY & HP COVER
 # =====================================================================
 
+
+def get_fdt_name_from_line(line_name):
+    upper_name = line_name.upper()
+    if "FDT" in upper_name:
+        idx = upper_name.find("FDT")
+        return line_name[idx:].strip()
+    return "FDT" # Fallback
+
 def process_boundaries_and_hp_in_line(line_folder):
     """Process boundary polygons within a LINE folder, naming them with letters."""
     nm = line_folder.find("name")
@@ -342,9 +350,14 @@ def move_root_hp_to_lines(doc, line_folders, polygons_by_line):
 
         for line_folder in line_folders:
             nm = line_folder.find("name")
-            parts = (nm.text or "").split()
-            letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else (nm.text or "")[0].upper()
-            polygons = polygons_by_line.get(letter, [])
+            line_name = (nm.text or "").strip()
+            parts = line_name.split()
+            letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else line_name[0].upper() if line_name else 'X'
+            fdt_name = get_fdt_name_from_line(line_name)
+            
+            polygons = []
+            if fdt_name in polygons_by_line and letter in polygons_by_line[fdt_name]:
+                polygons = polygons_by_line[fdt_name][letter]
             hp_folder = find_or_create_folder(line_folder, "HP COVER")
             for poly_name, poly, _, _ in polygons:
                 if poly.distance(pt) < 2e-5:
@@ -401,7 +414,8 @@ def update_boundary_descriptions(doc, polygons_by_line):
             continue
         parts = line_name.split()
         letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else (line_name or "")[0].upper()
-        polygons = polygons_by_line.get(letter, [])
+        fdt_name = get_fdt_name_from_line(line_name)
+        polygons = polygons_by_line.get(fdt_name, {}).get(letter, [])
         hp_folder = None
         for sub in line_folder.findall("Folder"):
             sname = sub.find("name")
@@ -620,20 +634,9 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
 # POLE Numbering (global)
 # =====================================================================
 
-def process_poles(doc, tol_m=5.0):
+def process_poles(doc, fdts, tol_m=5.0):
     """Process and renumber all poles based on distribution cable and sling wire routes."""
-    fdt_lat, fdt_lon = None, None
-    for f in doc.findall("Folder"):
-        nm_el = f.find("name")
-        if nm_el is not None and (nm_el.text or "").upper().startswith("FDT"):
-            pm = f.find("Placemark/Point/coordinates")
-            if pm is not None and pm.text:
-                try:
-                    lon, lat, *_ = pm.text.strip().split(",")
-                    fdt_lat, fdt_lon = float(lat), float(lon)
-                except Exception:
-                    pass
-            break
+    # FDTs are now passed as fdts dictionary: {"FDT 01": (lat, lon)}
 
     poles = {}
     for f in doc.findall("Folder"):
@@ -754,6 +757,9 @@ def process_poles(doc, tol_m=5.0):
         dist_mapped = [map_line_to_poles(coords) for coords in distribution_coords_list]
         sling_mapped = [map_line_to_poles(coords) for coords in sling_coords_list]
 
+        fdt_name = get_fdt_name_from_line(line_name)
+        fdt_lat, fdt_lon = fdts.get(fdt_name, (None, None))
+        
         # Normalize direction: distribution from FDT to end
         if fdt_lat is not None and dist_mapped:
             for i, seq in enumerate(dist_mapped):
@@ -881,7 +887,7 @@ def process_poles(doc, tol_m=5.0):
                 owner = "PARTNER" if "PARTNER" in pm_str else "EMR"
 
                 is_fdt = False
-                if fdt_lat is not None and haversine(lat, lon, fdt_lat, fdt_lon) <= 5.0:
+                if fallback_lat is not None and haversine(lat, lon, fallback_lat, fallback_lon) <= 5.0:
                     is_fdt = True
 
                 is_fat = False
@@ -994,8 +1000,12 @@ def process_poles(doc, tol_m=5.0):
     # Handle remaining poles (not assigned to any line)
     remaining = [pm for pm in poles.keys() if coords_key_pm(pm) not in visited_coords]
     if remaining:
-        if fdt_lat is not None:
-            remaining.sort(key=lambda pm: haversine(poles[pm][0], poles[pm][1], fdt_lat, fdt_lon))
+        # Fallback to first FDT for unassigned poles if any
+        fallback_lat, fallback_lon = None, None
+        if fdts:
+            fallback_lat, fallback_lon = list(fdts.values())[0]
+        if fallback_lat is not None:
+            remaining.sort(key=lambda pm: haversine(poles[pm][0], poles[pm][1], fallback_lat, fallback_lon))
         for pm in remaining:
             lat, lon, is_exist = poles[pm]
             new_pm = ET.Element("Placemark")
@@ -1164,21 +1174,28 @@ def _process_kml_tree(tree):
     inject_custom_styles(doc)
 
     # Step 1: Process boundaries and HP coverage per LINE
-    polygons_by_line = {}
+    polygons_by_line = {} # now it is polygons_by_line[fdt_name][letter]
     line_folders = []
     for line_folder in doc.findall("Folder"):
         nm = line_folder.find("name")
         if nm is None:
             continue
-        if (nm.text or "").strip().upper().startswith("LINE "):
+        line_name = (nm.text or "").strip()
+        if line_name.upper().startswith("LINE "):
             line_folders.append(line_folder)
+            fdt_name = get_fdt_name_from_line(line_name)
+            if fdt_name not in polygons_by_line:
+                polygons_by_line[fdt_name] = {}
+                
             polygons = process_boundaries_and_hp_in_line(line_folder)
+            
+            parts = line_name.split()
+            letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else line_name[0].upper()
+            
             if polygons:
-                polygons_by_line[polygons[0][3]] = polygons
+                polygons_by_line[fdt_name][polygons[0][3]] = polygons
             else:
-                parts = (nm.text or "").split()
-                letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else (nm.text or "")[0].upper()
-                polygons_by_line[letter] = []
+                polygons_by_line[fdt_name][letter] = []
 
     # Step 2: Move root HP placemarks into line folders
     move_root_hp_to_lines(doc, line_folders, polygons_by_line)
@@ -1225,27 +1242,36 @@ def _process_kml_tree(tree):
     global_poles = kept_poles
 
     # Step 4: Get FDT info for cable/sling processing
+    fdts = {}
     fdt_count = 0
-    fdt_lat, fdt_lon = None, None
     for f in doc.findall("Folder"):
         nm = f.find("name")
         if nm is not None and (nm.text or "").upper().startswith("FDT"):
-            fdt_count += 1
-            if fdt_lat is None:
-                pm = f.find("Placemark/Point/coordinates")
-                if pm is not None and pm.text:
+            for pm in f.findall("Placemark"):
+                fdt_nm_el = pm.find("name")
+                fdt_name = (fdt_nm_el.text or "").strip() if fdt_nm_el is not None else "FDT"
+                coords = pm.find("Point/coordinates")
+                if coords is not None and coords.text:
                     try:
-                        lon, lat, *_ = pm.text.strip().split(",")
-                        fdt_lat, fdt_lon = float(lat), float(lon)
+                        lon, lat, *_ = coords.text.strip().split(",")
+                        fdts[fdt_name.upper()] = (float(lat), float(lon))
+                        fdt_count += 1
                     except Exception:
                         pass
 
     # Step 5: Process FAT/Cable/Sling for each line
     for line_folder in line_folders:
         nm = line_folder.find("name")
-        parts = (nm.text or "").split()
-        letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else (nm.text or "")[0].upper()
-        polygons = polygons_by_line.get(letter, [])
+        line_name = (nm.text or "").strip()
+        parts = line_name.split()
+        letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else line_name[0].upper()
+        
+        fdt_name = get_fdt_name_from_line(line_name)
+        fdt_lat, fdt_lon = fdts.get(fdt_name.upper(), (None, None))
+        if fdt_lat is None and fdts: # fallback to first FDT
+            fdt_lat, fdt_lon = list(fdts.values())[0]
+            
+        polygons = polygons_by_line.get(fdt_name, {}).get(letter, [])
         process_fat_cable_sling_for_line(
             line_folder, polygons, global_poles, fdt_count,
             doc=doc, line_folders=line_folders,
@@ -1254,7 +1280,8 @@ def _process_kml_tree(tree):
         )
 
     # Step 6: Process pole numbering
-    process_poles(doc, tol_m=5.0)
+    # Pass fdts dictionary with upper case keys
+    process_poles(doc, {k.upper(): v for k, v in fdts.items()}, tol_m=5.0)
 
     # Step 7: Remove original root POLE/NP/EXT folders
     for f in list(doc.findall("Folder")):
