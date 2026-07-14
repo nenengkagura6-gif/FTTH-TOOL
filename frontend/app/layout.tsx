@@ -58,11 +58,6 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <AppProviders>{children}</AppProviders>
-        <Script
-          src="https://app.sandbox.midtrans.com/snap/snap.js"
-          data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
-          strategy="lazyOnload"
-        />
         {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>
