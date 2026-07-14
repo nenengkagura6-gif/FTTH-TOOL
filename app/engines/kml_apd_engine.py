@@ -969,11 +969,17 @@ def process_poles(doc, fdts, tol_m=5.0):
                         
                 new_pm = ET.Element("Placemark")
                 n = ET.Element("name")
+                
+                # Format FDT name for display (remove spaces and take first 5 chars if too long)
+                disp_fdt = current_fdt.replace(" ", "")
+                if len(disp_fdt) > 6:
+                    disp_fdt = disp_fdt[-6:]
+                
                 if is_exist:
-                    n.text = f"EXT.MR.P{existing_pole_counters[current_fdt]:03d}"
+                    n.text = f"EXT.{disp_fdt}.P{existing_pole_counters[current_fdt]:03d}"
                     existing_pole_counters[current_fdt] += 1
                 else:
-                    n.text = f"MR.XXX.P{new_pole_counters[current_fdt]:03d}"
+                    n.text = f"{disp_fdt}.P{new_pole_counters[current_fdt]:03d}"
                     new_pole_counters[current_fdt] += 1
                 pt = ET.Element("Point")
                 cc = ET.Element("coordinates")
@@ -1380,8 +1386,28 @@ def _process_kml_tree(tree):
         )
 
     # Step 6: Process pole numbering
-    # Pass fdts dictionary with upper case keys
     process_poles(doc, {k.upper(): v for k, v in fdts.items()}, tol_m=5.0)
+
+    # Create debug folder for detected FDTs
+    debug_folder = ET.Element("Folder")
+    debug_name = ET.Element("name")
+    debug_name.text = "DEBUG FDT TERDETEKSI"
+    debug_folder.append(debug_name)
+    for fname, (flat, flon) in fdts.items():
+        pm = ET.Element("Placemark")
+        n = ET.Element("name")
+        n.text = f"TERDETEKSI: {fname}"
+        desc = ET.Element("description")
+        desc.text = "Jika ini muncul, mesin berhasil mendeteksi FDT ini."
+        pt = ET.Element("Point")
+        cc = ET.Element("coordinates")
+        cc.text = f"{flon},{flat},0"
+        pt.append(cc)
+        pm.append(n)
+        pm.append(desc)
+        pm.append(pt)
+        debug_folder.append(pm)
+    doc.append(debug_folder)
 
     # Step 7: Remove original root POLE/NP/EXT folders
     for f in list(doc.findall("Folder")):
