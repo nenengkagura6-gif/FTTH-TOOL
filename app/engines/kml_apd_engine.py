@@ -615,6 +615,21 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
     sling_folder = find_or_create_folder(line_folder, "SLING WIRE")
     connections = []
 
+    if not served and poles_list and cable_pms:
+        # Fallback: if no poles are strictly within 10m of the cable, pick the closest one as the starting point
+        best_i, best_d = 0, float('inf')
+        for i, p in enumerate(poles_list):
+            for pm in cable_pms:
+                ls = pm.find("LineString")
+                if ls is not None:
+                    c_el = ls.find("coordinates")
+                    if c_el is not None and c_el.text:
+                        pts = parse_coords(c_el.text)
+                        d = point_linestring_distance_m((p["lon"], p["lat"]), pts)
+                        if d < best_d:
+                            best_d, best_i = d, i
+        served.add(best_i)
+
     if served:
         connected = set(served)
         unconnected = {i for i in range(len(poles_list)) if i not in served}
@@ -806,20 +821,20 @@ def process_poles(doc, fdts, tol_m=5.0):
         dist_mapped = [map_line_to_poles(coords) for coords in distribution_coords_list]
         sling_mapped = [map_line_to_poles(coords) for coords in sling_coords_list]
 
-        # Robust FDT association: Find the FDT closest to any distribution line in this LINE folder
-        fdt_name = None
-        best_fdt_dist = float('inf')
-        if distribution_coords_list and fdts:
-            for fname, (flat, flon) in fdts.items():
-                for coords in distribution_coords_list:
-                    for c_lon, c_lat in coords:
-                        d = haversine(flat, flon, c_lat, c_lon)
-                        if d < best_fdt_dist:
-                            best_fdt_dist = d
-                            fdt_name = fname
+        fdt_name_from_text = get_fdt_name_from_line(line_name)
+        fdt_name = fdt_name_from_text
         
-        if fdt_name is None:
-            fdt_name = get_fdt_name_from_line(line_name)
+        # Robust FDT association fallback: if the folder wasn't named with a specific FDT, find the closest one
+        if fdt_name == "FDT":
+            best_fdt_dist = float('inf')
+            if distribution_coords_list and fdts:
+                for fname, (flat, flon) in fdts.items():
+                    for coords in distribution_coords_list:
+                        for c_lon, c_lat in coords:
+                            d = haversine(flat, flon, c_lat, c_lon)
+                            if d < best_fdt_dist:
+                                best_fdt_dist = d
+                                fdt_name = fname
             
         fdt_lat, fdt_lon = fdts.get(fdt_name, (None, None))
         
