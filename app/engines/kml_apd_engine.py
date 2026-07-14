@@ -20,6 +20,32 @@ import traceback
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from typing import Dict, Any, List, Tuple, Optional
+import time
+import requests
+
+_NOMINATIM_CACHE = {}
+
+def get_road_name(lat: float, lon: float) -> Optional[str]:
+    """Reverse geocode to get road name with rate limiting and caching."""
+    key = (round(lat, 4), round(lon, 4))
+    if key in _NOMINATIM_CACHE:
+        return _NOMINATIM_CACHE[key]
+    
+    try:
+        url = "https://nominatim.openstreetmap.org/reverse"
+        headers = {"User-Agent": "Mozilla/5.0 FTTH_TOOLS_BOT"}
+        params = {"lat": lat, "lon": lon, "format": "jsonv2", "zoom": 18}
+        resp = requests.get(url, params=params, headers=headers, timeout=5)
+        time.sleep(1.2) # Nominatim rate limit
+        if resp.status_code == 200:
+            data = resp.json()
+            road = data.get("address", {}).get("road", None)
+            _NOMINATIM_CACHE[key] = road
+            return road
+    except Exception:
+        pass
+    _NOMINATIM_CACHE[key] = None
+    return None
 
 try:
     from shapely.geometry import Point, Polygon
@@ -465,10 +491,21 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
     poles = []
     for pm_pole, parent, lon, lat, is_exist in global_poles:
         pt = Point(lon, lat)
+        assigned = False
+        
+        # 1. Check distance to boundary polygons with larger tolerance (1.5e-4 degrees ~ 15 meters)
         for poly_name, poly, poly_pm, letter in polygons:
-            if poly.distance(pt) < 2e-5:
+            if poly.distance(pt) < 1.5e-4:
                 poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": poly_name, "is_exist": is_exist})
+                assigned = True
                 break
+                
+        # 2. If not near polygon, check if near distribution cable (15 meters)
+        if not assigned:
+            for dline in dist_lines:
+                if point_linestring_distance_m((lon, lat), dline) <= 15:
+                    poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": None, "is_exist": is_exist})
+                    break
 
     fat_folder = find_or_create_folder(line_folder, "FAT")
     for pm in list(fat_folder.findall("Placemark")):
@@ -529,7 +566,7 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
 
         total_slack_units = fdt_count + fat_count
         total_slack = total_slack_units * 20
-        toleransi = int(round((total_route + total_slack) * 0.03))
+        toleransi = int(round((total_route + total_slack) * 0.05))
         total_length = total_route + total_slack + toleransi
 
         nm_el = pm.find("name")
@@ -586,15 +623,27 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
             best_p, best_q, best_d = None, None, float('inf')
             for p_idx in unconnected:
                 p = poles_list[p_idx]
+                p_road = get_road_name(p["lat"], p["lon"])
+                
                 for q_idx in connected:
                     q = poles_list[q_idx]
+                    q_road = get_road_name(q["lat"], q["lon"])
+                    
                     d = line_length_m([(p["lon"], p["lat"]), (q["lon"], q["lat"])])
-                    if d < best_d:
-                        best_d = d
+                    
+                    # Prioritize if both are on the same road (discount distance by 90%)
+                    eff_d = d * 0.1 if (p_road and q_road and p_road == q_road) else d
+                    
+                    if eff_d < best_d and d <= 60.0:
+                        best_d = eff_d
                         best_p = p_idx
                         best_q = q_idx
-            if best_p is not None and best_d <= 60.0:
-                connections.append((best_p, best_q, best_d, poles_list[best_p], poles_list[best_q]))
+                        
+            if best_p is not None:
+                q = poles_list[best_q]
+                p = poles_list[best_p]
+                actual_d = line_length_m([(p["lon"], p["lat"]), (q["lon"], q["lat"])])
+                connections.append((best_p, best_q, actual_d, p, q))
                 unconnected.remove(best_p)
                 connected.add(best_p)
             else:
@@ -686,8 +735,8 @@ def process_poles(doc, fdts, tol_m=5.0):
             line_folders.append(line_folder)
 
     visited_coords = set()
-    new_pole_counter = 1
-    existing_pole_counter = 1
+    new_pole_counters = defaultdict(lambda: 1)
+    existing_pole_counters = defaultdict(lambda: 1)
 
     for line_folder in line_folders:
         nm_el = line_folder.find("name")
@@ -871,11 +920,11 @@ def process_poles(doc, fdts, tol_m=5.0):
                 new_pm = ET.Element("Placemark")
                 n = ET.Element("name")
                 if is_exist:
-                    n.text = f"EXT.MR.P{existing_pole_counter:03d}"
-                    existing_pole_counter += 1
+                    n.text = f"EXT.MR.P{existing_pole_counters[fdt_name]:03d}"
+                    existing_pole_counters[fdt_name] += 1
                 else:
-                    n.text = f"MR.XXX.P{new_pole_counter:03d}"
-                    new_pole_counter += 1
+                    n.text = f"MR.XXX.P{new_pole_counters[fdt_name]:03d}"
+                    new_pole_counters[fdt_name] += 1
                 pt = ET.Element("Point")
                 cc = ET.Element("coordinates")
                 cc.text = f"{lon},{lat},0"
@@ -1340,16 +1389,13 @@ def process_kml_apd(
 
         if is_kmz:
             with zipfile.ZipFile(io.BytesIO(kml_content), "r") as kmz:
-                kml_files = [f for f in kmz.namelist() if f.lower().endswith(".kml")]
-                if not kml_files:
-                    return {"status": "error", "message": "Tidak ada file KML di dalam KMZ"}
-                kml_name = kml_files[0]
-                with kmz.open(kml_name) as kml_file:
-                    raw_kml = kml_file.read()
-                # Preserve non-KML files (images, etc.)
                 for item in kmz.namelist():
-                    if not item.lower().endswith(".kml"):
+                    if item.lower().endswith(".kml"):
+                        raw_kml = kmz.read(item).decode("utf-8")
+                    else:
                         kmz_extra_files[item] = kmz.read(item)
+                if 'raw_kml' not in locals():
+                    return {"status": "error", "message": "Tidak ada file KML di dalam KMZ"}
         else:
             raw_kml = kml_content
 
