@@ -957,16 +957,24 @@ def process_poles(doc, fdts, tol_m=5.0):
                         return True
                 return False
 
+            current_fdt = fdt_name
             for pm in order:
                 lat, lon, is_exist = poles[pm]
+                
+                # Dynamic FDT Reset: If this pole is within 5m of any FDT, switch numbering context to that FDT
+                for fname, (flat, flon) in fdts.items():
+                    if haversine(lat, lon, flat, flon) <= 5.0:
+                        current_fdt = fname
+                        break
+                        
                 new_pm = ET.Element("Placemark")
                 n = ET.Element("name")
                 if is_exist:
-                    n.text = f"EXT.MR.P{existing_pole_counters[fdt_name]:03d}"
-                    existing_pole_counters[fdt_name] += 1
+                    n.text = f"EXT.MR.P{existing_pole_counters[current_fdt]:03d}"
+                    existing_pole_counters[current_fdt] += 1
                 else:
-                    n.text = f"MR.XXX.P{new_pole_counters[fdt_name]:03d}"
-                    new_pole_counters[fdt_name] += 1
+                    n.text = f"MR.XXX.P{new_pole_counters[current_fdt]:03d}"
+                    new_pole_counters[current_fdt] += 1
                 pt = ET.Element("Point")
                 cc = ET.Element("coordinates")
                 cc.text = f"{lon},{lat},0"
