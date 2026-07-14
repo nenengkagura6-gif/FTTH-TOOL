@@ -20,32 +20,6 @@ import traceback
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from typing import Dict, Any, List, Tuple, Optional
-import time
-import requests
-
-_NOMINATIM_CACHE = {}
-
-def get_road_name(lat: float, lon: float) -> Optional[str]:
-    """Reverse geocode to get road name with rate limiting and caching."""
-    key = (round(lat, 4), round(lon, 4))
-    if key in _NOMINATIM_CACHE:
-        return _NOMINATIM_CACHE[key]
-    
-    try:
-        url = "https://nominatim.openstreetmap.org/reverse"
-        headers = {"User-Agent": "Mozilla/5.0 FTTH_TOOLS_BOT"}
-        params = {"lat": lat, "lon": lon, "format": "jsonv2", "zoom": 18}
-        resp = requests.get(url, params=params, headers=headers, timeout=5)
-        time.sleep(1.2) # Nominatim rate limit
-        if resp.status_code == 200:
-            data = resp.json()
-            road = data.get("address", {}).get("road", None)
-            _NOMINATIM_CACHE[key] = road
-            return road
-    except Exception:
-        pass
-    _NOMINATIM_CACHE[key] = None
-    return None
 
 try:
     from shapely.geometry import Point, Polygon
@@ -219,7 +193,7 @@ def inject_custom_styles(doc):
         "style_pole_9m_4inch", "style_pole_7m_4inch", "style_pole_7m_3inch", "style_pole_7m_2_5inch",
         "style_pole_existing", "style_fat", "style_homepass", "style_homepass_not_cover",
         "style_slack_cable", "style_slack_existing", "style_sling_wire", "style_cable_24c",
-        "style_cable_36c", "style_cable_48c", "style_fdt_96c", "style_fdt_72c", "style_fdt_48c"
+        "style_cable_36c", "style_cable_48c", "style_fdt_72c", "style_fdt_48c"
     }
     for el in list(doc):
         if el.tag in ("Style", "StyleMap"):
@@ -269,7 +243,7 @@ def inject_custom_styles(doc):
         <LabelStyle><color>ffffffff</color><scale>0.0</scale></LabelStyle>
     </Style>
     <Style id="style_sling_wire">
-        <LineStyle><color>ffffff00</color><width>3.0</width></LineStyle>
+        <LineStyle><color>fffff000</color><width>3.0</width></LineStyle>
     </Style>
     <Style id="style_cable_24c">
         <LineStyle><color>ff00ff00</color><width>3.0</width></LineStyle>
@@ -279,10 +253,6 @@ def inject_custom_styles(doc):
     </Style>
     <Style id="style_cable_48c">
         <LineStyle><color>ffff00aa</color><width>3.0</width></LineStyle>
-    </Style>
-    <Style id="style_fdt_96c">
-        <IconStyle><color>ff0000ff</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/cross-hairs.png</href></Icon></IconStyle>
-        <LabelStyle><color>ff0000ff</color><scale>0.8</scale></LabelStyle>
     </Style>
     <Style id="style_fdt_72c">
         <IconStyle><color>ff000055</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/cross-hairs.png</href></Icon></IconStyle>
@@ -495,21 +465,10 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
     poles = []
     for pm_pole, parent, lon, lat, is_exist in global_poles:
         pt = Point(lon, lat)
-        assigned = False
-        
-        # 1. Check distance to boundary polygons with larger tolerance (1e-3 degrees ~ 111 meters)
         for poly_name, poly, poly_pm, letter in polygons:
-            if poly.distance(pt) < 1e-3:
+            if poly.distance(pt) < 2e-5:
                 poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": poly_name, "is_exist": is_exist})
-                assigned = True
                 break
-                
-        # 2. If not near polygon, check if near distribution cable (100 meters)
-        if not assigned:
-            for dline in dist_lines:
-                if point_linestring_distance_m((lon, lat), dline) <= 100:
-                    poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": None, "is_exist": is_exist})
-                    break
 
     fat_folder = find_or_create_folder(line_folder, "FAT")
     for pm in list(fat_folder.findall("Placemark")):
@@ -570,7 +529,7 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
 
         total_slack_units = fdt_count + fat_count
         total_slack = total_slack_units * 20
-        toleransi = int(round((total_route + total_slack) * 0.05))
+        toleransi = int(round((total_route + total_slack) * 0.03))
         total_length = total_route + total_slack + toleransi
 
         nm_el = pm.find("name")
@@ -619,21 +578,6 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
     sling_folder = find_or_create_folder(line_folder, "SLING WIRE")
     connections = []
 
-    if not served and poles_list and cable_pms:
-        # Fallback: if no poles are strictly within 10m of the cable, pick the closest one as the starting point
-        best_i, best_d = 0, float('inf')
-        for i, p in enumerate(poles_list):
-            for pm in cable_pms:
-                ls = pm.find("LineString")
-                if ls is not None:
-                    c_el = ls.find("coordinates")
-                    if c_el is not None and c_el.text:
-                        pts = parse_coords(c_el.text)
-                        d = point_linestring_distance_m((p["lon"], p["lat"]), pts)
-                        if d < best_d:
-                            best_d, best_i = d, i
-        served.add(best_i)
-
     if served:
         connected = set(served)
         unconnected = {i for i in range(len(poles_list)) if i not in served}
@@ -642,27 +586,15 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
             best_p, best_q, best_d = None, None, float('inf')
             for p_idx in unconnected:
                 p = poles_list[p_idx]
-                p_road = get_road_name(p["lat"], p["lon"])
-                
                 for q_idx in connected:
                     q = poles_list[q_idx]
-                    q_road = get_road_name(q["lat"], q["lon"])
-                    
                     d = line_length_m([(p["lon"], p["lat"]), (q["lon"], q["lat"])])
-                    
-                    # Prioritize if both are on the same road (discount distance by 90%)
-                    eff_d = d * 0.1 if (p_road and q_road and p_road == q_road) else d
-                    
-                    if eff_d < best_d and d <= 80.0:
-                        best_d = eff_d
+                    if d < best_d:
+                        best_d = d
                         best_p = p_idx
                         best_q = q_idx
-                        
-            if best_p is not None:
-                q = poles_list[best_q]
-                p = poles_list[best_p]
-                actual_d = line_length_m([(p["lon"], p["lat"]), (q["lon"], q["lat"])])
-                connections.append((best_p, best_q, actual_d, p, q))
+            if best_p is not None and best_d <= 60.0:
+                connections.append((best_p, best_q, best_d, poles_list[best_p], poles_list[best_q]))
                 unconnected.remove(best_p)
                 connected.add(best_p)
             else:
@@ -757,8 +689,8 @@ def process_poles(doc, fdts, tol_m=5.0):
     line_folders.sort(key=lambda lf: get_fdt_name_from_line((lf.find("name").text or "").strip()).upper())
 
     visited_coords = set()
-    global_new_counter = 1
-    global_ext_counter = 1
+    new_pole_counter = 1
+    existing_pole_counter = 1
     last_fdt = None
 
     for line_folder in line_folders:
@@ -829,42 +761,15 @@ def process_poles(doc, fdts, tol_m=5.0):
         dist_mapped = [map_line_to_poles(coords) for coords in distribution_coords_list]
         sling_mapped = [map_line_to_poles(coords) for coords in sling_coords_list]
 
-        fdt_name_from_text = get_fdt_name_from_line(line_name)
-        fdt_name = fdt_name_from_text
-        
-        # Robust FDT association fallback: if the folder wasn't named with a specific FDT, find the closest one
-        if fdt_name == "FDT":
-            best_fdt_dist = float('inf')
-            if fat_coords and fdts:
-                # Use FAT coordinates as the most reliable indicator of which FDT this line belongs to
-                for fname, (flat, flon) in fdts.items():
-                    # Calculate minimum distance from this FDT to any FAT in the line
-                    d = min([haversine(flat, flon, fat_lat, fat_lon) for fat_lat, fat_lon in fat_coords])
-                    if d < best_fdt_dist:
-                        best_fdt_dist = d
-                        fdt_name = fname
-            elif distribution_coords_list and fdts:
-                # Fallback to distribution cable AVERAGE distance (avoids ODC overlap issues)
-                for fname, (flat, flon) in fdts.items():
-                    total_d = 0.0
-                    pts_count = 0
-                    for coords in distribution_coords_list:
-                        for c_lon, c_lat in coords:
-                            total_d += haversine(flat, flon, c_lat, c_lon)
-                            pts_count += 1
-                    avg_d = total_d / pts_count if pts_count > 0 else float('inf')
-                    if avg_d < best_fdt_dist:
-                        best_fdt_dist = avg_d
-                        fdt_name = fname
-            
+        fdt_name = get_fdt_name_from_line(line_name)
         fdt_lat, fdt_lon = fdts.get(fdt_name, (None, None))
         
         resolved_fdt_name = fdt_name.upper()
         if resolved_fdt_name != last_fdt:
-            global_new_counter = 1
-            global_ext_counter = 1
+            new_pole_counter = 1
+            existing_pole_counter = 1
             last_fdt = resolved_fdt_name
-        
+            
         # Normalize direction: distribution from FDT to end
         if fdt_lat is not None and dist_mapped:
             for i, seq in enumerate(dist_mapped):
@@ -973,16 +878,14 @@ def process_poles(doc, fdts, tol_m=5.0):
 
             for pm in order:
                 lat, lon, is_exist = poles[pm]
-                
                 new_pm = ET.Element("Placemark")
                 n = ET.Element("name")
-                
                 if is_exist:
-                    n.text = f"EXT.MR.P{global_ext_counter:03d}"
-                    global_ext_counter += 1
+                    n.text = f"EXT.MR.P{existing_pole_counter:03d}"
+                    existing_pole_counter += 1
                 else:
-                    n.text = f"MR.XXX.P{global_new_counter:03d}"
-                    global_new_counter += 1
+                    n.text = f"MR.XXX.P{new_pole_counter:03d}"
+                    new_pole_counter += 1
                 pt = ET.Element("Point")
                 cc = ET.Element("coordinates")
                 cc.text = f"{lon},{lat},0"
@@ -1120,11 +1023,11 @@ def process_poles(doc, fdts, tol_m=5.0):
             new_pm = ET.Element("Placemark")
             nn = ET.Element("name")
             if is_exist:
-                nn.text = f"EXT.MR.P{global_ext_counter:03d}"
-                global_ext_counter += 1
+                nn.text = f"EXT.MR.P{existing_pole_counter:03d}"
+                existing_pole_counter += 1
             else:
-                nn.text = f"MR.XXX.P{global_new_counter:03d}"
-                global_new_counter += 1
+                nn.text = f"MR.XXX.P{new_pole_counter:03d}"
+                new_pole_counter += 1
             pt = ET.Element("Point")
             cc = ET.Element("coordinates")
             cc.text = f"{lon},{lat},0"
@@ -1350,19 +1253,20 @@ def _process_kml_tree(tree):
             kept_poles.append(p)
     global_poles = kept_poles
 
-    # Step 4: Get FDT info for cable/sling processing by searching all placemarks
+    # Step 4: Get FDT info for cable/sling processing
     fdts = {}
     fdt_count = 0
-    for pm in doc.findall(".//Placemark"):
-        fdt_nm_el = pm.find("name")
-        if fdt_nm_el is not None:
-            pm_name = (fdt_nm_el.text or "").strip().upper()
-            if "FDT" in pm_name:
-                coords = pm.find(".//coordinates")
+    for f in doc.findall("Folder"):
+        nm = f.find("name")
+        if nm is not None and (nm.text or "").upper().startswith("FDT"):
+            for pm in f.findall("Placemark"):
+                fdt_nm_el = pm.find("name")
+                fdt_name = (fdt_nm_el.text or "").strip() if fdt_nm_el is not None else "FDT"
+                coords = pm.find("Point/coordinates")
                 if coords is not None and coords.text:
                     try:
                         lon, lat, *_ = coords.text.strip().split(",")
-                        fdts[pm_name] = (float(lat), float(lon))
+                        fdts[fdt_name.upper()] = (float(lat), float(lon))
                         fdt_count += 1
                     except Exception:
                         pass
@@ -1388,28 +1292,8 @@ def _process_kml_tree(tree):
         )
 
     # Step 6: Process pole numbering
+    # Pass fdts dictionary with upper case keys
     process_poles(doc, {k.upper(): v for k, v in fdts.items()}, tol_m=5.0)
-
-    # Create debug folder for detected FDTs
-    debug_folder = ET.Element("Folder")
-    debug_name = ET.Element("name")
-    debug_name.text = "DEBUG FDT TERDETEKSI"
-    debug_folder.append(debug_name)
-    for fname, (flat, flon) in fdts.items():
-        pm = ET.Element("Placemark")
-        n = ET.Element("name")
-        n.text = f"TERDETEKSI: {fname}"
-        desc = ET.Element("description")
-        desc.text = "Jika ini muncul, mesin berhasil mendeteksi FDT ini."
-        pt = ET.Element("Point")
-        cc = ET.Element("coordinates")
-        cc.text = f"{flon},{flat},0"
-        pt.append(cc)
-        pm.append(n)
-        pm.append(desc)
-        pm.append(pt)
-        debug_folder.append(pm)
-    doc.append(debug_folder)
 
     # Step 7: Remove original root POLE/NP/EXT folders
     for f in list(doc.findall("Folder")):
@@ -1437,30 +1321,6 @@ def _process_kml_tree(tree):
 
     print(f"[KML-APD] Total FAT: {total_fat_count}, Total HP Cover: {total_hp_count}")
     print(f"[KML-APD] Total LINE folders: {len(line_folders)}")
-
-    # =====================================================================
-    # Style Original FDTs
-    # =====================================================================
-    for pm in doc.findall(".//Placemark"):
-        n = pm.find("name")
-        if n is not None and n.text:
-            pm_name = n.text.strip().upper()
-            if "FDT" in pm_name and "DEBUG" not in pm_name:
-                # Remove existing styleUrl and inline Styles
-                for st in pm.findall("styleUrl"):
-                    pm.remove(st)
-                for st in pm.findall("Style"):
-                    pm.remove(st)
-                    
-                st_el = ET.Element("styleUrl")
-                if "96" in pm_name:
-                    st_el.text = "#style_fdt_96c"
-                elif "48" in pm_name:
-                    st_el.text = "#style_fdt_48c"
-                else:
-                    # Default to 72 if not specified, or match 72 explicitly
-                    st_el.text = "#style_fdt_72c"
-                pm.append(st_el)
 
     return tree
 
@@ -1490,13 +1350,16 @@ def process_kml_apd(
 
         if is_kmz:
             with zipfile.ZipFile(io.BytesIO(kml_content), "r") as kmz:
-                for item in kmz.namelist():
-                    if item.lower().endswith(".kml"):
-                        raw_kml = kmz.read(item).decode("utf-8")
-                    else:
-                        kmz_extra_files[item] = kmz.read(item)
-                if 'raw_kml' not in locals():
+                kml_files = [f for f in kmz.namelist() if f.lower().endswith(".kml")]
+                if not kml_files:
                     return {"status": "error", "message": "Tidak ada file KML di dalam KMZ"}
+                kml_name = kml_files[0]
+                with kmz.open(kml_name) as kml_file:
+                    raw_kml = kml_file.read()
+                # Preserve non-KML files (images, etc.)
+                for item in kmz.namelist():
+                    if not item.lower().endswith(".kml"):
+                        kmz_extra_files[item] = kmz.read(item)
         else:
             raw_kml = kml_content
 
