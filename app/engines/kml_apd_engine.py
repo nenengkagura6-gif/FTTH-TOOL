@@ -493,17 +493,17 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
         pt = Point(lon, lat)
         assigned = False
         
-        # 1. Check distance to boundary polygons with larger tolerance (1.5e-4 degrees ~ 15 meters)
+        # 1. Check distance to boundary polygons with larger tolerance (6e-4 degrees ~ 65 meters)
         for poly_name, poly, poly_pm, letter in polygons:
-            if poly.distance(pt) < 1.5e-4:
+            if poly.distance(pt) < 6e-4:
                 poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": poly_name, "is_exist": is_exist})
                 assigned = True
                 break
                 
-        # 2. If not near polygon, check if near distribution cable (15 meters)
+        # 2. If not near polygon, check if near distribution cable (65 meters)
         if not assigned:
             for dline in dist_lines:
-                if point_linestring_distance_m((lon, lat), dline) <= 15:
+                if point_linestring_distance_m((lon, lat), dline) <= 65:
                     poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": None, "is_exist": is_exist})
                     break
 
@@ -806,7 +806,21 @@ def process_poles(doc, fdts, tol_m=5.0):
         dist_mapped = [map_line_to_poles(coords) for coords in distribution_coords_list]
         sling_mapped = [map_line_to_poles(coords) for coords in sling_coords_list]
 
-        fdt_name = get_fdt_name_from_line(line_name)
+        # Robust FDT association: Find the FDT closest to any distribution line in this LINE folder
+        fdt_name = None
+        best_fdt_dist = float('inf')
+        if distribution_coords_list and fdts:
+            for fname, (flat, flon) in fdts.items():
+                for coords in distribution_coords_list:
+                    for c_lon, c_lat in coords:
+                        d = haversine(flat, flon, c_lat, c_lon)
+                        if d < best_fdt_dist:
+                            best_fdt_dist = d
+                            fdt_name = fname
+        
+        if fdt_name is None:
+            fdt_name = get_fdt_name_from_line(line_name)
+            
         fdt_lat, fdt_lon = fdts.get(fdt_name, (None, None))
         
         # Normalize direction: distribution from FDT to end
