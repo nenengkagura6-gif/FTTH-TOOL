@@ -40,7 +40,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const fetchProfile = useCallback(async (userId: string) => {
         try {
             // Check and automatically downgrade if subscription expired
-            await supabase.rpc('refresh_subscription_status').catch(err => console.error("Error refreshing subscription:", err));
+            const { error: rpcErr } = await supabase.rpc('refresh_subscription_status');
+            if (rpcErr) {
+                console.error("Error refreshing subscription:", rpcErr);
+            }
 
             const { data, error } = await supabase
                 .from('profiles')
