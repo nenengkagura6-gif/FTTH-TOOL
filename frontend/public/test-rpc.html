@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test RPC</title>
+</head>
+<body>
+    <h1>RPC Output Test</h1>
+    <pre id="output">Loading...</pre>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+        // Read from your .env.local values (hardcoded here for testing)
+        const SUPABASE_URL = 'https://itfwqexiekhjaxbhjlpf.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZndxZXhpZWtoamF4YmhqbHBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MzkxNDgsImV4cCI6MjA5NDAxNTE0OH0.x6fo0JZNUSL64Pa90EHyMbwe9MzdCcO5pVB-AP6FPww';
+
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        async function run() {
+            try {
+                // Must be logged in as admin to test.
+                // Assuming you're testing this while logged in, or we just call the RPC
+                // Wait, this script needs the user's session.
+                // Better yet, we can just fetch the data. If it fails, it means we need auth.
+                
+                // For a quick test, we will just show what the RPC returns.
+                const { data, error } = await supabase.rpc('get_admin_payments');
+                
+                document.getElementById('output').textContent = JSON.stringify({ data, error }, null, 2);
+            } catch (err) {
+                document.getElementById('output').textContent = err.message;
+            }
+        }
+        run();
+    </script>
+</body>
+</html>

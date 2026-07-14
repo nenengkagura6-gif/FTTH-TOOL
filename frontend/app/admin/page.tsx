@@ -50,16 +50,20 @@ export default function AdminPage() {
       const { getSupabaseClient } = await import("@/lib/supabase/client");
       const supabase = getSupabaseClient();
       
-      const { data, error } = await supabase
-        .from('payment_confirmations')
-        .select(`
-          *,
-          profiles(email, full_name)
-        `)
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.rpc('get_admin_payments');
 
       if (error) throw error;
-      setPayments(data || []);
+      
+      // Transform the flat RPC response back to the shape expected by the UI
+      const formattedData = (data || []).map((item: any) => ({
+        ...item,
+        profiles: {
+          email: item.email,
+          full_name: item.full_name
+        }
+      }));
+      
+      setPayments(formattedData);
     } catch (err) {
       console.error("Error fetching payments:", err);
     } finally {
