@@ -493,17 +493,17 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
         pt = Point(lon, lat)
         assigned = False
         
-        # 1. Check distance to boundary polygons with larger tolerance (6e-4 degrees ~ 65 meters)
+        # 1. Check distance to boundary polygons with larger tolerance (1e-3 degrees ~ 111 meters)
         for poly_name, poly, poly_pm, letter in polygons:
-            if poly.distance(pt) < 6e-4:
+            if poly.distance(pt) < 1e-3:
                 poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": poly_name, "is_exist": is_exist})
                 assigned = True
                 break
                 
-        # 2. If not near polygon, check if near distribution cable (65 meters)
+        # 2. If not near polygon, check if near distribution cable (100 meters)
         if not assigned:
             for dline in dist_lines:
-                if point_linestring_distance_m((lon, lat), dline) <= 65:
+                if point_linestring_distance_m((lon, lat), dline) <= 100:
                     poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": None, "is_exist": is_exist})
                     break
 
@@ -649,7 +649,7 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
                     # Prioritize if both are on the same road (discount distance by 90%)
                     eff_d = d * 0.1 if (p_road and q_road and p_road == q_road) else d
                     
-                    if eff_d < best_d and d <= 60.0:
+                    if eff_d < best_d and d <= 80.0:
                         best_d = eff_d
                         best_p = p_idx
                         best_q = q_idx
@@ -827,14 +827,27 @@ def process_poles(doc, fdts, tol_m=5.0):
         # Robust FDT association fallback: if the folder wasn't named with a specific FDT, find the closest one
         if fdt_name == "FDT":
             best_fdt_dist = float('inf')
-            if distribution_coords_list and fdts:
+            if fat_coords and fdts:
+                # Use FAT coordinates as the most reliable indicator of which FDT this line belongs to
                 for fname, (flat, flon) in fdts.items():
+                    # Calculate minimum distance from this FDT to any FAT in the line
+                    d = min([haversine(flat, flon, fat_lat, fat_lon) for fat_lat, fat_lon in fat_coords])
+                    if d < best_fdt_dist:
+                        best_fdt_dist = d
+                        fdt_name = fname
+            elif distribution_coords_list and fdts:
+                # Fallback to distribution cable AVERAGE distance (avoids ODC overlap issues)
+                for fname, (flat, flon) in fdts.items():
+                    total_d = 0.0
+                    pts_count = 0
                     for coords in distribution_coords_list:
                         for c_lon, c_lat in coords:
-                            d = haversine(flat, flon, c_lat, c_lon)
-                            if d < best_fdt_dist:
-                                best_fdt_dist = d
-                                fdt_name = fname
+                            total_d += haversine(flat, flon, c_lat, c_lon)
+                            pts_count += 1
+                    avg_d = total_d / pts_count if pts_count > 0 else float('inf')
+                    if avg_d < best_fdt_dist:
+                        best_fdt_dist = avg_d
+                        fdt_name = fname
             
         fdt_lat, fdt_lon = fdts.get(fdt_name, (None, None))
         
