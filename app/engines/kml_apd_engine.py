@@ -961,9 +961,9 @@ def process_poles(doc, fdts, tol_m=5.0):
             for pm in order:
                 lat, lon, is_exist = poles[pm]
                 
-                # Dynamic FDT Reset: If this pole is within 5m of any FDT, switch numbering context to that FDT
+                # Dynamic FDT Reset: If this pole is within 25m of any FDT, switch numbering context to that FDT
                 for fname, (flat, flon) in fdts.items():
-                    if haversine(lat, lon, flat, flon) <= 5.0:
+                    if haversine(lat, lon, flat, flon) <= 25.0:
                         current_fdt = fname
                         break
                         
@@ -1349,7 +1349,7 @@ def _process_kml_tree(tree):
         fdt_nm_el = pm.find("name")
         if fdt_nm_el is not None:
             pm_name = (fdt_nm_el.text or "").strip().upper()
-            if pm_name.startswith("FDT"):
+            if "FDT" in pm_name:
                 coords = pm.find(".//coordinates")
                 if coords is not None and coords.text:
                     try:
