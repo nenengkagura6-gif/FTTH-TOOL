@@ -750,12 +750,16 @@ def process_poles(doc, fdts, tol_m=5.0):
             line_folders.append(line_folder)
 
     visited_coords = set()
-    new_pole_counters = defaultdict(lambda: 1)
-    existing_pole_counters = defaultdict(lambda: 1)
+    global_new_counter = 1
+    global_ext_counter = 1
 
     for line_folder in line_folders:
         nm_el = line_folder.find("name")
         line_name = (nm_el.text or "").strip().upper()
+
+        if "LINE A" in line_name:
+            global_new_counter = 1
+            global_ext_counter = 1
 
         distribution_coords_list = []
         sling_coords_list = []
@@ -957,30 +961,18 @@ def process_poles(doc, fdts, tol_m=5.0):
                         return True
                 return False
 
-            current_fdt = fdt_name
             for pm in order:
                 lat, lon, is_exist = poles[pm]
                 
-                # Dynamic FDT Reset: If this pole is within 25m of any FDT, switch numbering context to that FDT
-                for fname, (flat, flon) in fdts.items():
-                    if haversine(lat, lon, flat, flon) <= 25.0:
-                        current_fdt = fname
-                        break
-                        
                 new_pm = ET.Element("Placemark")
                 n = ET.Element("name")
                 
-                # Format FDT name for display (remove spaces and take first 5 chars if too long)
-                disp_fdt = current_fdt.replace(" ", "")
-                if len(disp_fdt) > 6:
-                    disp_fdt = disp_fdt[-6:]
-                
                 if is_exist:
-                    n.text = f"EXT.{disp_fdt}.P{existing_pole_counters[current_fdt]:03d}"
-                    existing_pole_counters[current_fdt] += 1
+                    n.text = f"EXT.MR.P{global_ext_counter:03d}"
+                    global_ext_counter += 1
                 else:
-                    n.text = f"{disp_fdt}.P{new_pole_counters[current_fdt]:03d}"
-                    new_pole_counters[current_fdt] += 1
+                    n.text = f"MR.XXX.P{global_new_counter:03d}"
+                    global_new_counter += 1
                 pt = ET.Element("Point")
                 cc = ET.Element("coordinates")
                 cc.text = f"{lon},{lat},0"
