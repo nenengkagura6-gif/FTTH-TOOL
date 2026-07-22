@@ -215,12 +215,12 @@ def inject_custom_styles(doc):
         <LabelStyle><color>ffffff00</color><scale>0.8</scale></LabelStyle>
     </Style>
     <Style id="style_pole_7m_2_5inch">
-        <IconStyle><color>ffff00ff</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle>
-        <LabelStyle><color>ffff00ff</color><scale>0.8</scale></LabelStyle>
+        <IconStyle><color>ffff00aa</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle>
+        <LabelStyle><color>ffff00aa</color><scale>0.8</scale></LabelStyle>
     </Style>
     <Style id="style_pole_existing">
-        <IconStyle><color>ff000050</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle>
-        <LabelStyle><color>ff000050</color><scale>0.8</scale></LabelStyle>
+        <IconStyle><color>ffffffff</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle>
+        <LabelStyle><color>ffffffff</color><scale>0.8</scale></LabelStyle>
     </Style>
     <Style id="style_fat">
         <IconStyle><color>ff00ffff</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/triangle.png</href></Icon></IconStyle>

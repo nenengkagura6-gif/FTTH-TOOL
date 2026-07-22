@@ -18,6 +18,15 @@ from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
 from utils.commons import haversine, safe_localname
+from collections import defaultdict
+
+
+def get_fdt_name_from_folder_path(folder_path: str) -> str:
+    """Extract FDT name from folder path (e.g., 'LINE A FDT 02/HP COVER' -> 'FDT 02')"""
+    match = re.search(r'\bFDT\s*(\d+)\b', folder_path, re.IGNORECASE)
+    if match:
+        return f"FDT {int(match.group(1)):02d}"
+    return "FDT 01" # Default fallback
 
 
 def parse_kml_lxml_with_kmz(content: bytes, is_kmz: bool = False) -> etree.ElementTree:
@@ -169,7 +178,7 @@ class APDEngine:
                     if safe_localname(child) == "name":
                         name_elem = child
                         break
-                if name_elem is not None and name_elem.text and "HP" in name_elem.text.upper() and "COVER" in name_elem.text.upper():
+                if name_elem is not None and name_elem.text and "HP" in name_elem.text.upper() and "COVER" in name_elem.text.upper() and "UNCOVER" not in name_elem.text.upper():
                     hp_cover_folders.append(folder)
         return hp_cover_folders
     
@@ -299,6 +308,40 @@ class APDEngine:
         except Exception:
             pass
         return None, None
+
+    def get_all_fdt_coords(self) -> Dict[str, Tuple[str, str]]:
+        """Get coordinates for all FDTs, mapped by FDT name (e.g. 'FDT 01' -> (lat, lon))"""
+        fdt_coords = {}
+        try:
+            for folder in self.root.iter():
+                if safe_localname(folder) == "Folder":
+                    name_elem = None
+                    for child in folder:
+                        if safe_localname(child) == "name":
+                            name_elem = child
+                            break
+                    if name_elem is not None and name_elem.text and "FDT" in name_elem.text.strip().upper():
+                        for pm in folder:
+                            if safe_localname(pm) == "Placemark":
+                                pm_name_el = pm.find(".//name")
+                                pm_name = pm_name_el.text.strip().upper() if pm_name_el is not None else ""
+                                if "FDT" in pm_name:
+                                    fdt_match = re.search(r'\bFDT\s*(\d+)\b', pm_name, re.IGNORECASE)
+                                    if fdt_match:
+                                        fdt_key = f"FDT {int(fdt_match.group(1)):02d}"
+                                    else:
+                                        fdt_key = "FDT 01"
+                                        
+                                    for coord in pm.iter():
+                                        if safe_localname(coord) == "coordinates":
+                                            parts = coord.text.strip().split(",")
+                                            if len(parts) >= 2:
+                                                lon, lat = map(float, parts[:2])
+                                                fdt_coords[fdt_key] = (f"{lat:.5f}", f"{lon:.5f}")
+                                            break
+        except Exception as e:
+            print("Error in get_all_fdt_coords:", e)
+        return fdt_coords
     
     def process(self) -> Dict[str, Any]:
         """Main processing method."""
@@ -311,154 +354,191 @@ class APDEngine:
         
         # Parse HP Cover points
         hp_folders = self.find_hp_cover_folders()
+        self.hp_points = []
         for folder in hp_folders:
-            self.hp_points.extend(self.extract_points_recursive(folder, ""))
+            parent = folder.getparent()
+            parent_name = ""
+            if parent is not None:
+                for child in parent:
+                    if safe_localname(child) == "name":
+                        parent_name = child.text.strip() if child.text else ""
+                        break
+            self.hp_points.extend(self.extract_points_recursive(folder, parent_name))
         
         fat_to_hpc = self.build_fat_to_hpc_map(max_distance=25)
         
-        # Calculate FAT ID statistics
-        fat_id_nums = {}
-        for row in self.hp_points:
-            match = re.search(r'\b([A-Z]\d{1,2})\b', row[3] + " " + row[0], re.IGNORECASE)
-            fat_id = match.group(1).upper() if match else ""
-            if not fat_id:
-                continue
-            prefix = fat_id[0].upper()
-            num = int(re.findall(r'\d+', fat_id)[0]) if re.findall(r'\d+', fat_id) else 0
-            if prefix not in fat_id_nums:
-                fat_id_nums[prefix] = []
-            fat_id_nums[prefix].append(num)
-        fat_id_max = {k: max(v) for k, v in fat_id_nums.items()}
-        
-        # Create workbook
-        wb = Workbook()
-        ws = wb.active
-        headers = [
-            "FDT Tray (Front)", "FDT Port", "Line", "Capacity",
-            "Tube Colour", "Core Number", "FAT ID",
-            "FAT Port", "POLE_Name", "POLE_Lat", "POLE_Lon",
-            "HP_Cover", "name_1", "name_2", "latitude", "longitude"
-        ]
-        ws.append(headers)
-        
-        # Process rows
-        fat_port_counters = {}
-        fdt_port_counter = 1
-        core_number = 1
-        skip_numbers = {11, 12, 23, 24, 35, 36, 47, 48}
-        last_fat_id = ""
-        last_prefix = ""
-        
+        # Group hp_points by FDT
+        hp_points_by_fdt = defaultdict(list)
         for row in self.hp_points:
             name, lat, lon, folder_path = row
-            name_parts = [p.strip() for p in re.split(r"[,/ ]", name) if p.strip()]
-            name_1 = name_parts[0] if len(name_parts) > 0 else ""
-            name_2 = name_parts[1] if len(name_parts) > 1 else ""
+            fdt_name = get_fdt_name_from_folder_path(folder_path)
+            hp_points_by_fdt[fdt_name].append(row)
             
-            match = re.search(r'\b([A-Z]\d{1,2})\b', folder_path + " " + name, re.IGNORECASE)
-            fat_id = match.group(1).upper() if match else ""
-            if not fat_id:
-                continue
+        sorted_fdts = sorted(hp_points_by_fdt.keys())
+        if not sorted_fdts:
+            sorted_fdts = ["FDT 01"] # Fallback
             
-            prefix = fat_id[0].upper()
-            num_part = int(re.findall(r'\d+', fat_id)[0]) if re.findall(r'\d+', fat_id) else 0
+        # Process rows per FDT
+        fdt_processed_rows = {}
+        skip_numbers = {11, 12, 23, 24, 35, 36, 47, 48}
+        
+        for fdt_name in sorted_fdts:
+            rows_in_fdt = hp_points_by_fdt.get(fdt_name, [])
             
-            if fat_id != last_fat_id:
-                fat_port_counters[fat_id] = 1
-                last_fat_id = fat_id
+            # Calculate FAT ID statistics for this FDT
+            fat_id_nums = {}
+            for row in rows_in_fdt:
+                name, lat, lon, folder_path = row
+                match = re.search(r'\b([A-Z]\d{1,2})\b', folder_path + " " + name, re.IGNORECASE)
+                fat_id = match.group(1).upper() if match else ""
+                if not fat_id:
+                    continue
+                prefix = fat_id[0].upper()
+                num = int(re.findall(r'\d+', fat_id)[0]) if re.findall(r'\d+', fat_id) else 0
+                if prefix not in fat_id_nums:
+                    fat_id_nums[prefix] = []
+                fat_id_nums[prefix].append(num)
+            fat_id_max = {k: max(v) for k, v in fat_id_nums.items()}
             
-            if prefix != last_prefix:
-                core_number = 1
-                last_prefix = prefix
+            # Process rows
+            fat_port_counters = {}
+            fdt_port_counter = 1
+            core_number = 1
+            last_fat_id = ""
+            last_prefix = ""
             
-            fat_port = fat_port_counters[fat_id]
-            fat_port_counters[fat_id] += 1
+            processed_list = []
             
-            fdt_port = fdt_port_counter if fat_port == 1 else ""
-            if fat_port == 1:
-                fdt_port_counter += 1
-            
-            core = ""
-            if fat_port in [1, 2]:
-                while core_number in skip_numbers:
-                    core_number += 1
-                core = core_number
-                core_number += 1
-            
-            line, cap, tube_number = "", "", ""
-            if core:
-                line = f"LINE {prefix}"
-                max_num = fat_id_max.get(prefix, 0)
-                if max_num <= 10:
-                    cap = "24C/2T"
-                elif max_num <= 15:
-                    cap = "36C/3T"
-                elif max_num <= 20:
-                    cap = "48C/4T"
+            for row in rows_in_fdt:
+                name, lat, lon, folder_path = row
+                name_parts = [p.strip() for p in re.split(r"[,/ ]", name) if p.strip()]
+                name_1 = name_parts[0] if len(name_parts) > 0 else ""
+                name_2 = name_parts[1] if len(name_parts) > 1 else ""
                 
-                if num_part <= 5:
-                    tube_number = "1"
-                elif num_part <= 10:
-                    tube_number = "2"
-                elif num_part <= 15:
-                    tube_number = "3"
-                elif num_part <= 20:
-                    tube_number = "4"
-            
-            tray = ""
-            if isinstance(fdt_port, int):
-                if 1 <= fdt_port <= 8: tray = 1
-                elif 9 <= fdt_port <= 16: tray = 2
-                elif 17 <= fdt_port <= 24: tray = 3
-                elif 25 <= fdt_port <= 32: tray = 4
-                elif 33 <= fdt_port <= 40: tray = 5
-            
-            pole_name, pole_lat, pole_lon = "", "", ""
-            if fat_id in fat_to_pole:
-                pole_name = fat_to_pole[fat_id]["name"]
-                pole_lat = fat_to_pole[fat_id]["lat"]
-                pole_lon = fat_to_pole[fat_id]["lon"]
-            
-            hpc_text = ""
-            if fat_id in fat_to_hpc:
-                hpc_text = "IN FRONT OF HP NUMBER " + fat_to_hpc[fat_id][0]
-            
-            ws.append([
-                tray, fdt_port, line, cap, tube_number, core, fat_id, fat_port,
-                pole_name, pole_lat, pole_lon, hpc_text,
-                name_1, name_2, lat, lon
-            ])
-        
-        # Apply formatting
-        thin_border = Border(
-            left=Side(style='thin'), right=Side(style='thin'),
-            top=Side(style='thin'), bottom=Side(style='thin')
-        )
-        
-        for row in ws.iter_rows(min_row=2):
-            for idx, cell in enumerate(row, 1):
-                if cell.value not in (None, ""):
-                    cell.border = thin_border
-                if idx == 5:
-                    if cell.value == "1":
-                        cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
-                    elif cell.value == "2":
-                        cell.fill = PatternFill(start_color="FFD580", end_color="FFD580", fill_type="solid")
-                    elif cell.value == "3":
-                        cell.fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
-                    elif cell.value == "4":
-                        cell.fill = PatternFill(start_color="D2B48C", end_color="D2B48C", fill_type="solid")
-        
-        # Save intermediate result
-        output_buffer = io.BytesIO()
-        wb.save(output_buffer)
-        output_buffer.seek(0)
+                match = re.search(r'\b([A-Z]\d{1,2})\b', folder_path + " " + name, re.IGNORECASE)
+                fat_id = match.group(1).upper() if match else ""
+                if not fat_id:
+                    continue
+                
+                prefix = fat_id[0].upper()
+                num_part = int(re.findall(r'\d+', fat_id)[0]) if re.findall(r'\d+', fat_id) else 0
+                
+                if fat_id != last_fat_id:
+                    fat_port_counters[fat_id] = 1
+                    last_fat_id = fat_id
+                
+                if prefix != last_prefix:
+                    core_number = 1
+                    last_prefix = prefix
+                
+                fat_port = fat_port_counters[fat_id]
+                fat_port_counters[fat_id] += 1
+                
+                fdt_port = fdt_port_counter if fat_port == 1 else ""
+                if fat_port == 1:
+                    fdt_port_counter += 1
+                
+                core = ""
+                if fat_port in [1, 2]:
+                    while core_number in skip_numbers:
+                        core_number += 1
+                    core = core_number
+                    core_number += 1
+                
+                line, cap, tube_number = "", "", ""
+                if core:
+                    line = f"LINE {prefix}"
+                    max_num = fat_id_max.get(prefix, 0)
+                    if max_num <= 10:
+                        cap = "24C/2T"
+                    elif max_num <= 15:
+                        cap = "36C/3T"
+                    elif max_num <= 20:
+                        cap = "48C/4T"
+                    
+                    if num_part <= 5:
+                        tube_number = "1"
+                    elif num_part <= 10:
+                        tube_number = "2"
+                    elif num_part <= 15:
+                        tube_number = "3"
+                    elif num_part <= 20:
+                        tube_number = "4"
+                
+                tray = ""
+                if isinstance(fdt_port, int):
+                    if 1 <= fdt_port <= 8: tray = 1
+                    elif 9 <= fdt_port <= 16: tray = 2
+                    elif 17 <= fdt_port <= 24: tray = 3
+                    elif 25 <= fdt_port <= 32: tray = 4
+                    elif 33 <= fdt_port <= 40: tray = 5
+                
+                pole_name, pole_lat, pole_lon = "", "", ""
+                if fat_id in fat_to_pole:
+                    pole_name = fat_to_pole[fat_id]["name"]
+                    pole_lat = fat_to_pole[fat_id]["lat"]
+                    pole_lon = fat_to_pole[fat_id]["lon"]
+                
+                hpc_text = ""
+                if fat_id in fat_to_hpc:
+                    hpc_text = "IN FRONT OF HP NUMBER " + fat_to_hpc[fat_id][0]
+                
+                processed_list.append([
+                    tray, fdt_port, line, cap, tube_number, core, fat_id, fat_port,
+                    pole_name, pole_lat, pole_lon, hpc_text,
+                    name_1, name_2, lat, lon
+                ])
+                
+            fdt_processed_rows[fdt_name] = processed_list
         
         output_filename = f"{os.path.splitext(self.input_filename)[0]}_with_pole.xlsx"
         
         # If template provided, integrate with template
         if self.apd_template_content:
-            return self._integrate_with_template(output_buffer.getvalue(), output_filename)
+            return self._integrate_with_template(fdt_processed_rows, output_filename)
+        
+        # Otherwise, save as raw Excel
+        wb = Workbook()
+        thin_border = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
+        )
+        
+        for idx, fdt_name in enumerate(sorted_fdts):
+            if idx == 0:
+                ws = wb.active
+                ws.title = f"Homepass Database {fdt_name}"
+            else:
+                ws = wb.create_sheet(title=f"Homepass Database {fdt_name}")
+                
+            headers = [
+                "FDT Tray (Front)", "FDT Port", "Line", "Capacity",
+                "Tube Colour", "Core Number", "FAT ID",
+                "FAT Port", "POLE_Name", "POLE_Lat", "POLE_Lon",
+                "HP_Cover", "name_1", "name_2", "latitude", "longitude"
+            ]
+            ws.append(headers)
+            
+            for row in fdt_processed_rows.get(fdt_name, []):
+                ws.append(row)
+                
+            for row in ws.iter_rows(min_row=2):
+                for cell_idx, cell in enumerate(row, 1):
+                    if cell.value not in (None, ""):
+                        cell.border = thin_border
+                    if cell_idx == 5:
+                        if cell.value == "1":
+                            cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+                        elif cell.value == "2":
+                            cell.fill = PatternFill(start_color="FFD580", end_color="FFD580", fill_type="solid")
+                        elif cell.value == "3":
+                            cell.fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
+                        elif cell.value == "4":
+                            cell.fill = PatternFill(start_color="D2B48C", end_color="D2B48C", fill_type="solid")
+                            
+        output_buffer = io.BytesIO()
+        wb.save(output_buffer)
+        output_buffer.seek(0)
         
         return {
             "status": "success",
@@ -466,16 +546,16 @@ class APDEngine:
             "content": output_buffer.getvalue()
         }
     
-    def _integrate_with_template(self, data_content: bytes, output_filename: str) -> Dict[str, Any]:
+    def _integrate_with_template(self, fdt_processed_rows: Dict[str, List], output_filename: str) -> Dict[str, Any]:
         """Integrate data with APD template."""
         wb_template = load_workbook(io.BytesIO(self.apd_template_content))
-        ws_template = wb_template.worksheets[0]
         
-        wb_data = load_workbook(io.BytesIO(data_content))
-        ws_data = wb_data.active
-        
-        headers = [str(h).strip() for h in next(ws_data.iter_rows(min_row=1, max_row=1, values_only=True))]
-        data_rows = list(ws_data.iter_rows(min_row=2, values_only=True))
+        headers = [
+            "FDT Tray (Front)", "FDT Port", "Line", "Capacity",
+            "Tube Colour", "Core Number", "FAT ID",
+            "FAT Port", "POLE_Name", "POLE_Lat", "POLE_Lon",
+            "HP_Cover", "name_1", "name_2", "latitude", "longitude"
+        ]
         
         header_map = {
             "FDT Tray (Front)": "A",
@@ -508,128 +588,161 @@ class APDEngine:
             top=Side(style='thin'), bottom=Side(style='thin')
         )
         
-        start_row = 10
-        for i, row in enumerate(data_rows, start=start_row):
-            row_dict = dict(zip(headers, row))
-            
-            for key, target in header_map.items():
-                if key not in row_dict:
-                    continue
-                val = row_dict[key]
-                if val in (None, ""):
-                    continue
-                
-                if isinstance(target, list):
-                    for col in target:
-                        cell = ws_template[f"{col}{i}"]
-                        cell.value = val
-                        cell.border = thin_border
-                elif key == "name_1":
-                    combined = str(val)
-                    if row_dict.get("name_2"):
-                        combined += " " + str(row_dict["name_2"])
-                    cell = ws_template[f"{target}{i}"]
-                    cell.value = combined
-                    cell.border = thin_border
-                elif key == "name_2":
-                    continue
-                else:
-                    cell = ws_template[f"{target}{i}"]
-                    if key in ["POLE_Lat", "POLE_Lon", "latitude", "longitude"]:
-                        try:
-                            val = float(val)
-                        except:
-                            pass
-                    
-                    cell.value = val
-                    cell.border = thin_border
-                    
-                    if key == "Tube Colour":
-                        color_hex = tube_colors.get(str(val).strip(), None)
-                        if color_hex:
-                            cell.fill = PatternFill(start_color=color_hex, end_color=color_hex, fill_type="solid")
-        
-        # Add FDT coordinates
-        lat_fdt, lon_fdt = self.get_fdt_coords()
-        if lat_fdt and lon_fdt:
-            ws_template["N6"].value = f": {lat_fdt},{lon_fdt}"
+        # Get FDT coordinates mapped by FDT name
+        all_fdt_coords = self.get_all_fdt_coords()
         
         # Clean and set location name (remove dash)
         file_base_name = os.path.splitext(os.path.basename(self.input_filename))[0]
         file_base_name_clean = file_base_name.replace("APD_HPDB_", "")
         parts = file_base_name_clean.split(" ", 1)
         lokasi_nama = parts[1].strip() if len(parts) > 1 else file_base_name_clean.strip()
-        
-        # Remove dash from cluster name
         lokasi_nama_clean = lokasi_nama.replace("-", " ")
         
-        ws_template["C5"].value = lokasi_nama_clean
-        ws_template["Y10"].value = lokasi_nama_clean
-        ws_template["Z10"].value = lokasi_nama_clean
+        sorted_fdts = sorted(fdt_processed_rows.keys())
         
-        # Reverse geocode
-        max_row_data = start_row + len(data_rows) - 1
-        lat_source = ws_template["J10"].value
-        lon_source = ws_template["K10"].value
+        # 1. Create/prepare worksheets for each FDT in sorted order
+        fdt_worksheets = {}
+        template_ws = wb_template.worksheets[0]
         
-        if lat_source in (None, "") or lon_source in (None, ""):
-            lat_source = ws_template["AV10"].value
-            lon_source = ws_template["AW10"].value
-        
-        geo_result = self._empty_geo_result()
-        if lat_source not in (None, "") and lon_source not in (None, ""):
-            geo_result = self.reverse_geocode(lat_source, lon_source)
-        
-        ws_template["M10"] = geo_result["province"]
-        ws_template["N10"] = geo_result["kabupaten"]
-        ws_template["W10"] = geo_result["kabupaten"]
-        ws_template["O10"] = geo_result["kecamatan"]
-        ws_template["P10"] = geo_result["desa"]
-        ws_template["Q10"] = geo_result["kodepos"]
-        ws_template["AD10"] = geo_result["jalan"]  # Nama jalan
-        
-        # Autocopy geocoding and cluster data to all rows
-        for r in range(11, max_row_data + 1):
-            ws_template[f"M{r}"] = ws_template["M10"].value
-            ws_template[f"N{r}"] = ws_template["N10"].value
-            ws_template[f"W{r}"] = ws_template["W10"].value
-            ws_template[f"O{r}"] = ws_template["O10"].value
-            ws_template[f"P{r}"] = ws_template["P10"].value
-            ws_template[f"Q{r}"] = ws_template["Q10"].value
-            ws_template[f"AD{r}"] = ws_template["AD10"].value  # Autocopy nama jalan
-            ws_template[f"Y{r}"] = ws_template["Y10"].value    # Autocopy cluster Y
-            ws_template[f"Z{r}"] = ws_template["Z10"].value    # Autocopy cluster Z
-        
-        # Count unique FAT IDs to determine capacity (Cell N3)
-        fat_id_col_idx = headers.index("FAT ID") if "FAT ID" in headers else -1
-        unique_fat_ids = set()
-        if fat_id_col_idx >= 0:
-            for row in data_rows:
-                fat_id = row[fat_id_col_idx]
-                if fat_id and str(fat_id).strip():
-                    unique_fat_ids.add(str(fat_id).strip().upper())
-        
-        fat_count = len(unique_fat_ids)
-        if fat_count <= 20:
-            capacity = "48C"
-        elif fat_count <= 30:
-            capacity = "72C"
-        elif fat_count <= 40:
-            capacity = "96C"
+        if len(sorted_fdts) <= 1:
+            fdt_name = sorted_fdts[0] if sorted_fdts else "FDT 01"
+            fdt_worksheets[fdt_name] = template_ws
         else:
-            capacity = "96C"  # Default untuk lebih dari 40
+            for idx, fdt_name in enumerate(sorted_fdts):
+                if idx == 0:
+                    ws = template_ws
+                    ws.title = f"Homepass Database {fdt_name}"
+                else:
+                    ws = wb_template.copy_worksheet(template_ws)
+                    ws.title = f"Homepass Database {fdt_name}"
+                fdt_worksheets[fdt_name] = ws
         
-        ws_template["N3"] = capacity
-        
-        # Set formula for N4
-        ws_template["N4"] = f'=": "&COUNTA(G10:G{max_row_data})&" HP /Aerial"'
-        
-        # Delete unused rows
-        last_template_row = ws_template.max_row
-        if max_row_data < last_template_row:
-            delete_start = max_row_data + 1
-            delete_count = last_template_row - max_row_data
-            ws_template.delete_rows(delete_start, delete_count)
+        # 2. Populate each worksheet with its own FDT data
+        for fdt_name in sorted_fdts:
+            ws = fdt_worksheets[fdt_name]
+            data_rows = fdt_processed_rows.get(fdt_name, [])
+            
+            start_row = 10
+            for i, row in enumerate(data_rows, start=start_row):
+                row_dict = dict(zip(headers, row))
+                
+                for key, target in header_map.items():
+                    if key not in row_dict:
+                        continue
+                    val = row_dict[key]
+                    if val in (None, ""):
+                        continue
+                    
+                    if isinstance(target, list):
+                        for col in target:
+                            cell = ws[f"{col}{i}"]
+                            cell.value = val
+                            cell.border = thin_border
+                    elif key == "name_1":
+                        combined = str(val)
+                        if row_dict.get("name_2"):
+                            combined += " " + str(row_dict["name_2"])
+                        cell = ws[f"{target}{i}"]
+                        cell.value = combined
+                        cell.border = thin_border
+                    elif key == "name_2":
+                        continue
+                    else:
+                        cell = ws[f"{target}{i}"]
+                        if key in ["POLE_Lat", "POLE_Lon", "latitude", "longitude"]:
+                            try:
+                                val = float(val)
+                            except:
+                                pass
+                        
+                        cell.value = val
+                        cell.border = thin_border
+                        
+                        if key == "Tube Colour":
+                            color_hex = tube_colors.get(str(val).strip(), None)
+                            if color_hex:
+                                cell.fill = PatternFill(start_color=color_hex, end_color=color_hex, fill_type="solid")
+            
+            # Set FDT coordinates for this sheet
+            lat_fdt, lon_fdt = all_fdt_coords.get(fdt_name, (None, None))
+            # Fallback if specific not found, use first found or None
+            if not lat_fdt and all_fdt_coords:
+                lat_fdt, lon_fdt = next(iter(all_fdt_coords.values()))
+            if lat_fdt and lon_fdt:
+                ws["N6"].value = f": {lat_fdt},{lon_fdt}"
+            
+            # Set cluster/location name
+            ws["C5"].value = lokasi_nama_clean
+            ws["Y10"].value = lokasi_nama_clean
+            ws["Z10"].value = lokasi_nama_clean
+            
+            # Reverse geocode and autocopy (using the first populated row, i=10)
+            max_row_data = start_row + len(data_rows) - 1
+            if len(data_rows) > 0:
+                lat_source = ws["J10"].value
+                lon_source = ws["K10"].value
+                
+                if lat_source in (None, "") or lon_source in (None, ""):
+                    lat_source = ws["AV10"].value
+                    lon_source = ws["AW10"].value
+                
+                geo_result = self._empty_geo_result()
+                if lat_source not in (None, "") and lon_source not in (None, ""):
+                    geo_result = self.reverse_geocode(lat_source, lon_source)
+                
+                ws["M10"] = geo_result["province"]
+                ws["N10"] = geo_result["kabupaten"]
+                ws["W10"] = geo_result["kabupaten"]
+                ws["O10"] = geo_result["kecamatan"]
+                ws["P10"] = geo_result["desa"]
+                ws["Q10"] = geo_result["kodepos"]
+                ws["AD10"] = geo_result["jalan"]  # Nama jalan
+                
+                # Autocopy geocoding and cluster data to all rows
+                for r in range(11, max_row_data + 1):
+                    ws[f"M{r}"] = ws["M10"].value
+                    ws[f"N{r}"] = ws["N10"].value
+                    ws[f"W{r}"] = ws["W10"].value
+                    ws[f"O{r}"] = ws["O10"].value
+                    ws[f"P{r}"] = ws["P10"].value
+                    ws[f"Q{r}"] = ws["Q10"].value
+                    ws[f"AD{r}"] = ws["AD10"].value  # Autocopy nama jalan
+                    ws[f"Y{r}"] = ws["Y10"].value    # Autocopy cluster Y
+                    ws[f"Z{r}"] = ws["Z10"].value    # Autocopy cluster Z
+            
+            # Count unique FAT IDs to determine capacity (Cell N3)
+            fat_id_col_idx = headers.index("FAT ID") if "FAT ID" in headers else -1
+            unique_fat_ids = set()
+            if fat_id_col_idx >= 0:
+                for row in data_rows:
+                    fat_id = row[fat_id_col_idx]
+                    if fat_id and str(fat_id).strip():
+                        unique_fat_ids.add(str(fat_id).strip().upper())
+            
+            fat_count = len(unique_fat_ids)
+            if fat_count <= 20:
+                capacity = "48C"
+            elif fat_count <= 30:
+                capacity = "72C"
+            elif fat_count <= 40:
+                capacity = "96C"
+            else:
+                capacity = "96C"  # Default untuk lebih dari 40
+            
+            ws["N3"] = capacity
+            
+            # Set formula for N4
+            if len(data_rows) > 0:
+                ws["N4"] = f'=": "&COUNTA(G10:G{max_row_data})&" HP /Aerial"'
+            else:
+                ws["N4"] = '=": 0 HP /Aerial"'
+            
+            # Delete unused rows from template
+            last_template_row = ws.max_row
+            if max_row_data < last_template_row:
+                delete_start = max_row_data + 1
+                delete_count = last_template_row - max_row_data
+                ws.delete_rows(delete_start, delete_count)
         
         # Save final output
         output_buffer = io.BytesIO()
