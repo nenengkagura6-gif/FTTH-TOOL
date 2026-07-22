@@ -130,17 +130,25 @@ class KMLEngine:
         self._init_workbook()
         all_folders = find_all_folders(self.doc.documentElement)
         
-        # Process FDT columns
+        # Detect if KML has multiple FDTs in line folder names
         fdt_map = {"FDT 01": "C", "FDT 02": "I", "FDT 03": "O"}
+        detected_fdts = set()
+        for folder in all_folders:
+            name = get_folder_name(folder).upper()
+            m = re.search(r'\bFDT\s*(\d+)\b', name)
+            if m:
+                detected_fdts.add(f"FDT {int(m.group(1)):02d}")
+        is_multi_fdt = len(detected_fdts) > 1
         
+        # Process FDT columns
         for fdt_name, col in fdt_map.items():
             self._process_fdt_column(col, all_folders, fdt_name)
         
         # Process FAT per Line
-        self._process_fat_per_line(fdt_map)
+        self._process_fat_per_line(fdt_map, is_multi_fdt)
         
         # Process Pole Counts
-        self._process_pole_counts(all_folders, fdt_map)
+        self._process_pole_counts(all_folders, fdt_map, is_multi_fdt)
         
         # Process HP Cover (remains global)
         self._process_hp_cover(all_folders)
@@ -206,8 +214,8 @@ class KMLEngine:
                         self._safe_add(self.sheet_ae, cell, length)
                 break
     
-    def _process_fat_per_line(self, fdt_map: Dict[str, str]) -> None:
-        """Process FAT counts per Line, split per FDT."""
+    def _process_fat_per_line(self, fdt_map: Dict[str, str], is_multi_fdt: bool) -> None:
+        """Process FAT counts per Line, split per FDT (or all columns for single FDT)."""
         for line_folder in self.doc.getElementsByTagName("Folder"):
             line_name = get_folder_name(line_folder).upper()
             
@@ -218,25 +226,31 @@ class KMLEngine:
                     break
             
             if matched_line:
-                fdt_name = get_fdt_name_from_ancestors(line_folder)
-                col = fdt_map.get(fdt_name)
+                total_fat = 0
+                has_fat = False
+                for sub_folder in line_folder.getElementsByTagName("Folder"):
+                    sub_name = get_folder_name(sub_folder).upper()
+                    if sub_name == "FAT":
+                        total_fat = len(sub_folder.getElementsByTagName("Placemark"))
+                        has_fat = True
+                        break
                 
-                if col:
-                    total_fat = 0
-                    has_fat = False
-                    for sub_folder in line_folder.getElementsByTagName("Folder"):
-                        sub_name = get_folder_name(sub_folder).upper()
-                        if sub_name == "FAT":
-                            total_fat = len(sub_folder.getElementsByTagName("Placemark"))
-                            has_fat = True
-                            break
-                    
-                    if has_fat:
-                        row_map = {"LINE A": 36, "LINE B": 37, "LINE C": 38, "LINE D": 39}
-                        self.sheet_ae[f"{col}{row_map[matched_line]}"] = total_fat
+                if has_fat:
+                    row_map = {"LINE A": 36, "LINE B": 37, "LINE C": 38, "LINE D": 39}
+                    row = row_map[matched_line]
+                    if is_multi_fdt:
+                        # Multi-FDT: write only to the specific FDT column
+                        fdt_name = get_fdt_name_from_ancestors(line_folder)
+                        col = fdt_map.get(fdt_name)
+                        if col:
+                            self.sheet_ae[f"{col}{row}"] = total_fat
+                    else:
+                        # Single FDT: write to ALL columns (backward compatible)
+                        for col in fdt_map.values():
+                            self.sheet_ae[f"{col}{row}"] = total_fat
     
-    def _process_pole_counts(self, all_folders: List, fdt_map: Dict[str, str]) -> None:
-        """Process pole counts, split per FDT."""
+    def _process_pole_counts(self, all_folders: List, fdt_map: Dict[str, str], is_multi_fdt: bool) -> None:
+        """Process pole counts, split per FDT or all columns for single FDT."""
         target_rows = {
             "new pole 7-4": 54,
             "new pole 7-3": 55,
@@ -246,7 +260,7 @@ class KMLEngine:
         }
         
         processed_pms = defaultdict(set)
-        pole_totals = defaultdict(int)
+        pole_totals = defaultdict(int)  # key: (fdt_name, target_name)
         
         for folder in all_folders:
             folder_name = get_folder_name(folder).strip().lower()
@@ -261,10 +275,16 @@ class KMLEngine:
                             pole_totals[key] += 1
                             
         for (fdt_name, target_name), total in pole_totals.items():
-            col = fdt_map.get(fdt_name)
-            if col:
-                row = target_rows[target_name]
-                self.sheet_ae[f"{col}{row}"] = total
+            row = target_rows[target_name]
+            if is_multi_fdt:
+                # Multi-FDT: write only to the specific FDT column
+                col = fdt_map.get(fdt_name)
+                if col:
+                    self.sheet_ae[f"{col}{row}"] = total
+            else:
+                # Single FDT: write to ALL columns (backward compatible)
+                for col in fdt_map.values():
+                    self.sheet_ae[f"{col}{row}"] = total
     
     def _process_hp_cover(self, all_folders: List) -> None:
         """Process HP Cover count."""
