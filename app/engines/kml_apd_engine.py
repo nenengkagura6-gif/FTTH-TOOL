@@ -1309,6 +1309,24 @@ def _process_kml_tree(tree):
     for line_folder in line_folders:
         reorder_line_folders(line_folder)
 
+    # Step 8b: Sort HP COVER subfolders A-Z by name
+    for line_folder in line_folders:
+        for sub in line_folder.findall("Folder"):
+            sname = sub.find("name")
+            if sname is not None and "HP COVER" in (sname.text or "").upper():
+                # Collect all child Folder elements (subfolders = FAT zones like A01, B02, etc.)
+                child_folders = sub.findall("Folder")
+                if not child_folders:
+                    continue
+                # Remove all child Folders from hp_cover folder
+                for cf in child_folders:
+                    sub.remove(cf)
+                # Sort by name A-Z (case-insensitive)
+                child_folders.sort(key=lambda f: (f.find("name").text or "").strip().upper() if f.find("name") is not None else "")
+                # Re-insert in sorted order
+                for cf in child_folders:
+                    sub.append(cf)
+
     # Count totals for logging
     total_fat_count = 0
     total_hp_count = 0
