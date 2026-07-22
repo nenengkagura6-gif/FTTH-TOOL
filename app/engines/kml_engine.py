@@ -10,11 +10,34 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.workbook.workbook import Workbook
 from xml.dom import minidom
+from collections import defaultdict
 
 from utils.commons import (
     parse_kml_content, find_all_folders, get_folder_name,
     parse_coords, clean_project_name
 )
+
+
+def get_direct_child_name(node: minidom.Element) -> str:
+    """Get the text value of the direct child <name> tag of a node."""
+    for child in node.childNodes:
+        if child.nodeType == minidom.Node.ELEMENT_NODE and child.nodeName == "name":
+            if child.firstChild:
+                return child.firstChild.nodeValue.strip()
+    return ""
+
+
+def get_fdt_name_from_ancestors(node: minidom.Element) -> str:
+    """Find the FDT name by traversing up the parent nodes to find a Folder containing FDT name."""
+    curr = node
+    while curr is not None:
+        if curr.nodeType == minidom.Node.ELEMENT_NODE and curr.nodeName == "Folder":
+            name = get_direct_child_name(curr)
+            match = re.search(r'\bFDT\s*(\d+)\b', name, re.IGNORECASE)
+            if match:
+                return f"FDT {int(match.group(1)):02d}"
+        curr = curr.parentNode
+    return "FDT 01" # Default fallback
 
 
 class KMLEngine:
@@ -108,20 +131,18 @@ class KMLEngine:
         all_folders = find_all_folders(self.doc.documentElement)
         
         # Process FDT columns
-        fdt_columns = ["C", "I", "O"]
-        fdt_folders = [f for f in all_folders if "FDT" in get_folder_name(f).upper()]
+        fdt_map = {"FDT 01": "C", "FDT 02": "I", "FDT 03": "O"}
         
-        for idx, fdt_folder in enumerate(fdt_folders[:3]):
-            col = fdt_columns[idx]
-            self._process_fdt_column(col, all_folders)
+        for fdt_name, col in fdt_map.items():
+            self._process_fdt_column(col, all_folders, fdt_name)
         
         # Process FAT per Line
-        self._process_fat_per_line()
+        self._process_fat_per_line(fdt_map)
         
         # Process Pole Counts
-        self._process_pole_counts(all_folders)
+        self._process_pole_counts(all_folders, fdt_map)
         
-        # Process HP Cover
+        # Process HP Cover (remains global)
         self._process_hp_cover(all_folders)
         
         # Save output to bytes
@@ -137,11 +158,15 @@ class KMLEngine:
             "content": output_buffer.getvalue()
         }
     
-    def _process_fdt_column(self, col: str, all_folders: List) -> None:
+    def _process_fdt_column(self, col: str, all_folders: List, target_fdt: str) -> None:
         """Process Distribution Cable for an FDT column."""
         processed_pms = set()  # Track processed Placemarks to avoid double counting
+        total_sling_length = 0.0
         
         for sub in all_folders:
+            if get_fdt_name_from_ancestors(sub) != target_fdt:
+                continue
+                
             if "distribution" in get_folder_name(sub).lower():
                 for pm in sub.getElementsByTagName("Placemark"):
                     pm_id = id(pm)
@@ -158,15 +183,15 @@ class KMLEngine:
             
             # Process Sling Wire
             if "sling" in get_folder_name(sub).lower():
-                sling_pms = set()
-                total_sling_length = 0
                 for pm in sub.getElementsByTagName("Placemark"):
                     pm_id = id(pm)
-                    if pm_id in sling_pms:
+                    if pm_id in processed_pms:
                         continue
-                    sling_pms.add(pm_id)
+                    processed_pms.add(pm_id)
                     total_sling_length += self._calculate_length_from_placemark(pm)
-                self.sheet_ae[f"{col}15"] = round(total_sling_length)
+                    
+        if total_sling_length > 0:
+            self.sheet_ae[f"{col}15"] = round(total_sling_length)
     
     def _process_cable_entry(self, col: str, pm_name: str, length: float) -> None:
         """Process a cable entry based on line and type."""
@@ -181,51 +206,65 @@ class KMLEngine:
                         self._safe_add(self.sheet_ae, cell, length)
                 break
     
-    def _process_fat_per_line(self) -> None:
-        """Process FAT counts per Line."""
-        fdt_columns = ["C", "I", "O"]
-        
+    def _process_fat_per_line(self, fdt_map: Dict[str, str]) -> None:
+        """Process FAT counts per Line, split per FDT."""
         for line_folder in self.doc.getElementsByTagName("Folder"):
             line_name = get_folder_name(line_folder).upper()
             
-            if line_name in ["LINE A", "LINE B", "LINE C", "LINE D"]:
-                total_fat = 0
+            matched_line = None
+            for l in ["LINE A", "LINE B", "LINE C", "LINE D"]:
+                if l in line_name:
+                    matched_line = l
+                    break
+            
+            if matched_line:
+                fdt_name = get_fdt_name_from_ancestors(line_folder)
+                col = fdt_map.get(fdt_name)
                 
-                for sub_folder in line_folder.getElementsByTagName("Folder"):
-                    sub_name = get_folder_name(sub_folder).upper()
-                    if sub_name == "FAT":
-                        total_fat = len(sub_folder.getElementsByTagName("Placemark"))
-                        break
-                
-                # Write to appropriate cell
-                row_map = {"LINE A": 36, "LINE B": 37, "LINE C": 38, "LINE D": 39}
-                for col in fdt_columns:
-                    self.sheet_ae[f"{col}{row_map[line_name]}"] = total_fat
+                if col:
+                    total_fat = 0
+                    has_fat = False
+                    for sub_folder in line_folder.getElementsByTagName("Folder"):
+                        sub_name = get_folder_name(sub_folder).upper()
+                        if sub_name == "FAT":
+                            total_fat = len(sub_folder.getElementsByTagName("Placemark"))
+                            has_fat = True
+                            break
+                    
+                    if has_fat:
+                        row_map = {"LINE A": 36, "LINE B": 37, "LINE C": 38, "LINE D": 39}
+                        self.sheet_ae[f"{col}{row_map[matched_line]}"] = total_fat
     
-    def _process_pole_counts(self, all_folders: List) -> None:
-        """Process pole counts."""
-        target_counts = {
-            "new pole 7-4": "C54",
-            "new pole 7-2.5": "C56",
-            "new pole 7-3": "C55",
-            "new pole 9-4": "C58",
-            "existing pole emr 7-4": "C61",
+    def _process_pole_counts(self, all_folders: List, fdt_map: Dict[str, str]) -> None:
+        """Process pole counts, split per FDT."""
+        target_rows = {
+            "new pole 7-4": 54,
+            "new pole 7-3": 55,
+            "new pole 7-2.5": 56,
+            "new pole 9-4": 58,
+            "existing pole emr 7-4": 61,
         }
-        folder_totals = {key: 0 for key in target_counts}
-        processed_pms = {key: set() for key in target_counts}
+        
+        processed_pms = defaultdict(set)
+        pole_totals = defaultdict(int)
         
         for folder in all_folders:
             folder_name = get_folder_name(folder).strip().lower()
-            for target_name in target_counts:
+            for target_name, row in target_rows.items():
                 if folder_name == target_name:
+                    fdt_name = get_fdt_name_from_ancestors(folder)
                     for pm in folder.getElementsByTagName("Placemark"):
                         pm_id = id(pm)
-                        if pm_id not in processed_pms[target_name]:
-                            processed_pms[target_name].add(pm_id)
-                            folder_totals[target_name] += 1
-        
-        for name, total in folder_totals.items():
-            self.sheet_ae[target_counts[name]] = total
+                        key = (fdt_name, target_name)
+                        if pm_id not in processed_pms[key]:
+                            processed_pms[key].add(pm_id)
+                            pole_totals[key] += 1
+                            
+        for (fdt_name, target_name), total in pole_totals.items():
+            col = fdt_map.get(fdt_name)
+            if col:
+                row = target_rows[target_name]
+                self.sheet_ae[f"{col}{row}"] = total
     
     def _process_hp_cover(self, all_folders: List) -> None:
         """Process HP Cover count."""
