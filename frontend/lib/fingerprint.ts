@@ -1,67 +1,134 @@
 /**
- * Simple Canvas Fingerprint Generator
- * Generates a unique device signature based on browser canvas rendering artifacts.
- * Zero external dependencies. Safe to run in browser client.
+ * Device fingerprint untuk pembatasan jumlah perangkat.
+ *
+ * Versi sebelumnya (prefix "dr_") hanya memakai satu sinyal — hasil render
+ * canvas — lalu memampatkannya jadi hash 32-bit. Masalahnya bukan lebar
+ * hash-nya, melainkan INPUT-nya: dua laptop berbeda dengan kombinasi
+ * OS + browser + GPU yang sama menghasilkan canvas dataURL yang persis
+ * identik, sehingga hash-nya juga identik. Akibatnya pengguna yang tidak
+ * saling kenal bisa terbaca sebagai satu perangkat yang sama, lalu terkena
+ * aturan anti-abuse paket gratis dan terkunci tanpa sebab.
+ *
+ * Versi ini (prefix "dv2_") menggabungkan beberapa sinyal independen —
+ * canvas, GPU lewat WebGL, dimensi layar, zona waktu, jumlah core, dan
+ * platform — sehingga dua mesin dengan spesifikasi mirip masih bisa
+ * dibedakan oleh zona waktu, resolusi, atau jumlah core-nya.
+ *
+ * Batas yang jujur: fingerprint browser TIDAK BISA membedakan dua mesin
+ * yang benar-benar identik dalam segala hal. Karena itu sinyal yang gagal
+ * dikumpulkan ditandai, dan fungsi RPC di server melewati aturan
+ * anti-abuse ketika keyakinannya rendah — lebih baik meloloskan penyalahguna
+ * sesekali daripada mengunci pengguna yang sah.
  */
+
+/** Naikkan kalau susunan sinyal berubah, supaya hash lama bisa dibedakan. */
+const FP_VERSION = "dv2"
+
+/** Ambil satu sinyal dengan aman; kegagalan tidak boleh menjatuhkan yang lain. */
+function safe(fn: () => string | number | undefined | null): string {
+  try {
+    const v = fn()
+    return v === undefined || v === null ? "" : String(v)
+  } catch {
+    return ""
+  }
+}
+
+/** Hasil render canvas — dipengaruhi GPU, driver, dan font rendering OS. */
+function canvasSignal(): string {
+  const canvas = document.createElement("canvas")
+  const ctx = canvas.getContext("2d")
+  if (!ctx) return ""
+
+  ctx.textBaseline = "top"
+  ctx.font = "14px 'Arial', 'Times New Roman', sans-serif"
+  ctx.textBaseline = "alphabetic"
+  ctx.fillStyle = "#f60"
+  ctx.fillRect(125, 1, 62, 20)
+  ctx.fillStyle = "#069"
+  ctx.fillText("FTTH-Tool, Fingerprint!", 2, 15)
+  ctx.fillStyle = "rgba(102, 204, 0, 0.7)"
+  ctx.fillText("Device_Lock_Security", 4, 17)
+  ctx.shadowBlur = 10
+  ctx.shadowColor = "blue"
+  ctx.fillStyle = "red"
+  ctx.fillRect(20, 20, 10, 10)
+
+  return canvas.toDataURL()
+}
+
+/** Vendor & model GPU. Pembeda kuat antar mesin dengan OS/browser sama. */
+function webglSignal(): string {
+  const canvas = document.createElement("canvas")
+  const gl =
+    (canvas.getContext("webgl") ||
+      canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null
+  if (!gl) return ""
+
+  const parts: string[] = []
+  const dbg = gl.getExtension("WEBGL_debug_renderer_info")
+  if (dbg) {
+    parts.push(String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) ?? ""))
+    parts.push(String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? ""))
+  }
+  parts.push(String(gl.getParameter(gl.VERSION) ?? ""))
+  parts.push(String(gl.getParameter(gl.MAX_TEXTURE_SIZE) ?? ""))
+  return parts.join("|")
+}
+
+/**
+ * Hash FNV-1a 128-bit, dirakit dari empat jalur 32-bit dengan offset basis
+ * berbeda. Cukup lebar sehingga tabrakan hash sendiri bisa diabaikan —
+ * yang tersisa hanya tabrakan karena input yang memang sama.
+ */
+function hash128(input: string): string {
+  const seeds = [0x811c9dc5, 0x01000193, 0x9e3779b9, 0x85ebca6b]
+  const out: string[] = []
+
+  for (const seed of seeds) {
+    let h = seed >>> 0
+    for (let i = 0; i < input.length; i++) {
+      h ^= input.charCodeAt(i)
+      // FNV prime 16777619, dikalikan tanpa overflow 53-bit
+      h = Math.imul(h, 0x01000193) >>> 0
+    }
+    out.push(h.toString(16).padStart(8, "0"))
+  }
+  return out.join("")
+}
+
 export function getDeviceFingerprint(): string {
   if (typeof window === "undefined") return "server"
 
-  try {
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return "no-canvas"
+  const signals: string[] = [
+    safe(canvasSignal),
+    safe(webglSignal),
+    safe(() => `${screen.width}x${screen.height}x${screen.colorDepth}`),
+    safe(() => screen.availWidth + "x" + screen.availHeight),
+    safe(() => Intl.DateTimeFormat().resolvedOptions().timeZone),
+    safe(() => new Date().getTimezoneOffset()),
+    safe(() => navigator.language),
+    safe(() => (navigator.languages || []).join(",")),
+    safe(() => navigator.hardwareConcurrency),
+    safe(() => (navigator as any).deviceMemory),
+    safe(() => (navigator as any).userAgentData?.platform || navigator.platform),
+    safe(() => navigator.maxTouchPoints),
+    safe(() => devicePixelRatio),
+  ]
 
-    // Draw text with multiple fonts, colors, and shadows to create unique rendering artifacts
-    ctx.textBaseline = "top"
-    ctx.font = "14px 'Arial', 'Times New Roman', sans-serif"
-    ctx.textBaseline = "alphabetic"
-    
-    // Draw rectangles
-    ctx.fillStyle = "#f60"
-    ctx.fillRect(125, 1, 62, 20)
-    
-    // Draw texts
-    ctx.fillStyle = "#069"
-    ctx.fillText("FTTH-Tool, Fingerprint!", 2, 15)
-    ctx.fillStyle = "rgba(102, 204, 0, 0.7)"
-    ctx.fillText("Device_Lock_Security", 4, 17)
+  // Canvas dan WebGL adalah satu-satunya sinyal berentropi tinggi di sini.
+  // Sisanya — layar, zona waktu, bahasa, jumlah core — berentropi rendah:
+  // ribuan pengguna di wilayah yang sama mudah memiliki kombinasi identik.
+  // Jadi menghitung jumlah sinyal saja tidak cukup; kalau kedua sinyal kuat
+  // gagal (browser privasi yang memblokir canvas & WebGL), identitasnya
+  // ditandai lemah supaya server melewati pembatasan alih-alih mengunci
+  // orang berdasarkan tebakan.
+  const hasStrongSignal = signals[0].length > 0 || signals[1].length > 0
+  const collected = signals.filter((s) => s.length > 0).length
 
-    // Shadow effects
-    ctx.shadowBlur = 10
-    ctx.shadowColor = "blue"
-    ctx.fillStyle = "red"
-    ctx.fillRect(20, 20, 10, 10)
+  if (!hasStrongSignal || collected < 6) return "lowconfidence"
 
-    const dataUrl = canvas.toDataURL()
-
-    // Fast hashing function for canvas data URL (DJB2a-like)
-    let hash = 0
-    if (dataUrl.length === 0) return "empty"
-    for (let i = 0; i < dataUrl.length; i++) {
-      const char = dataUrl.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash |= 0 // Convert to 32bit integer
-    }
-    return "dr_" + Math.abs(hash).toString(16)
-  } catch (e) {
-    // Fallback based on user agent and screen metrics if canvas throws an error
-    let fallbackStr = ""
-    if (typeof navigator !== "undefined") {
-      fallbackStr += navigator.userAgent || ""
-      fallbackStr += navigator.language || ""
-    }
-    if (typeof window !== "undefined" && window.screen) {
-      fallbackStr += `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`
-    }
-    
-    let hash = 0
-    for (let i = 0; i < fallbackStr.length; i++) {
-      const char = fallbackStr.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash |= 0
-    }
-    return "fallback_" + Math.abs(hash).toString(16)
-  }
+  return `${FP_VERSION}_${hash128(signals.join("~"))}`
 }
 
 export function getDeviceTypeInfo(): { type: "mobile" | "desktop"; name: string } {

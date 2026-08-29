@@ -14,6 +14,34 @@ export type Json =
 export interface Database {
     public: {
         Tables: {
+            plan_prices: {
+                Row: {
+                    plan: string
+                    billing_cycle: string
+                    /** Harga rupiah penuh (IDR tidak dipakai dengan pecahan sen). */
+                    price_idr: number
+                    currency: string
+                    is_active: boolean
+                    updated_at: string
+                }
+                Insert: {
+                    plan: string
+                    billing_cycle: string
+                    price_idr: number
+                    currency?: string
+                    is_active?: boolean
+                    updated_at?: string
+                }
+                Update: {
+                    plan?: string
+                    billing_cycle?: string
+                    price_idr?: number
+                    currency?: string
+                    is_active?: boolean
+                    updated_at?: string
+                }
+                Relationships: []
+            }
             payment_confirmations: {
                 Row: {
                     id: string
@@ -37,12 +65,15 @@ export interface Database {
                     user_id: string
                     plan: 'basic' | 'pro' | 'enterprise'
                     billing_cycle: 'monthly' | 'yearly'
-                    price_cents: number
+                    /** Diisi server oleh tr_enforce_payment_price — jangan dikirim client. */
+                    price_cents?: number
                     currency?: string
                     sender_name: string
                     sender_bank: string
-                    amount_paid: number
+                    /** Diisi server oleh tr_enforce_payment_price — jangan dikirim client. */
+                    amount_paid?: number
                     receipt_url: string
+                    /** Dipaksa 'pending' oleh trigger saat INSERT. */
                     status?: 'pending' | 'approved' | 'rejected'
                     admin_notes?: string | null
                     created_at?: string
@@ -284,7 +315,7 @@ export interface Database {
                     id: string
                     user_id: string
                     plan: 'free' | 'basic' | 'pro' | 'enterprise'
-                    status: 'active' | 'paused' | 'cancelled' | 'past_due' | 'trialing'
+                    status: 'active' | 'paused' | 'cancelled' | 'past_due' | 'trialing' | 'expired'
                     billing_cycle: 'monthly' | 'yearly' | null
                     price_cents: number | null
                     currency: string
@@ -303,7 +334,7 @@ export interface Database {
                     id?: string
                     user_id: string
                     plan: 'free' | 'basic' | 'pro' | 'enterprise'
-                    status?: 'active' | 'paused' | 'cancelled' | 'past_due' | 'trialing'
+                    status?: 'active' | 'paused' | 'cancelled' | 'past_due' | 'trialing' | 'expired'
                     billing_cycle?: 'monthly' | 'yearly' | null
                     price_cents?: number | null
                     currency?: string
@@ -322,7 +353,7 @@ export interface Database {
                     id?: string
                     user_id?: string
                     plan?: 'free' | 'basic' | 'pro' | 'enterprise'
-                    status?: 'active' | 'paused' | 'cancelled' | 'past_due' | 'trialing'
+                    status?: 'active' | 'paused' | 'cancelled' | 'past_due' | 'trialing' | 'expired'
                     billing_cycle?: 'monthly' | 'yearly' | null
                     price_cents?: number | null
                     currency?: string

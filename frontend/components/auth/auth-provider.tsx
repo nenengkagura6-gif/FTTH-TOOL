@@ -69,7 +69,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const initializeAuth = async () => {
             try {
                 // Timeout helper
-                const withTimeout = <T,>(promise: Promise<T>, ms = 5000): Promise<T> => {
+                // 15 detik. Batas 5 detik sebelumnya membuat pengguna dengan
+                // koneksi lambat gagal memulihkan sesi lalu dilempar ke /login
+                // padahal sesinya masih sah.
+                const withTimeout = <T,>(promise: Promise<T>, ms = 15000): Promise<T> => {
                     return Promise.race([
                         promise,
                         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))

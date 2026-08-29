@@ -50,8 +50,31 @@ export default function PricingPage({ params }: PageProps) {
   const [lastRejectedPayment, setLastRejectedPayment] = useState<any>(null)
   const [loadingPaymentCheck, setLoadingPaymentCheck] = useState(true)
 
+  // Harga resmi dari server, dipetakan sebagai { plan: harga_rupiah }
+  const [serverPrices, setServerPrices] = useState<Record<string, number>>({})
+
   useEffect(() => {
     setMounted(true)
+
+    // plan_prices boleh dibaca publik, jadi tidak perlu menunggu login
+    const loadPrices = async () => {
+      try {
+        const supabase = getSupabaseClient()
+        const { data, error } = await supabase
+          .from('plan_prices')
+          .select('plan, price_idr')
+          .eq('billing_cycle', 'monthly')
+          .eq('is_active', true)
+
+        if (error || !data) return
+        setServerPrices(
+          Object.fromEntries(data.map((r) => [r.plan, r.price_idr]))
+        )
+      } catch {
+        // Biarkan kosong — getPlanPriceIDR jatuh ke nilai cadangan
+      }
+    }
+    loadPrices()
   }, [])
 
   useEffect(() => {
@@ -183,21 +206,19 @@ export default function PricingPage({ params }: PageProps) {
       // siapa pun. Panel admin membuat signed URL berumur pendek saat dibuka.
 
       // 3. Insert payment confirmation request in DB
-      const priceCents = selectedPlan.target === 'pro' ? 1667 : 300 // USD cents representation ($16.67 is about Rp 250k)
-      const amountPaid = selectedPlan.target === 'pro' ? 250000 : 45000 // Converted IDR amount
-
+      // Kolom harga (price_cents, amount_paid, currency) dan status sengaja
+      // TIDAK dikirim. Nilainya diisi server lewat trigger
+      // tr_enforce_payment_price dari tabel plan_prices — kalau dikirim dari
+      // sini, user bisa mengarang nominal pembayarannya sendiri.
       const { error: insertError } = await supabase
         .from('payment_confirmations')
         .insert({
           user_id: user.id,
           plan: selectedPlan.target as 'basic' | 'pro' | 'enterprise',
           billing_cycle: 'monthly',
-          price_cents: priceCents,
           sender_name: senderName,
           sender_bank: senderBank,
-          amount_paid: amountPaid,
           receipt_url: filePath,
-          status: 'pending'
         })
 
       if (insertError) throw insertError
@@ -214,10 +235,19 @@ export default function PricingPage({ params }: PageProps) {
     }
   }
 
+  /**
+   * Harga diambil dari tabel plan_prices — sumber yang sama dipakai trigger
+   * server saat menyimpan konfirmasi pembayaran. Sebelumnya angka ini
+   * dihardcode di dua tempat sekaligus (tampilan & INSERT), jadi bisa
+   * menyimpang satu sama lain. Angka di bawah hanya cadangan kalau query
+   * gagal, supaya modal checkout tidak menampilkan kosong.
+   */
+  const FALLBACK_PRICE_IDR: Record<string, number> = { basic: 45000, pro: 250000 }
+
   const getPlanPriceIDR = (target: string) => {
-    if (target === 'basic') return "45.000"
-    if (target === 'pro') return "250.000"
-    return "0"
+    if (target === 'free') return "0"
+    const idr = serverPrices[target] ?? FALLBACK_PRICE_IDR[target]
+    return idr === undefined ? "0" : idr.toLocaleString('id-ID')
   }
 
   const plans = [

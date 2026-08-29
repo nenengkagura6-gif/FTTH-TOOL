@@ -26,8 +26,27 @@ class DuplikatEngine:
         """Set target keywords for folder filtering."""
         self.target_keywords = keywords
     
+    @staticmethod
+    def _unwrap_kmz(content: bytes) -> bytes:
+        """
+        Kembalikan XML KML dari dalam arsip KMZ.
+
+        KMZ adalah file ZIP; dikenali dari magic number-nya, bukan dari
+        ekstensi, supaya file bernama .kml yang sebenarnya KMZ tetap terbaca.
+        """
+        if content[:4] != b"PK\x03\x04":
+            return content
+
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(content)) as kmz:
+            names = [n for n in kmz.namelist() if n.lower().endswith(".kml")]
+            if not names:
+                raise ValueError("Arsip KMZ tidak berisi file .kml")
+            return kmz.read(names[0])
+
     def parse_kml(self, content: bytes, filename: str = "input.kml") -> List[Dict]:
-        """Parse KML content and extract POLE/HP points."""
+        """Parse KML/KMZ content and extract POLE/HP points."""
+        content = self._unwrap_kmz(content)
         parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
         tree = etree.parse(io.BytesIO(content), parser)
         root = tree.getroot()

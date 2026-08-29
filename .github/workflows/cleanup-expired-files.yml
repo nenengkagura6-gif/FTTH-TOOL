@@ -1,0 +1,96 @@
+name: Cleanup expired files
+
+# Menghapus file storage milik job yang sudah lewat masa simpan 7 hari.
+#
+# Kenapa lewat GitHub Actions dan bukan pg_cron:
+# menghapus baris dari storage.objects lewat SQL hanya membuang catatan
+# database-nya — byte file tetap tertinggal di S3 sebagai objek yatim yang
+# tidak bisa dihapus lagi dan tetap memakan kuota. Penghapusan yang benar
+# harus lewat Storage API, dan itu dikerjakan endpoint backend.
+#
+# pg_cron tetap menangani sisanya (menandai job kedaluwarsa, membereskan
+# job macet, reset kuota bulanan).
+#
+# Secret yang dibutuhkan (Settings > Secrets and variables > Actions):
+#   BACKEND_URL        contoh: https://nenengkagura-ftthtools.hf.space
+#   MAINTENANCE_TOKEN  sama persis dengan secret di Hugging Face Space
+
+on:
+  schedule:
+    # 03:10 UTC = 10:10 WIB, setiap hari.
+    # Menit non-bulat sengaja: jam bulat adalah waktu tersibuk di
+    # infrastruktur GitHub Actions dan sering tertunda lama.
+    - cron: "10 3 * * *"
+  # Tombol "Run workflow" di tab Actions untuk uji manual
+  workflow_dispatch:
+
+# Kalau run sebelumnya masih jalan, jangan menumpuk
+concurrency:
+  group: cleanup-expired-files
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Panggil endpoint maintenance
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          MAINTENANCE_TOKEN: ${{ secrets.MAINTENANCE_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BACKEND_URL:-}" ] || [ -z "${MAINTENANCE_TOKEN:-}" ]; then
+            echo "::error::Secret BACKEND_URL dan/atau MAINTENANCE_TOKEN belum diset."
+            exit 1
+          fi
+
+          # Hugging Face free tier menidurkan Space setelah idle. Request
+          # pertama bisa habis waktu saat container dibangunkan, jadi
+          # dicoba beberapa kali dengan jeda.
+          for attempt in 1 2 3; do
+            echo "Percobaan $attempt..."
+
+            http_code=$(curl -sS -w '%{http_code}' -o response.json \
+              --max-time 120 \
+              -X POST "${BACKEND_URL}/api/v1/maintenance/cleanup" \
+              -H "X-Maintenance-Token: ${MAINTENANCE_TOKEN}" \
+              || echo "000")
+
+            if [ "$http_code" = "200" ]; then
+              echo "Berhasil:"
+              cat response.json
+              echo ""
+              # Tampilkan ringkasannya di halaman Summary
+              {
+                echo "### Cleanup berhasil"
+                echo ""
+                echo '```json'
+                cat response.json
+                echo ""
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+
+            echo "HTTP $http_code"
+            [ -s response.json ] && cat response.json && echo ""
+
+            # 401/403 = token salah. Mencoba ulang tidak akan menolong.
+            if [ "$http_code" = "401" ] || [ "$http_code" = "403" ]; then
+              echo "::error::Token maintenance ditolak. Pastikan secret MAINTENANCE_TOKEN di GitHub sama persis dengan yang di Hugging Face Space."
+              exit 1
+            fi
+
+            if [ "$http_code" = "503" ]; then
+              echo "::error::Backend melaporkan MAINTENANCE_TOKEN belum dikonfigurasi di sisi server."
+              exit 1
+            fi
+
+            [ "$attempt" -lt 3 ] && sleep 45
+          done
+
+          echo "::error::Cleanup gagal setelah 3 percobaan (HTTP terakhir: $http_code)."
+          exit 1

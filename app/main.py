@@ -8,24 +8,52 @@ import sys
 import secrets
 import zipfile
 import tempfile
+import threading
 from typing import List, Optional
 
 # Redirect stdout and stderr to a file for debugging
 class LoggerWriter:
+    """
+    Menyalin stdout/stderr ke file, dengan dua pengaman:
+
+    - Ukuran dibatasi. Versi sebelumnya menulis tanpa batas ke direktori
+      temp; pada instance yang berumur panjang, file itu terus tumbuh
+      sampai memenuhi disk.
+    - Penulisan dikunci. Job diproses lewat BackgroundTask di threadpool,
+      jadi beberapa thread bisa menulis bersamaan dan barisnya tercampur.
+    """
+
+    MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+
     def __init__(self, filepath):
         self.terminal = sys.stdout
+        self.filepath = filepath
         self.log = open(filepath, "a", encoding="utf-8")
+        self._lock = threading.Lock()
 
     def write(self, message):
         if self.terminal:
             self.terminal.write(message)
-        self.log.write(message)
-        self.log.flush()
+        with self._lock:
+            try:
+                if self.log.tell() > self.MAX_BYTES:
+                    # Buang isi lama; log ini hanya untuk diagnosis terbaru.
+                    self.log.close()
+                    self.log = open(self.filepath, "w", encoding="utf-8")
+                    self.log.write("--- log dipangkas (melewati batas ukuran) ---\n")
+                self.log.write(message)
+                self.log.flush()
+            except Exception:
+                # Logging tidak boleh menjatuhkan aplikasi
+                pass
 
     def flush(self):
         if self.terminal:
             self.terminal.flush()
-        self.log.flush()
+        try:
+            self.log.flush()
+        except Exception:
+            pass
 
 log_file_path = os.path.join(tempfile.gettempdir(), "app_debug.log")
 sys.stdout = LoggerWriter(log_file_path)
@@ -45,15 +73,17 @@ import sentry_sdk
 
 sentry_dsn = os.environ.get("SENTRY_DSN_PYTHON")
 if sentry_dsn:
+    # Sample rate diturunkan dari 1.0. Merekam 100% transaksi menghabiskan
+    # kuota Sentry free tier dengan cepat; error tetap terkirim seluruhnya.
     sentry_sdk.init(
         dsn=sentry_dsn,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
+        traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
     )
     print("Sentry initialized for FastAPI")
 
-APP_VERSION = "1.2.5"
-APP_BUILD_DATE = "2026-05-23"
+APP_VERSION = "1.3.0"
+APP_BUILD_DATE = "2026-08-29"
 
 app = FastAPI(
     title="KML Processing API",
@@ -779,8 +809,10 @@ async def check_duplicates(
         # Validate and read files
         file_list = []
         for f in kml_files:
-            if not f.filename.lower().endswith(".kml"):
-                raise HTTPException(status_code=400, detail=f"File {f.filename} must be .kml")
+            # .kmz ikut diterima agar konsisten dengan endpoint lain;
+            # pembukaan arsipnya ditangani DuplikatEngine.parse_kml.
+            if not f.filename.lower().endswith((".kml", ".kmz")):
+                raise HTTPException(status_code=400, detail=f"File {f.filename} must be .kml or .kmz")
             content = await read_upload_limited(f, label=f"File {f.filename}")
             file_list.append((content, f.filename))
         
@@ -951,14 +983,35 @@ async def validate_kml(kml_file: UploadFile = File(...)):
         
         # Try to parse securely
         from lxml import etree
-        parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
+        # recover=False. Dengan recover=True lxml memperbaiki XML rusak dan
+        # nyaris tidak pernah melempar error, sehingga endpoint ini SELALU
+        # menjawab valid: true — termasuk untuk file yang jelas bukan KML.
+        parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=False)
         tree = etree.parse(io.BytesIO(content), parser)
         root = tree.getroot()
         
         # Count elements
+        # Struktur KML minimal: elemen root harus <kml>
+        root_name = etree.QName(root).localname if root.tag else ""
+        if root_name.lower() != "kml":
+            return {
+                "valid": False,
+                "filename": kml_file.filename,
+                "error": f"Elemen root '{root_name}' bukan <kml>",
+            }
+
         folders = len([e for e in root.iter() if e.tag and "Folder" in str(e.tag)])
         placemarks = len([e for e in root.iter() if e.tag and "Placemark" in str(e.tag)])
         
+        if placemarks == 0:
+            return {
+                "valid": False,
+                "filename": kml_file.filename,
+                "folders": folders,
+                "placemarks": 0,
+                "error": "Tidak ada Placemark di dalam file",
+            }
+
         return {
             "valid": True,
             "filename": kml_file.filename,

@@ -185,13 +185,33 @@ export function ToolPage({
       const { data: userData } = await supabase.auth.getUser()
       if (!userData?.user) return
 
-      const { error } = await supabase.rpc('reset_user_devices', { p_user_id: userData.user.id })
+      const { data, error } = await supabase.rpc('reset_user_devices', { p_user_id: userData.user.id })
       if (error) throw error
+
+      // RPC mengembalikan { success: false, error: 'Unauthorized' } tanpa
+      // memunculkan error PostgREST. Sebelumnya hanya `error` yang diperiksa,
+      // sehingga penolakan terbaca sebagai sukses dan halaman tetap reload
+      // seolah perangkat sudah direset.
+      const res = data as { success?: boolean; error?: string; deleted_count?: number } | null
+      if (!res?.success) {
+        throw new Error(
+          res?.error === 'Unauthorized'
+            ? (locale === "id"
+                ? "Sesi tidak valid. Silakan login ulang lalu coba lagi."
+                : "Invalid session. Please sign in again and retry.")
+            : (res?.error || "Reset perangkat ditolak server")
+        )
+      }
 
       window.location.reload()
     } catch (err: any) {
       console.error("Failed to reset devices:", err)
-      alert(locale === "id" ? "Gagal mereset perangkat. Silakan coba lagi." : "Failed to reset devices. Please try again.")
+      const detail = err?.message ? `\n\n${err.message}` : ""
+      alert(
+        (locale === "id"
+          ? "Gagal mereset perangkat."
+          : "Failed to reset devices.") + detail
+      )
     } finally {
       setResettingDevices(false)
     }
@@ -440,9 +460,13 @@ export function ToolPage({
             return Math.min(prev + increment, 90)
           })
 
-          if (!progressMessage) {
-            setProgressMessage(job.status === 'queued' ? 'Antrian...' : 'Sedang diproses...')
-          }
+          // setProgressMessage dipanggil lewat bentuk fungsional. Callback
+          // setInterval menutup nilai progressMessage dari render saat
+          // startPolling dijalankan, jadi pembacaan langsung selalu melihat
+          // string kosong dan pesan bawaan terus menimpa pesan dari backend.
+          setProgressMessage(prev =>
+            prev || (job.status === 'queued' ? 'Antrian...' : 'Sedang diproses...')
+          )
         } else if (job.status === 'completed') {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
           setStatus("success")

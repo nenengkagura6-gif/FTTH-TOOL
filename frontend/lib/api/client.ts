@@ -9,6 +9,33 @@ import { ApiResponse, ApiError, HealthCheckResponse } from './types'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+/**
+ * Batas waktu setiap request. Tanpa ini, backend yang menggantung
+ * membuat fetch menunggu selamanya dan UI tidak pernah keluar dari
+ * status loading.
+ */
+const DEFAULT_TIMEOUT_MS = 30_000
+const UPLOAD_TIMEOUT_MS = 120_000
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`Permintaan melebihi batas ${Math.round(timeoutMs / 1000)} detik`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 class ApiClient {
   private baseUrl: string
   private supabase: SupabaseClient | null = null
@@ -62,7 +89,7 @@ class ApiClient {
   // Health check
   async healthCheck(): Promise<ApiResponse<HealthCheckResponse>> {
     try {
-      const response = await fetch(`${this.baseUrl}/health`)
+      const response = await fetchWithTimeout(`${this.baseUrl}/health`, {}, 10_000)
       if (!response.ok) {
         return {
           success: false,
@@ -86,10 +113,10 @@ class ApiClient {
   async get<T>(endpoint: string): Promise<ApiResponse<T>> {
     try {
       const headers = await this.getHeaders()
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await fetchWithTimeout(`${this.baseUrl}${endpoint}`, {
         method: 'GET',
         headers,
-      })
+      }, DEFAULT_TIMEOUT_MS)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -120,14 +147,14 @@ class ApiClient {
   async post<T>(endpoint: string, body: unknown): Promise<ApiResponse<T>> {
     try {
       const headers = await this.getHeaders()
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await fetchWithTimeout(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
         headers: {
           ...headers,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
-      })
+      }, DEFAULT_TIMEOUT_MS)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -164,11 +191,11 @@ class ApiClient {
       const headers = await this.getHeaders()
       delete headers['Content-Type'] // Let browser set Content-Type with boundary
 
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await fetchWithTimeout(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
         headers,
         body: formData,
-      })
+      }, UPLOAD_TIMEOUT_MS)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -218,11 +245,11 @@ class ApiClient {
       const headers = await this.getHeaders()
       delete headers['Content-Type']
 
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await fetchWithTimeout(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
         headers,
         body: formData,
-      })
+      }, UPLOAD_TIMEOUT_MS)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))

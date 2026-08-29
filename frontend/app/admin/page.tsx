@@ -198,10 +198,21 @@ export default function AdminPage() {
           
         if (updateErr) throw updateErr;
 
-        // 2. Insert subscription record
+        // 2. Batalkan langganan berjalan supaya tidak ada dua baris aktif
+        const { error: cancelErr } = await supabase
+          .from('subscriptions')
+          .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+          .eq('user_id', payment.user_id)
+          .eq('status', 'active');
+        if (cancelErr) throw cancelErr;
+
+        // 3. Insert subscription record
         const startedAt = new Date();
         const expiresAt = new Date();
-        expiresAt.setDate(startedAt.getDate() + 30); // 30 days active
+        // Durasi mengikuti siklus tagihan; sebelumnya selalu 30 hari,
+        // sehingga pembayaran tahunan hanya mendapat sebulan.
+        const days = payment.billing_cycle === 'yearly' ? 365 : 30;
+        expiresAt.setDate(expiresAt.getDate() + days);
 
         const { error: subErr } = await supabase
           .from('subscriptions')
@@ -211,7 +222,7 @@ export default function AdminPage() {
             status: 'active',
             billing_cycle: payment.billing_cycle || 'monthly',
             price_cents: payment.price_cents,
-            currency: payment.currency || 'USD',
+            currency: payment.currency || 'IDR',
             started_at: startedAt.toISOString(),
             expires_at: expiresAt.toISOString(),
             payment_provider: 'manual',
@@ -220,8 +231,8 @@ export default function AdminPage() {
 
         if (subErr) throw subErr;
 
-        // 3. Update user profiles plan & quota
-        const quotaLimit = payment.plan === 'pro' ? 99999 : payment.plan === 'basic' ? 500 : 50;
+        // 4. Update user profiles plan & quota
+        const quotaLimit = QUOTA_BY_PLAN[payment.plan as keyof typeof QUOTA_BY_PLAN] ?? 50;
         const { error: profileErr } = await supabase
           .from('profiles')
           .update({
@@ -233,7 +244,7 @@ export default function AdminPage() {
 
         if (profileErr) throw profileErr;
 
-        // 4. Refresh stats and data
+        // 5. Refresh stats and data
         setTriggerRefresh(t => t + 1);
         alert("Payment approved successfully! User plan upgraded.");
       } catch (err: any) {
@@ -273,6 +284,70 @@ export default function AdminPage() {
       alert("Failed to reject payment: " + err.message);
     }
   };
+
+  const QUOTA_BY_PLAN = { free: 50, basic: 500, pro: 99999, enterprise: 99999 } as const
+
+  /**
+   * Ganti paket seorang user, LENGKAP dengan baris langganannya.
+   *
+   * Sebelumnya dropdown ini hanya menulis profiles.plan. Tanpa baris di
+   * tabel subscriptions, tidak ada tanggal kedaluwarsa sama sekali —
+   * sehingga akun yang dijadikan 'pro' lewat panel ini tidak pernah turun
+   * dan berlaku selamanya.
+   */
+  const handleChangePlan = async (
+    userId: string,
+    plan: Database['public']['Tables']['profiles']['Row']['plan']
+  ) => {
+    try {
+      const { getSupabaseClient } = await import("@/lib/supabase/client")
+      const supabase = getSupabaseClient()
+
+      // Hentikan langganan berjalan; plan baru mendapat periode baru
+      const { error: cancelErr } = await supabase
+        .from('subscriptions')
+        .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .eq('status', 'active')
+      if (cancelErr) throw cancelErr
+
+      if (plan !== 'free') {
+        const expiresAt = new Date()
+        expiresAt.setDate(expiresAt.getDate() + 30)
+
+        const { error: subErr } = await supabase
+          .from('subscriptions')
+          .insert({
+            user_id: userId,
+            plan,
+            status: 'active',
+            billing_cycle: 'monthly',
+            started_at: new Date().toISOString(),
+            expires_at: expiresAt.toISOString(),
+            payment_provider: 'manual',
+            provider_subscription_id: 'admin_' + crypto.randomUUID().slice(0, 8),
+          })
+        if (subErr) throw subErr
+      }
+
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update({ plan, quota_limit: QUOTA_BY_PLAN[plan] })
+        .eq('id', userId)
+      if (profileErr) throw profileErr
+
+      setUsers(users.map(u =>
+        u.id === userId ? { ...u, plan, quota_limit: QUOTA_BY_PLAN[plan] } : u
+      ))
+
+      if (plan !== 'free') {
+        alert(`Paket diubah ke ${plan.toUpperCase()}. Berlaku 30 hari dan otomatis turun ke Free setelah itu.`)
+      }
+    } catch (err: any) {
+      console.error("Gagal mengubah paket:", err)
+      alert("Gagal mengubah paket: " + (err?.message || "unknown error"))
+    }
+  }
 
   const handleUpdateUser = async (userId: string, updates: Partial<Database['public']['Tables']['profiles']['Update']>) => {
     try {
@@ -417,12 +492,12 @@ export default function AdminPage() {
                         value={u.plan}
                         onChange={e => {
                           const plan = e.target.value as Database['public']['Tables']['profiles']['Row']['plan']
-                          const quotaByPlan = { free: 50, basic: 500, pro: 99999, enterprise: 99999 } as const
-                          handleUpdateUser(u.id, { plan, quota_limit: quotaByPlan[plan] })
+                          handleChangePlan(u.id, plan)
                         }}
                         className="bg-transparent text-xs border border-white/10 rounded-md px-2 py-1 cursor-pointer"
                       >
                         <option value="free" className="bg-card">Free</option>
+                        <option value="basic" className="bg-card">Basic</option>
                         <option value="pro" className="bg-card">Pro</option>
                         <option value="enterprise" className="bg-card">Enterprise</option>
                       </select>

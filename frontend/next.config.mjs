@@ -26,8 +26,13 @@ export default withSentryConfig(
 
     // Suppresses source map uploading logs during build
     silent: true,
-    org: "your-sentry-org", // This is usually configured in environment variables or automatically detected in Vercel
-    project: "your-sentry-project",
+
+    // Sebelumnya berisi placeholder harfiah "your-sentry-org" /
+    // "your-sentry-project" yang ikut ter-build. Sekarang diambil dari env;
+    // kalau kosong, unggahan source map dilewati tanpa merusak build.
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
+    disableSourceMapUpload: !process.env.SENTRY_AUTH_TOKEN,
   },
   {
     // For all available options, see:
