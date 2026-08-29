@@ -38,6 +38,8 @@
   --sidebar-accent-foreground: oklch(0.15 0.01 200);
   --sidebar-border: oklch(0 0 0 / 0.08);
   --sidebar-ring: oklch(0.60 0.14 200);
+  /* Garis grid/dot dekoratif — gelap di light, terang di dark */
+  --pattern-line: oklch(0 0 0 / 0.055);
 }
 
 .dark {
@@ -68,6 +70,7 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 0.08);
   --sidebar-ring: oklch(0.78 0.15 200);
+  --pattern-line: oklch(1 0 0 / 0.04);
 }
 
 @theme inline {
@@ -154,12 +157,12 @@
   }
   .grid-bg {
     background-image:
-      linear-gradient(to right, oklch(1 0 0 / 0.04) 1px, transparent 1px),
-      linear-gradient(to bottom, oklch(1 0 0 / 0.04) 1px, transparent 1px);
+      linear-gradient(to right, var(--pattern-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--pattern-line) 1px, transparent 1px);
     background-size: 48px 48px;
   }
   .dot-bg {
-    background-image: radial-gradient(oklch(1 0 0 / 0.08) 1px, transparent 1px);
+    background-image: radial-gradient(var(--pattern-line) 1px, transparent 1px);
     background-size: 24px 24px;
   }
   .radial-fade {
@@ -349,3 +352,19 @@
   border-top: 1px solid var(--border);
 }
 
+
+/* ==================================================
+   Reduced motion
+   Menghormati setting aksesibilitas OS. Sebelumnya tidak ada sama sekali,
+   sehingga animasi tetap berjalan untuk user yang sensitif terhadap gerak.
+   ================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

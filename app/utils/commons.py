@@ -6,7 +6,11 @@ import re
 import zipfile
 import io
 from typing import Tuple, Optional, Dict, Any, List
+# defusedxml menolak deklarasi entitas XML, sehingga file KML kecil
+# berisi 'billion laughs' tidak bisa lagi menghabiskan RAM instance.
+# minidom & xml.etree bawaan Python rentan terhadap serangan ini.
 from xml.dom import minidom
+from defusedxml.minidom import parseString as safe_parse_string
 from lxml import etree
 
 
@@ -46,11 +50,11 @@ def parse_kml_content(content: bytes, is_kmz: bool = False) -> minidom.Document:
             with kmz.open(kml_name) as kml_file:
                 raw_text = kml_file.read().decode("utf-8", errors="ignore")
                 cleaned_text = clean_xml_prefixes(raw_text)
-                return minidom.parseString(cleaned_text)
+                return safe_parse_string(cleaned_text)
     else:
         raw_text = content.decode("utf-8", errors="ignore")
         cleaned_text = clean_xml_prefixes(raw_text)
-        return minidom.parseString(cleaned_text)
+        return safe_parse_string(cleaned_text)
 
 
 def parse_kml_lxml(content: bytes, is_kmz: bool = False) -> etree.ElementTree:

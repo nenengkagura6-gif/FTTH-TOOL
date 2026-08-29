@@ -14,13 +14,111 @@ export type Json =
 export interface Database {
     public: {
         Tables: {
+            payment_confirmations: {
+                Row: {
+                    id: string
+                    user_id: string
+                    plan: 'basic' | 'pro' | 'enterprise'
+                    billing_cycle: 'monthly' | 'yearly'
+                    price_cents: number
+                    currency: string
+                    sender_name: string
+                    sender_bank: string
+                    amount_paid: number
+                    /** Path storage di bucket 'receipts' (bucket privat). */
+                    receipt_url: string
+                    status: 'pending' | 'approved' | 'rejected'
+                    admin_notes: string | null
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    plan: 'basic' | 'pro' | 'enterprise'
+                    billing_cycle: 'monthly' | 'yearly'
+                    price_cents: number
+                    currency?: string
+                    sender_name: string
+                    sender_bank: string
+                    amount_paid: number
+                    receipt_url: string
+                    status?: 'pending' | 'approved' | 'rejected'
+                    admin_notes?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    plan?: 'basic' | 'pro' | 'enterprise'
+                    billing_cycle?: 'monthly' | 'yearly'
+                    price_cents?: number
+                    currency?: string
+                    sender_name?: string
+                    sender_bank?: string
+                    amount_paid?: number
+                    receipt_url?: string
+                    status?: 'pending' | 'approved' | 'rejected'
+                    admin_notes?: string | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Relationships: []
+            }
+            api_keys: {
+                Row: {
+                    id: string
+                    user_id: string
+                    name: string
+                    key_hash: string
+                    key_prefix: string
+                    is_active: boolean
+                    usage_count: number
+                    last_used_at: string | null
+                    expires_at: string | null
+                    permissions: Json | null
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    name: string
+                    key_hash: string
+                    key_prefix: string
+                    is_active?: boolean
+                    usage_count?: number
+                    last_used_at?: string | null
+                    expires_at?: string | null
+                    permissions?: Json | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    name?: string
+                    key_hash?: string
+                    key_prefix?: string
+                    is_active?: boolean
+                    usage_count?: number
+                    last_used_at?: string | null
+                    expires_at?: string | null
+                    permissions?: Json | null
+                    created_at?: string
+                    updated_at?: string
+                }
+                Relationships: []
+            }
             profiles: {
                 Row: {
                     id: string
                     email: string
                     full_name: string | null
                     avatar_url: string | null
-                    plan: 'free' | 'pro' | 'enterprise'
+                    plan: 'free' | 'basic' | 'pro' | 'enterprise'
+                    role: 'user' | 'admin'
                     quota_limit: number
                     quota_used: number
                     quota_reset_at: string | null
@@ -37,7 +135,8 @@ export interface Database {
                     email: string
                     full_name?: string | null
                     avatar_url?: string | null
-                    plan?: 'free' | 'pro' | 'enterprise'
+                    plan?: 'free' | 'basic' | 'pro' | 'enterprise'
+                    role?: 'user' | 'admin'
                     quota_limit?: number
                     quota_used?: number
                     quota_reset_at?: string | null
@@ -54,7 +153,8 @@ export interface Database {
                     email?: string
                     full_name?: string | null
                     avatar_url?: string | null
-                    plan?: 'free' | 'pro' | 'enterprise'
+                    plan?: 'free' | 'basic' | 'pro' | 'enterprise'
+                    role?: 'user' | 'admin'
                     quota_limit?: number
                     quota_used?: number
                     quota_reset_at?: string | null
@@ -66,12 +166,34 @@ export interface Database {
                     updated_at?: string
                     last_login_at?: string | null
                 }
+                Relationships: []
+            }
+            device_registrations: {
+                Row: {
+                    id: string
+                    device_hash: string
+                    user_id: string
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    device_hash: string
+                    user_id: string
+                    created_at?: string
+                }
+                Update: {
+                    id?: string
+                    device_hash?: string
+                    user_id?: string
+                    created_at?: string
+                }
+                Relationships: []
             }
             processing_jobs: {
                 Row: {
                     id: string
                     user_id: string
-                    tool_name: 'kml_to_boq' | 'kml_to_database' | 'kml_duplicate_checker' | 'otdr_analyzer' | 'opm_calculator'
+                    tool_name: string
                     job_type: string
                     original_filename: string
                     original_file_url: string | null
@@ -80,7 +202,7 @@ export interface Database {
                     output_filename: string | null
                     output_file_url: string | null
                     output_file_size_bytes: number | null
-                    status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
+                    status: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired'
                     processing_time_ms: number | null
                     queue_time_ms: number | null
                     retry_count: number
@@ -100,7 +222,7 @@ export interface Database {
                 Insert: {
                     id?: string
                     user_id: string
-                    tool_name: 'kml_to_boq' | 'kml_to_database' | 'kml_duplicate_checker' | 'otdr_analyzer' | 'opm_calculator'
+                    tool_name: string
                     job_type?: string
                     original_filename: string
                     original_file_url?: string | null
@@ -109,7 +231,7 @@ export interface Database {
                     output_filename?: string | null
                     output_file_url?: string | null
                     output_file_size_bytes?: number | null
-                    status?: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
+                    status?: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired'
                     processing_time_ms?: number | null
                     queue_time_ms?: number | null
                     retry_count?: number
@@ -129,7 +251,7 @@ export interface Database {
                 Update: {
                     id?: string
                     user_id?: string
-                    tool_name?: 'kml_to_boq' | 'kml_to_database' | 'kml_duplicate_checker' | 'otdr_analyzer' | 'opm_calculator'
+                    tool_name?: string
                     job_type?: string
                     original_filename?: string
                     original_file_url?: string | null
@@ -138,7 +260,7 @@ export interface Database {
                     output_filename?: string | null
                     output_file_url?: string | null
                     output_file_size_bytes?: number | null
-                    status?: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
+                    status?: 'pending' | 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'expired'
                     processing_time_ms?: number | null
                     queue_time_ms?: number | null
                     retry_count?: number
@@ -155,12 +277,13 @@ export interface Database {
                     completed_at?: string | null
                     expires_at?: string | null
                 }
+                Relationships: []
             }
             subscriptions: {
                 Row: {
                     id: string
                     user_id: string
-                    plan: 'free' | 'pro' | 'enterprise'
+                    plan: 'free' | 'basic' | 'pro' | 'enterprise'
                     status: 'active' | 'paused' | 'cancelled' | 'past_due' | 'trialing'
                     billing_cycle: 'monthly' | 'yearly' | null
                     price_cents: number | null
@@ -179,7 +302,7 @@ export interface Database {
                 Insert: {
                     id?: string
                     user_id: string
-                    plan: 'free' | 'pro' | 'enterprise'
+                    plan: 'free' | 'basic' | 'pro' | 'enterprise'
                     status?: 'active' | 'paused' | 'cancelled' | 'past_due' | 'trialing'
                     billing_cycle?: 'monthly' | 'yearly' | null
                     price_cents?: number | null
@@ -198,7 +321,7 @@ export interface Database {
                 Update: {
                     id?: string
                     user_id?: string
-                    plan?: 'free' | 'pro' | 'enterprise'
+                    plan?: 'free' | 'basic' | 'pro' | 'enterprise'
                     status?: 'active' | 'paused' | 'cancelled' | 'past_due' | 'trialing'
                     billing_cycle?: 'monthly' | 'yearly' | null
                     price_cents?: number | null
@@ -214,6 +337,7 @@ export interface Database {
                     created_at?: string
                     updated_at?: string
                 }
+                Relationships: []
             }
             usage_logs: {
                 Row: {
@@ -267,6 +391,7 @@ export interface Database {
                     error_occurred?: boolean
                     created_at?: string
                 }
+                Relationships: []
             }
             audit_logs: {
                 Row: {
@@ -302,6 +427,7 @@ export interface Database {
                     severity?: 'info' | 'warning' | 'error' | 'critical'
                     created_at?: string
                 }
+                Relationships: []
             }
             system_config: {
                 Row: {
@@ -325,6 +451,7 @@ export interface Database {
                     updated_at?: string
                     updated_by?: string | null
                 }
+                Relationships: []
             }
         }
         Views: {
@@ -336,6 +463,7 @@ export interface Database {
                     total_processing_time_ms: number | null
                     unique_endpoints: number | null
                 }
+                Relationships: []
             }
             job_success_rate: {
                 Row: {
@@ -346,6 +474,7 @@ export interface Database {
                     failed_jobs: number | null
                     success_rate_percent: number | null
                 }
+                Relationships: []
             }
         }
         Functions: {
@@ -356,6 +485,52 @@ export interface Database {
             increment_quota_usage: {
                 Args: { p_user_id: string }
                 Returns: undefined
+            }
+            check_device_registration: {
+                Args: {
+                    p_device_hash: string
+                    p_user_id: string
+                }
+                Returns: Json
+            }
+            reset_user_devices: {
+                Args: {
+                    p_user_id: string
+                }
+                Returns: Json
+            }
+            refresh_subscription_status: {
+                Args: Record<string, never>
+                Returns: undefined
+            }
+            is_admin: {
+                Args: Record<string, never>
+                Returns: boolean
+            }
+            has_quota_remaining: {
+                Args: { p_user_id: string }
+                Returns: boolean
+            }
+            get_admin_payments: {
+                Args: Record<string, never>
+                Returns: {
+                    id: string
+                    user_id: string
+                    plan: string
+                    billing_cycle: string
+                    price_cents: number
+                    currency: string
+                    sender_name: string
+                    sender_bank: string
+                    amount_paid: number
+                    receipt_url: string
+                    status: string
+                    admin_notes: string | null
+                    created_at: string
+                    updated_at: string
+                    email: string
+                    full_name: string | null
+                }[]
             }
             create_audit_log: {
                 Args: {

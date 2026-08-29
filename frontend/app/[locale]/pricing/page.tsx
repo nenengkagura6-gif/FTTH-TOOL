@@ -177,14 +177,10 @@ export default function PricingPage({ params }: PageProps) {
 
       if (uploadError) throw uploadError
 
-      // 2. Get public URL
-      const { data: urlData } = supabase.storage
-        .from('receipts')
-        .getPublicUrl(filePath)
-
-      if (!urlData?.publicUrl) {
-        throw new Error("Failed to retrieve public URL for uploaded receipt")
-      }
+      // 2. Simpan PATH storage, bukan public URL.
+      // Bucket 'receipts' sekarang privat — bukti transfer berisi nama, bank,
+      // dan nominal, jadi tidak boleh punya URL permanen yang bisa diakses
+      // siapa pun. Panel admin membuat signed URL berumur pendek saat dibuka.
 
       // 3. Insert payment confirmation request in DB
       const priceCents = selectedPlan.target === 'pro' ? 1667 : 300 // USD cents representation ($16.67 is about Rp 250k)
@@ -194,13 +190,13 @@ export default function PricingPage({ params }: PageProps) {
         .from('payment_confirmations')
         .insert({
           user_id: user.id,
-          plan: selectedPlan.target,
+          plan: selectedPlan.target as 'basic' | 'pro' | 'enterprise',
           billing_cycle: 'monthly',
           price_cents: priceCents,
           sender_name: senderName,
           sender_bank: senderBank,
           amount_paid: amountPaid,
-          receipt_url: urlData.publicUrl,
+          receipt_url: filePath,
           status: 'pending'
         })
 

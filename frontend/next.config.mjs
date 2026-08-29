@@ -4,8 +4,13 @@ import { withSentryConfig } from '@sentry/nextjs';
 const nextConfig = {
   output: 'export',
   trailingSlash: true,
+  // ignoreBuildErrors sengaja TIDAK diaktifkan lagi.
+  // Sebelumnya bernilai true dan menyembunyikan 122 type error — akarnya
+  // types/supabase.ts yang kehilangan field `Relationships` (wajib oleh
+  // GenericTable di postgrest-js), sehingga SEMUA query DB ter-infer `never`
+  // dan kehilangan type safety. Sekarang build gagal kalau tipe rusak.
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     unoptimized: true,

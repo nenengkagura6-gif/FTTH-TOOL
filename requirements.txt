@@ -4,6 +4,8 @@ python-multipart>=0.0.6
 pydantic>=2.5.0
 openpyxl>=3.1.0
 lxml>=4.9.0
+# Parser XML tahan billion-laughs untuk KML/KMZ dari user
+defusedxml>=0.7.1
 geopy>=2.4.0
 requests>=2.31.0
 urllib3>=2.0.0

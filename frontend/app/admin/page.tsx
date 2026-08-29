@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/auth/auth-provider"
 import { useRouter } from "next/navigation"
+import type { Database } from "@/types/supabase"
 
 const planBadge: Record<string, string> = {
   free: "bg-gray-500/10 text-gray-400 border-gray-500/20",
@@ -33,8 +34,46 @@ export default function AdminPage() {
   const [payments, setPayments] = useState<any[]>([])
   const [loadingPayments, setLoadingPayments] = useState(false)
   const [selectedReceipt, setSelectedReceipt] = useState<string | null>(null)
+  const [loadingReceipt, setLoadingReceipt] = useState(false)
   const [rejectingPayment, setRejectingPayment] = useState<any | null>(null)
   const [rejectNotes, setRejectNotes] = useState("")
+
+  /**
+   * Bucket 'receipts' privat. receipt_url menyimpan path storage
+   * (mis. "<user-id>/<uuid>.jpg"), jadi butuh signed URL berumur pendek.
+   * Baris lama masih menyimpan public URL penuh — path-nya diekstrak
+   * supaya tetap bisa dibuka.
+   */
+  const handleViewReceipt = async (receiptUrl: string) => {
+    setLoadingReceipt(true)
+    try {
+      const { getSupabaseClient } = await import("@/lib/supabase/client")
+      const supabase = getSupabaseClient()
+
+      let path = receiptUrl
+      const marker = "/receipts/"
+      if (receiptUrl.startsWith("http")) {
+        const idx = receiptUrl.indexOf(marker)
+        if (idx === -1) throw new Error("Format URL struk tidak dikenali")
+        path = decodeURIComponent(receiptUrl.slice(idx + marker.length))
+      }
+
+      // 5 menit — cukup untuk verifikasi, tidak cukup untuk disebarkan
+      const { data, error } = await supabase.storage
+        .from("receipts")
+        .createSignedUrl(path, 300)
+
+      if (error || !data?.signedUrl) {
+        throw error || new Error("Gagal membuat signed URL")
+      }
+      setSelectedReceipt(data.signedUrl)
+    } catch (err: any) {
+      console.error("Failed to open receipt:", err)
+      alert(`Gagal membuka bukti transfer: ${err?.message || "unknown error"}`)
+    } finally {
+      setLoadingReceipt(false)
+    }
+  }
 
   // Redirect non-admin
   useEffect(() => {
@@ -235,7 +274,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleUpdateUser = async (userId: string, updates: Record<string, unknown>) => {
+  const handleUpdateUser = async (userId: string, updates: Partial<Database['public']['Tables']['profiles']['Update']>) => {
     try {
       const { getSupabaseClient } = await import("@/lib/supabase/client");
       const supabase = getSupabaseClient();
@@ -376,7 +415,11 @@ export default function AdminPage() {
                     <td className="px-3 py-3">
                       <select
                         value={u.plan}
-                        onChange={e => handleUpdateUser(u.id, { plan: e.target.value, quota_limit: e.target.value === 'pro' ? 99999 : e.target.value === 'enterprise' ? 99999 : e.target.value === 'basic' ? 500 : 50 })}
+                        onChange={e => {
+                          const plan = e.target.value as Database['public']['Tables']['profiles']['Row']['plan']
+                          const quotaByPlan = { free: 50, basic: 500, pro: 99999, enterprise: 99999 } as const
+                          handleUpdateUser(u.id, { plan, quota_limit: quotaByPlan[plan] })
+                        }}
                         className="bg-transparent text-xs border border-white/10 rounded-md px-2 py-1 cursor-pointer"
                       >
                         <option value="free" className="bg-card">Free</option>
@@ -477,10 +520,11 @@ export default function AdminPage() {
                     <td className="px-3 py-3">
                       {p.receipt_url ? (
                         <button
-                          onClick={() => setSelectedReceipt(p.receipt_url)}
-                          className="text-xs text-primary hover:underline cursor-pointer"
+                          onClick={() => handleViewReceipt(p.receipt_url)}
+                          disabled={loadingReceipt}
+                          className="text-xs text-primary hover:underline cursor-pointer disabled:opacity-50"
                         >
-                          View Receipt
+                          {loadingReceipt ? "Opening…" : "View Receipt"}
                         </button>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
@@ -536,7 +580,8 @@ export default function AdminPage() {
             </button>
             <h3 className="text-sm font-semibold mb-4">Receipt Proof</h3>
             <div className="relative aspect-[3/4] sm:aspect-square w-full rounded-lg bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
-              {selectedReceipt.endsWith('.pdf') ? (
+              {/* Signed URL punya query string (?token=…), jadi cek pathname-nya */}
+              {new URL(selectedReceipt, window.location.origin).pathname.toLowerCase().endsWith('.pdf') ? (
                 <iframe src={selectedReceipt} className="w-full h-full" />
               ) : (
                 <img src={selectedReceipt} alt="Transfer Receipt" className="max-w-full max-h-full object-contain" />

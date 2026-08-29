@@ -5,6 +5,8 @@ Supports Render + Cloudflare deployment
 import os
 import io
 import sys
+import secrets
+import zipfile
 import tempfile
 from typing import List, Optional
 
@@ -28,7 +30,7 @@ class LoggerWriter:
 log_file_path = os.path.join(tempfile.gettempdir(), "app_debug.log")
 sys.stdout = LoggerWriter(log_file_path)
 sys.stderr = sys.stdout
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form, BackgroundTasks, Header, Depends
 from fastapi.responses import Response, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -59,15 +61,112 @@ app = FastAPI(
     version=APP_VERSION
 )
 
-# CORS Configuration - Dynamically allow any origin (localhost, custom domains, Cloudflare Pages previews)
-# to avoid CORS preflight failures across various deployment environments.
+# CORS Configuration
+# Allowlist eksplisit. Origin tambahan (mis. domain preview) di-set lewat env
+# ALLOWED_ORIGINS, dipisah koma. Wildcard "*" digabung allow_credentials=True
+# dilarang oleh spesifikasi CORS dan membatalkan proteksi same-origin.
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://ftthtools.my.id",
+    "https://www.ftthtools.my.id",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+_extra_origins = [
+    o.strip()
+    for o in os.environ.get("ALLOWED_ORIGINS", "").split(",")
+    if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https?://.*",
+    allow_origins=DEFAULT_ALLOWED_ORIGINS + _extra_origins,
+    # Preview deploy Cloudflare Pages: <hash>.<project>.pages.dev
+    allow_origin_regex=r"https://[a-z0-9-]+\.[a-z0-9-]+\.pages\.dev",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+
+
+# =========================
+# Batas Ukuran Upload
+# =========================
+# Semua endpoint sebelumnya melakukan `await file.read()` tanpa batas apa pun,
+# sehingga satu request bisa menarik file berukuran berapa pun ke memori dan
+# menjatuhkan instance free tier. Nilainya selaras dengan file_size_limit
+# bucket 'uploads' di frontend/supabase/03-storage.sql.
+
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_SIZE", 50 * 1024 * 1024))
+MAX_FILES_PER_REQUEST = int(os.environ.get("MAX_FILES_PER_REQUEST", 10))
+
+# Rasio ekspansi maksimum untuk arsip ZIP (proteksi zip bomb)
+MAX_ZIP_RATIO = 100
+MAX_ZIP_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
+
+
+def _human(n: int) -> str:
+    return f"{n / (1024 * 1024):.1f} MB"
+
+
+async def read_upload_limited(
+    upload: UploadFile,
+    max_bytes: int = None,
+    label: str = "File",
+) -> bytes:
+    """
+    Baca UploadFile secara bertahap dan batalkan begitu melewati batas.
+
+    Dibaca per potongan supaya file raksasa ditolak SEBELUM seluruh isinya
+    masuk memori — berbeda dengan `await file.read()` yang menarik semuanya
+    lebih dulu, baru bisa diperiksa.
+    """
+    limit = max_bytes or MAX_UPLOAD_BYTES
+    chunks = []
+    total = 0
+
+    while True:
+        chunk = await upload.read(1024 * 1024)  # 1 MB per potongan
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(
+                status_code=413,
+                detail=f"{label} melebihi batas {_human(limit)}",
+            )
+        chunks.append(chunk)
+
+    return b"".join(chunks)
+
+
+def safe_zip_members(content: bytes, suffix: str) -> zipfile.ZipFile:
+    """
+    Buka arsip ZIP setelah memastikan ukuran hasil ekstraksinya wajar.
+
+    Tanpa ini, arsip beberapa kilobyte yang mengembang jadi puluhan gigabyte
+    (zip bomb) akan diekstrak apa adanya.
+    """
+    zf = zipfile.ZipFile(io.BytesIO(content))
+
+    total_uncompressed = sum(
+        i.file_size for i in zf.infolist()
+        if i.filename.lower().endswith(suffix) and not i.filename.startswith("__")
+    )
+
+    if total_uncompressed > MAX_ZIP_UNCOMPRESSED_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Isi arsip terlalu besar ({_human(total_uncompressed)})",
+        )
+
+    if len(content) > 0 and total_uncompressed / len(content) > MAX_ZIP_RATIO:
+        raise HTTPException(
+            status_code=400,
+            detail="Arsip ditolak: rasio kompresi mencurigakan (kemungkinan zip bomb)",
+        )
+
+    return zf
 
 
 # =========================
@@ -76,7 +175,7 @@ app.add_middleware(
 @app.get("/")
 async def root():
     """Root endpoint for health check."""
-    return {"status": "ok", "service": "KML Processing API", "version": "1.0.0"}
+    return {"status": "ok", "service": "KML Processing API", "version": APP_VERSION}
 
 
 @app.get("/health")
@@ -86,9 +185,18 @@ async def health_check():
 
 
 @app.get("/debug-logs")
-async def get_debug_logs(lines: int = 200):
-    """Retrieve the latest stdout/stderr logs for debugging."""
-    import tempfile
+async def get_debug_logs(lines: int = 200, token: str = Query(None)):
+    """
+    Retrieve the latest stdout/stderr logs for debugging.
+
+    Terkunci: hanya aktif jika env DEBUG_LOGS_TOKEN di-set, dan token yang
+    dikirim cocok. Log berisi job id, path storage, user id, dan stack trace —
+    sebelumnya endpoint ini terbuka untuk publik.
+    """
+    expected = os.environ.get("DEBUG_LOGS_TOKEN")
+    if not expected or not token or not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=404, detail="Not Found")
+
     log_file_path = os.path.join(tempfile.gettempdir(), "app_debug.log")
     if not os.path.exists(log_file_path):
         return {"error": "Log file not found"}
@@ -137,8 +245,11 @@ async def convert_kml_to_excel(
             )
         
         # Read files
-        kml_content = await kml_file.read()
-        template_content = await template.read() if template else None
+        kml_content = await read_upload_limited(kml_file, label="File KML")
+        template_content = (
+            await read_upload_limited(template, label="Template")
+            if template else None
+        )
         
         # Process
         result = process_kml_to_excel(
@@ -186,8 +297,11 @@ async def process_apd(
             raise HTTPException(status_code=400, detail="File must be .kml or .kmz")
         
         # Read files
-        kml_content = await kml_file.read()
-        template_content = await template.read() if template else None
+        kml_content = await read_upload_limited(kml_file, label="File KML")
+        template_content = (
+            await read_upload_limited(template, label="Template")
+            if template else None
+        )
         
         # Process
         result = process_apd_hpdb(
@@ -222,7 +336,9 @@ class JobRequest(BaseModel):
     job_id: str
     file_path: str
     original_filename: str
-    user_id: str
+    # Diabaikan oleh server — user id diambil dari JWT yang terverifikasi.
+    # Tetap diterima demi kompatibilitas dengan client lama.
+    user_id: Optional[str] = None
     tool_name: str
     template_path: Optional[str] = None
 
@@ -549,11 +665,52 @@ def _process_job_sync(
             traceback.print_exc()
 
 
+# =========================
+# AUTENTIKASI
+# =========================
+async def require_user_id(authorization: str = Header(None)) -> str:
+    """
+    Verifikasi Supabase JWT dari header Authorization dan kembalikan user id.
+
+    Sebelumnya /api/v1/queue/job tidak punya autentikasi sama sekali, padahal
+    backend memproses request memakai service role key yang mem-bypass RLS.
+    Siapa pun bisa mengirim file_path milik user lain untuk diunduh, diproses,
+    lalu hasilnya ditulis ke folder miliknya sendiri.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    token = authorization.split(" ", 1)[1].strip()
+
+    from supabase_client import get_user_from_token
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    return str(user.id)
+
+
+def _assert_owned_path(path: str, user_id: str, label: str) -> None:
+    """Storage key wajib berada di dalam folder milik user, tanpa traversal."""
+    if not path:
+        raise HTTPException(status_code=400, detail=f"{label} is required")
+    if ".." in path or path.startswith("/") or "\\" in path:
+        raise HTTPException(status_code=400, detail=f"Invalid {label}")
+    if not path.startswith(f"{user_id}/"):
+        raise HTTPException(status_code=403, detail=f"{label} does not belong to this user")
+
+
 @app.post("/api/v1/queue/job")
-async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
+async def queue_job(
+    req: JobRequest,
+    background_tasks: BackgroundTasks,
+    auth_user_id: str = Depends(require_user_id),
+):
     """
     Process a KML job in the background using FastAPI BackgroundTasks.
     No Celery/Redis required.
+
+    Semua identitas diambil dari JWT yang terverifikasi — bukan dari body.
     """
     supported_tools = (
         "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
@@ -566,13 +723,24 @@ async def queue_job(req: JobRequest, background_tasks: BackgroundTasks):
         print(f"[queue_job] ❌ Rejected: tool_name='{req.tool_name}' not in {supported_tools}")
         raise HTTPException(status_code=400, detail=f"Unsupported tool: {req.tool_name}. Supported: {', '.join(supported_tools)}")
 
+    # --- Otorisasi: identitas dari JWT, bukan dari body ---
+    # req.user_id sengaja diabaikan; body tidak dipercaya sama sekali.
+    _assert_owned_path(req.file_path, auth_user_id, "file_path")
+    if req.template_path:
+        _assert_owned_path(req.template_path, auth_user_id, "template_path")
+
+    from supabase_client import job_belongs_to_user
+    if not job_belongs_to_user(req.job_id, auth_user_id):
+        print(f"[queue_job] ❌ Rejected: job {req.job_id} bukan milik user {auth_user_id}")
+        raise HTTPException(status_code=403, detail="Job does not belong to this user")
+
     # Schedule processing as a background task
     background_tasks.add_task(
         _process_job_sync,
         job_id=req.job_id,
         file_path=req.file_path,
         original_filename=req.original_filename,
-        user_id=req.user_id,
+        user_id=auth_user_id,
         tool_name=req.tool_name,
         template_path=req.template_path
     )
@@ -602,13 +770,18 @@ async def check_duplicates(
     try:
         if not kml_files:
             raise HTTPException(status_code=400, detail="At least one file required")
+        if len(kml_files) > MAX_FILES_PER_REQUEST:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Maksimal {MAX_FILES_PER_REQUEST} file per request",
+            )
         
         # Validate and read files
         file_list = []
         for f in kml_files:
             if not f.filename.lower().endswith(".kml"):
                 raise HTTPException(status_code=400, detail=f"File {f.filename} must be .kml")
-            content = await f.read()
+            content = await read_upload_limited(f, label=f"File {f.filename}")
             file_list.append((content, f.filename))
         
         # Parse keywords
@@ -676,7 +849,7 @@ async def extract_kml_path(
                 detail="File must be .kml or .kmz"
             )
             
-        content = await kml_file.read()
+        content = await read_upload_limited(kml_file, label="File KML")
         result = extract_kml_geometries(content, is_kmz=is_kmz)
         
         if result.get("status") == "error":
@@ -703,9 +876,13 @@ async def parse_otdr_trace(
     Parse a standard OTDR SOR file and return structured trace coordinates and events.
     """
     try:
-        content = await sor_file.read()
+        content = await read_upload_limited(sor_file, label="File SOR")
         result = parse_sor_file(content, filename=sor_file.filename)
         return JSONResponse(content=result)
+    # HTTPException (mis. 413 batas ukuran) harus lolos apa adanya —
+    # tanpa ini handler catch-all di bawah mengubahnya jadi 500.
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -725,11 +902,11 @@ async def parse_otdr_batch(
     try:
         for file in files:
             filename = file.filename
-            content = await file.read()
+            content = await read_upload_limited(file, label=f"File {filename}")
             
             if filename.lower().endswith(".zip"):
                 # Handle ZIP archive
-                with zipfile.ZipFile(io.BytesIO(content)) as z:
+                with safe_zip_members(content, ".sor") as z:
                     for name in z.namelist():
                         # Skip directories or system files (like __MACOSX)
                         if name.lower().endswith(".sor") and not name.startswith("__"):
@@ -752,6 +929,10 @@ async def parse_otdr_batch(
             "results": parsed_results
         })
         
+    # HTTPException (mis. 413 batas ukuran) harus lolos apa adanya —
+    # tanpa ini handler catch-all di bawah mengubahnya jadi 500.
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Batch parsing failed: {str(e)}")
 
@@ -766,7 +947,7 @@ async def validate_kml(kml_file: UploadFile = File(...)):
     Validate if a KML file is properly formatted.
     """
     try:
-        content = await kml_file.read()
+        content = await read_upload_limited(kml_file, label="File KML")
         
         # Try to parse securely
         from lxml import etree
@@ -785,6 +966,10 @@ async def validate_kml(kml_file: UploadFile = File(...)):
             "placemarks": placemarks
         }
     
+    # HTTPException (mis. 413 batas ukuran) harus lolos apa adanya —
+    # tanpa ini handler catch-all di bawah mengubahnya jadi 500.
+    except HTTPException:
+        raise
     except Exception as e:
         return {
             "valid": False,
@@ -796,11 +981,69 @@ async def validate_kml(kml_file: UploadFile = File(...)):
 # =========================
 # Configuration
 # =========================
+# =========================
+# Maintenance / Retensi File
+# =========================
+@app.post("/api/v1/maintenance/cleanup")
+async def maintenance_cleanup(x_maintenance_token: str = Header(None)):
+    """
+    Hapus file storage milik job yang sudah lewat masa simpan.
+
+    Menggantikan cleanup_expired_jobs_task milik Celery yang tidak pernah
+    dideploy. Penghapusan HARUS lewat Storage API, bukan DELETE langsung ke
+    storage.objects lewat SQL: menghapus barisnya saja meninggalkan byte
+    file sebagai objek yatim yang tidak lagi bisa dihapus dan tetap
+    menghabiskan kuota storage.
+
+    Dilindungi shared secret. Jadwalkan sekali sehari dengan penjadwal
+    gratis apa pun (GitHub Actions, cron-job.org, Cloudflare Worker cron):
+
+        curl -fsS -X POST "$BACKEND_URL/api/v1/maintenance/cleanup" \
+             -H "X-Maintenance-Token: $MAINTENANCE_TOKEN"
+    """
+    expected = os.environ.get("MAINTENANCE_TOKEN")
+    if not expected:
+        raise HTTPException(status_code=503, detail="MAINTENANCE_TOKEN not configured")
+    if not x_maintenance_token or not secrets.compare_digest(x_maintenance_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid maintenance token")
+
+    from supabase_client import (
+        get_expired_jobs,
+        delete_storage_files,
+        mark_jobs_expired,
+    )
+
+    expired = get_expired_jobs()
+    if not expired:
+        return {"status": "ok", "jobs_processed": 0, "files_deleted": 0}
+
+    upload_paths = [j["original_file_url"] for j in expired if j.get("original_file_url")]
+    output_paths = [j["output_file_url"] for j in expired if j.get("output_file_url")]
+
+    deleted = 0
+    if upload_paths and delete_storage_files("uploads", upload_paths):
+        deleted += len(upload_paths)
+    if output_paths and delete_storage_files("outputs", output_paths):
+        deleted += len(output_paths)
+
+    # Kosongkan URL hanya SETELAH file benar-benar terhapus, supaya
+    # putaran berikutnya tidak kehilangan jejak file yang gagal dihapus.
+    job_ids = [j["id"] for j in expired]
+    mark_jobs_expired(job_ids)
+
+    print(f"[maintenance] {len(job_ids)} job dibersihkan, {deleted} file dihapus")
+    return {
+        "status": "ok",
+        "jobs_processed": len(job_ids),
+        "files_deleted": deleted,
+    }
+
+
 @app.get("/config")
 async def get_config():
     """Get API configuration and supported formats."""
     return {
-        "version": "1.0.0",
+        "version": APP_VERSION,
         "endpoints": [
             {
                 "path": "/kml-to-excel",

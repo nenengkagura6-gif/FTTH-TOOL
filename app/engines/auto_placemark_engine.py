@@ -20,7 +20,11 @@ import re
 import time
 import zipfile
 import traceback
+# defusedxml menolak deklarasi entitas XML, sehingga file KML kecil
+# berisi 'billion laughs' tidak bisa lagi menghabiskan RAM instance.
+# minidom & xml.etree bawaan Python rentan terhadap serangan ini.
 import xml.etree.ElementTree as ET
+from defusedxml.ElementTree import fromstring as safe_fromstring
 from typing import Any, Dict, List, Tuple, Optional
 
 import geopandas as gpd
@@ -121,7 +125,7 @@ def _first_child_text_any_ns(parent: ET.Element, tag: str) -> str | None:
 
 def read_kml_kmz_boundaries(content: bytes, is_kmz: bool) -> gpd.GeoDataFrame:
     kml_text = _read_kml_text_from_bytes(content, is_kmz)
-    root = ET.fromstring(kml_text.encode("utf-8"))
+    root = safe_fromstring(kml_text.encode("utf-8"))
 
     placemarks = _findall_any_ns(root, "Placemark")
     rows: List[Dict[str, Any]] = []

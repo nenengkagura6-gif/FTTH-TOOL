@@ -4,6 +4,7 @@
 // ==================================================
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { getSupabaseClient } from '@/lib/supabase/client'
 import { ApiResponse, ApiError, HealthCheckResponse } from './types'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -20,15 +21,35 @@ class ApiClient {
     this.supabase = client
   }
 
+  /**
+   * Ambil client Supabase yang dipakai untuk otentikasi.
+   *
+   * Sebelumnya hanya memakai this.supabase, yang diisi lewat setAuthClient().
+   * Metode itu tidak pernah dipanggil di mana pun, sehingga header
+   * Authorization tidak pernah terkirim. Sekarang jatuh balik ke singleton
+   * browser supaya setiap pemanggil ikut terotentikasi secara otomatis.
+   */
+  private getAuthSource(): SupabaseClient | null {
+    if (this.supabase) return this.supabase
+    if (typeof window === 'undefined') return null
+
+    try {
+      // Import statis; aman karena hanya dijalankan di browser.
+      return getSupabaseClient() as unknown as SupabaseClient
+    } catch {
+      return null
+    }
+  }
+
   // Get auth headers with Supabase token
   private async getHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
       'Accept': 'application/json',
     }
 
-    // Add Supabase auth token if available
-    if (this.supabase) {
-      const { data } = await this.supabase.auth.getSession()
+    const supabase = this.getAuthSource()
+    if (supabase) {
+      const { data } = await supabase.auth.getSession()
       const token = data.session?.access_token
       if (token) {
         headers['Authorization'] = `Bearer ${token}`

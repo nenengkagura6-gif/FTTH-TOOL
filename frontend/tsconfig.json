@@ -38,6 +38,22 @@
     "dist/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+
+    // Kode mati: next.config.mjs memakai output:'export', jadi tidak ada
+    // server sama sekali — tidak ada route handler, middleware dinonaktifkan.
+    // File-file di bawah mengimpor next/headers & next/server sehingga tidak
+    // mungkin dieksekusi, dan saling mengimpor satu sama lain (klaster tertutup).
+    // Dikeluarkan dari typecheck, BUKAN dihapus — kalau nanti pindah ke
+    // server rendering atau Edge Function, isinya masih bisa dipakai lagi.
+    "supabase/nextjs/**",
+    "lib/supabase/server.ts",
+    "lib/services/**",
+    "lib/api-auth.ts",
+    "lib/audit.ts",
+    "lib/request-logger.ts",
+    "lib/rate-limit.ts",
+    "middleware.ts.disabled",
+    "test-rpc.js"
   ]
 }

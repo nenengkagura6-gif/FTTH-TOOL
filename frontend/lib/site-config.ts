@@ -25,6 +25,7 @@ import {
   Wrench,
   GitFork,
   Navigation,
+  BookOpen,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -112,6 +113,10 @@ export type DashboardMenuItem = {
   adminOnly?: boolean
   /** Tool category for sidebar grouping (undefined = system/nav item) */
   category?: ToolCategory
+  /** YouTube video ID for tutorial tab (e.g. "dQw4w9WgXcQ") */
+  youtubeId?: string
+  /** URL for sample file download in tutorial */
+  sampleFileUrl?: string
 }
 
 // System / navigation items (no category — shown as flat list above tools)
@@ -133,6 +138,12 @@ export const systemMenuItems: DashboardMenuItem[] = [
     href: "/dashboard/history",
     icon: History,
     description: "Processing history",
+  },
+  {
+    title: "Tutorials",
+    href: "/dashboard/tutorials",
+    icon: BookOpen,
+    description: "Video guides for all tools",
   },
   {
     title: "API Keys",

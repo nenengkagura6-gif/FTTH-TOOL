@@ -9,6 +9,10 @@
 
 # production
 /build
+# Artefak build statis (output: 'export'). Sebelumnya tertutup pola "dist/"
+# di .gitignore root; pola itu kini dianchor ke root saja, jadi harus
+# disebutkan di sini.
+/dist/
 
 # debug
 npm-debug.log*

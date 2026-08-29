@@ -8,18 +8,23 @@ env/
 venv/
 .venv/
 ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+# Pola build Python di bawah ini DIANCHOR ke root repo dengan "/".
+# Tanpa slash awal, Git menerapkannya di setiap level direktori — pola
+# "lib/" ikut mengabaikan frontend/lib/, sehingga 17 file library frontend
+# (supabase/client.ts, features.ts, translations.ts, utils.ts, ...) tidak
+# pernah masuk git dan hilang kalau working directory rusak.
+/build/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
 *.egg-info/
 .installed.cfg
 *.egg

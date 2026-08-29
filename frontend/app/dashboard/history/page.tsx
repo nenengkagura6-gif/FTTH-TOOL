@@ -20,27 +20,17 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/auth/auth-provider"
+import type { Database } from "@/types/supabase"
 
 // ============================================
 // Types
 // ============================================
 
-interface Job {
-  id: string
-  original_filename: string
-  tool_name: string
-  status: "pending" | "processing" | "completed" | "failed" | "cancelled"
-  created_at: string
-  completed_at: string | null
-  started_at: string | null
-  progress_percent: number
-  progress_message: string | null
-  error_message: string | null
-  result_file_url: string | null
-  output_file_url?: string | null
-  original_file_size_bytes: number | null
-  processing_time_ms: number | null
-}
+// Diturunkan langsung dari skema database, bukan ditulis tangan.
+// Versi lama mendeklarasikan 'result_file_url' yang tidak pernah ada di
+// tabel processing_jobs — kolom sebenarnya bernama 'output_file_url'.
+type Job = Database["public"]["Tables"]["processing_jobs"]["Row"]
+type JobStatus = Job["status"]
 
 interface Pagination {
   page: number
@@ -164,7 +154,7 @@ export default function HistoryPage() {
         .eq('user_id', userData.user.id)
 
       if (statusFilter !== "all") {
-        query = query.eq('status', statusFilter)
+        query = query.eq('status', statusFilter as JobStatus)
       }
       if (toolFilter !== "all") {
         query = query.eq('tool_name', toolFilter)
@@ -409,7 +399,7 @@ export default function HistoryPage() {
                       <div className="flex items-center justify-end gap-2">
                         {job.status === "completed" && (
                           <button
-                            onClick={() => handleDownload(job.output_file_url || job.result_file_url)}
+                            onClick={() => handleDownload(job.output_file_url)}
                             className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors ring-1 ring-primary/20"
                           >
                             <Download className="h-3 w-3" />
@@ -473,7 +463,7 @@ export default function HistoryPage() {
 
                       {job.status === "completed" && (
                         <button
-                          onClick={() => handleDownload(job.output_file_url || job.result_file_url)}
+                          onClick={() => handleDownload(job.output_file_url)}
                           className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20 transition-colors ring-1 ring-primary/20"
                         >
                           <Download className="h-3 w-3" />

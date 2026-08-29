@@ -10,7 +10,11 @@ import re
 import zipfile
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional, Any
+# defusedxml menolak deklarasi entitas XML, sehingga file KML kecil
+# berisi 'billion laughs' tidak bisa lagi menghabiskan RAM instance.
+# minidom & xml.etree bawaan Python rentan terhadap serangan ini.
 from xml.dom import minidom
+from defusedxml.minidom import parseString as safe_parse_string
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -126,7 +130,7 @@ class InsertCodingEngine:
 
         # Strip namespace prefixes for uniform DOM access
         cleaned = re.sub(r"<(/?)[\w\-]+:", r"<\1", raw)
-        self.doc = minidom.parseString(cleaned.encode("utf-8"))
+        self.doc = safe_parse_string(cleaned.encode("utf-8"))
         return {"status": "success"}
 
     def process(self, prefixes: Dict[int, str]) -> Dict[str, Any]:

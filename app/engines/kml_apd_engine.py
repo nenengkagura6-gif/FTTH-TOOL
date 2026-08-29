@@ -17,7 +17,11 @@ import os
 import math
 import zipfile
 import traceback
+# defusedxml menolak deklarasi entitas XML, sehingga file KML kecil
+# berisi 'billion laughs' tidak bisa lagi menghabiskan RAM instance.
+# minidom & xml.etree bawaan Python rentan terhadap serangan ini.
 import xml.etree.ElementTree as ET
+from defusedxml.ElementTree import fromstring as safe_fromstring
 from collections import defaultdict
 from typing import Dict, Any, List, Tuple, Optional
 
@@ -1408,7 +1412,7 @@ def process_kml_apd(
         else:
             raw_kml = kml_content
 
-        tree = ET.ElementTree(ET.fromstring(raw_kml))
+        tree = ET.ElementTree(safe_fromstring(raw_kml))
         tree = _process_kml_tree(tree)
 
         # Write output
