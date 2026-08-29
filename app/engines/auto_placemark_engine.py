@@ -53,6 +53,11 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.openstreetmap.ru/api/interpreter",
 ]
 
+# Percobaan ulang Overpass: tiap putaran mencoba SEMUA endpoint,
+# lalu menunggu sebelum putaran berikutnya.
+OVERPASS_MAX_ATTEMPTS = 3
+OVERPASS_RETRY_BASE_SECONDS = 5
+
 MAX_TILE_SIZE_DEG = 0.02
 MAX_TOTAL_TILES = 80
 BBOX_MARGIN_DEG = 0.00015
@@ -332,24 +337,65 @@ def make_tiles(bounds: Tuple[float, float, float, float]) -> List[Tuple[float, f
 # OVERPASS COMMON
 # ==========================================================
 def overpass_request(query: str) -> Dict[str, Any]:
+    """
+    Kirim query ke Overpass dengan percobaan ulang berjenjang.
+
+    Versi sebelumnya mencoba tiap endpoint TEPAT SEKALI tanpa jeda. Overpass
+    rutin membalas 429 (Too Many Requests) atau 504 untuk permintaan dari IP
+    pusat data — persis kondisi Hugging Face Spaces — sementara dari koneksi
+    rumah biasanya langsung lolos. Itu sebabnya tool ini jalan saat diuji
+    lokal tapi gagal di produksi.
+
+    Kode yang layak diulang (429/502/503/504) sekarang diberi jeda menaik,
+    dan pesan errornya menjelaskan apa yang terjadi alih-alih sekadar gagal.
+    """
     last_error = None
-    headers = {"User-Agent": "ftth-tool-auto-placemark/1.0"}
+    headers = {
+        # Overpass memblokir User-Agent generik. Sertakan kontak sesuai
+        # etika pemakaian API mereka.
+        "User-Agent": "ftth-tool-auto-placemark/1.1 (+https://ftthtools.my.id)",
+        "Accept": "application/json",
+    }
+    retryable = {429, 502, 503, 504}
+    saw_rate_limit = False
 
-    for endpoint in OVERPASS_ENDPOINTS:
-        try:
-            resp = requests.post(
-                endpoint,
-                data={"data": query},
-                headers=headers,
-                timeout=OVERPASS_TIMEOUT_SECONDS + 40,
-            )
-            if resp.status_code == 200:
-                return resp.json()
-            last_error = f"{endpoint} -> HTTP {resp.status_code}: {resp.text[:250]}"
-        except Exception as e:
-            last_error = f"{endpoint} -> {type(e).__name__}: {e}"
+    for attempt in range(1, OVERPASS_MAX_ATTEMPTS + 1):
+        for endpoint in OVERPASS_ENDPOINTS:
+            try:
+                resp = requests.post(
+                    endpoint,
+                    data={"data": query},
+                    headers=headers,
+                    timeout=OVERPASS_TIMEOUT_SECONDS + 40,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
 
-    raise RuntimeError(f"Semua endpoint Overpass gagal. Error terakhir: {last_error}")
+                if resp.status_code in retryable:
+                    if resp.status_code == 429:
+                        saw_rate_limit = True
+                    last_error = f"{endpoint} -> HTTP {resp.status_code}"
+                    continue
+
+                # Kode lain (mis. 400 query salah) tidak akan membaik
+                # dengan diulang.
+                raise RuntimeError(
+                    f"Overpass menolak query: HTTP {resp.status_code} — {resp.text[:200]}"
+                )
+            except requests.RequestException as e:
+                last_error = f"{endpoint} -> {type(e).__name__}: {e}"
+
+        if attempt < OVERPASS_MAX_ATTEMPTS:
+            # Jeda menaik: 5 dtk, 15 dtk, 45 dtk
+            time.sleep(OVERPASS_RETRY_BASE_SECONDS * (3 ** (attempt - 1)))
+
+    hint = (
+        "Server OpenStreetMap sedang membatasi permintaan (rate limit). "
+        "Coba lagi beberapa menit lagi, atau perkecil area boundary."
+        if saw_rate_limit else
+        "Server OpenStreetMap sedang tidak dapat dihubungi. Coba lagi nanti."
+    )
+    raise RuntimeError(f"{hint} (detail: {last_error})")
 
 
 # ==========================================================

@@ -260,16 +260,23 @@ class APDEngine:
             
             result = {
                 "province": self.clean_region_name(addr.get("state", "")),
+                # "municipality" SENGAJA tidak dipakai di sini. Untuk
+                # Indonesia, Nominatim umumnya memakai field itu untuk
+                # KECAMATAN, bukan kabupaten. Karena rantai kabupaten
+                # dievaluasi lebih dulu, nilainya dulu terserobot ke kolom
+                # kabupaten dan kolom kecamatan ikut kosong.
                 "kabupaten": self.clean_region_name(
-                    addr.get("city") or addr.get("county") or 
-                    addr.get("municipality") or addr.get("state_district", "")
+                    addr.get("county") or addr.get("city") or
+                    addr.get("state_district", "")
                 ),
                 "kecamatan": self.clean_region_name(
-                    addr.get("subdistrict") or addr.get("district") or
-                    addr.get("city_district") or addr.get("suburb") or
-                    addr.get("borough") or addr.get("quarter") or
-                    addr.get("neighbourhood", "")
+                    addr.get("subdistrict") or addr.get("municipality") or
+                    addr.get("city_district") or addr.get("district") or
+                    addr.get("suburb") or addr.get("borough") or
+                    addr.get("quarter", "")
                 ),
+                # "neighbourhood" dikeluarkan dari rantai kecamatan supaya
+                # tidak menyalin nilai yang sama ke kecamatan dan desa.
                 "desa": self.clean_region_name(
                     addr.get("village") or addr.get("hamlet") or
                     addr.get("neighbourhood") or addr.get("quarter", "")
@@ -321,10 +328,20 @@ class APDEngine:
                             name_elem = child
                             break
                     if name_elem is not None and name_elem.text and "FDT" in name_elem.text.strip().upper():
-                        for pm in folder:
+                        # folder.iter(), bukan iterasi anak langsung: Placemark FDT
+                        # kerap berada di dalam sub-folder, bukan tepat di bawah
+                        # folder induknya.
+                        for pm in folder.iter():
                             if safe_localname(pm) == "Placemark":
-                                pm_name_el = pm.find(".//name")
-                                pm_name = pm_name_el.text.strip().upper() if pm_name_el is not None else ""
+                                # Cari <name> tanpa bergantung pada namespace.
+                                # pm.find(".//name") gagal untuk KML bernamespace
+                                # (semua ekspor Google Earth) — inilah sebab
+                                # koordinat FDT tidak pernah terisi.
+                                pm_name = ""
+                                for el in pm.iter():
+                                    if safe_localname(el) == "name" and el.text:
+                                        pm_name = el.text.strip().upper()
+                                        break
                                 if "FDT" in pm_name:
                                     fdt_match = re.search(r'\bFDT\s*(\d+)\b', pm_name, re.IGNORECASE)
                                     if fdt_match:
