@@ -245,6 +245,7 @@ class APDEngine:
             
             data = response.json()
             addr = data.get("address", {})
+            display_name = str(data.get("display_name", ""))
             
             # Extract street/road name
             street_name = (
@@ -285,12 +286,72 @@ class APDEngine:
                 "jalan": str(street_name).strip().upper()
             }
             
+            # Untuk Indonesia, respons zoom=18 sering TIDAK memuat level
+            # kecamatan sama sekali — hanya desa, kabupaten, dan provinsi.
+            # Itu sebabnya kolom "district" tetap kosong meski desa terisi.
+            # Dua cadangan di bawah dicoba berurutan.
+            if not result["kecamatan"]:
+                result["kecamatan"] = self._kecamatan_fallback(
+                    lat, lon, display_name, result["desa"], result["kabupaten"]
+                )
+
             self.geocode_cache[key] = result
             return result
         
         except Exception:
             return self._empty_geo_result()
     
+    def _kecamatan_fallback(self, lat, lon, display_name: str,
+                            desa: str, kabupaten: str) -> str:
+        """
+        Cari nama kecamatan ketika respons utama tidak memuatnya.
+
+        Cadangan 1 — susunan display_name. Untuk Indonesia bentuknya konsisten:
+            "Ambulu, Losari, Cirebon, Jawa Barat, Jawa, 45192, Indonesia"
+             desa      kecamatan kabupaten
+        Bagian tepat setelah desa adalah kecamatan.
+
+        Cadangan 2 — panggil ulang Nominatim pada zoom 12, tingkat yang
+        memang memetakan batas kecamatan.
+        """
+        # --- Cadangan 1: susunan display_name ---
+        try:
+            parts = [p.strip() for p in display_name.split(",") if p.strip()]
+            upper = [p.upper() for p in parts]
+            if desa and desa in upper:
+                idx = upper.index(desa)
+                if idx + 1 < len(parts):
+                    kandidat = self.clean_region_name(parts[idx + 1])
+                    if kandidat and kandidat != kabupaten and kandidat != desa:
+                        return kandidat
+        except Exception:
+            pass
+
+        # --- Cadangan 2: panggilan kedua pada zoom kecamatan ---
+        try:
+            resp = self.session.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={"lat": lat, "lon": lon, "format": "jsonv2",
+                        "addressdetails": 1, "zoom": 12},
+                headers={"User-Agent": "Mozilla/5.0 APD_HPDB_API"},
+                timeout=30,
+            )
+            time.sleep(1.2)  # hormati rate limit Nominatim
+            if resp.status_code == 200:
+                d2 = resp.json()
+                a2 = d2.get("address", {})
+                kandidat = self.clean_region_name(
+                    a2.get("subdistrict") or a2.get("municipality") or
+                    a2.get("city_district") or a2.get("district") or
+                    a2.get("suburb") or d2.get("name", "")
+                )
+                if kandidat and kandidat != kabupaten:
+                    return kandidat
+        except Exception:
+            pass
+
+        return ""
+
     def _empty_geo_result(self) -> Dict[str, str]:
         """Return empty geocode result."""
         return {"province": "", "kabupaten": "", "kecamatan": "", "desa": "", "kodepos": "", "jalan": ""}
@@ -316,48 +377,63 @@ class APDEngine:
             pass
         return None, None
 
+    def _placemark_coords(self, pm) -> Optional[Tuple[str, str]]:
+        """Ambil (lat, lon) dari sebuah Placemark, apa pun namespace-nya."""
+        for coord in pm.iter():
+            if safe_localname(coord) == "coordinates" and coord.text:
+                parts = coord.text.strip().split(",")
+                if len(parts) >= 2:
+                    try:
+                        lon, lat = float(parts[0]), float(parts[1])
+                        return f"{lat:.6f}", f"{lon:.6f}"
+                    except ValueError:
+                        return None
+        return None
+
     def get_all_fdt_coords(self) -> Dict[str, Tuple[str, str]]:
-        """Get coordinates for all FDTs, mapped by FDT name (e.g. 'FDT 01' -> (lat, lon))"""
-        fdt_coords = {}
+        """
+        Kumpulkan koordinat setiap FDT, dipetakan sebagai 'FDT 01' -> (lat, lon).
+
+        Versi sebelumnya hanya melihat Placemark yang berada di dalam Folder
+        yang namanya mengandung "FDT". Pada file nyata, titik FDT kerap berada
+        di folder lain atau langsung di bawah Document, sehingga tidak ada satu
+        koordinat pun terkumpul dan sel N6 tidak pernah ditimpa — nilai bawaan
+        template tetap tertinggal di hasil.
+
+        Sekarang SELURUH Placemark di dokumen dipindai; yang dipakai adalah
+        namanya sendiri, bukan letak foldernya.
+        """
+        fdt_coords: Dict[str, Tuple[str, str]] = {}
         try:
-            for folder in self.root.iter():
-                if safe_localname(folder) == "Folder":
-                    name_elem = None
-                    for child in folder:
-                        if safe_localname(child) == "name":
-                            name_elem = child
-                            break
-                    if name_elem is not None and name_elem.text and "FDT" in name_elem.text.strip().upper():
-                        # folder.iter(), bukan iterasi anak langsung: Placemark FDT
-                        # kerap berada di dalam sub-folder, bukan tepat di bawah
-                        # folder induknya.
-                        for pm in folder.iter():
-                            if safe_localname(pm) == "Placemark":
-                                # Cari <name> tanpa bergantung pada namespace.
-                                # pm.find(".//name") gagal untuk KML bernamespace
-                                # (semua ekspor Google Earth) — inilah sebab
-                                # koordinat FDT tidak pernah terisi.
-                                pm_name = ""
-                                for el in pm.iter():
-                                    if safe_localname(el) == "name" and el.text:
-                                        pm_name = el.text.strip().upper()
-                                        break
-                                if "FDT" in pm_name:
-                                    fdt_match = re.search(r'\bFDT\s*(\d+)\b', pm_name, re.IGNORECASE)
-                                    if fdt_match:
-                                        fdt_key = f"FDT {int(fdt_match.group(1)):02d}"
-                                    else:
-                                        fdt_key = "FDT 01"
-                                        
-                                    for coord in pm.iter():
-                                        if safe_localname(coord) == "coordinates":
-                                            parts = coord.text.strip().split(",")
-                                            if len(parts) >= 2:
-                                                lon, lat = map(float, parts[:2])
-                                                fdt_coords[fdt_key] = (f"{lat:.5f}", f"{lon:.5f}")
-                                            break
+            for pm in self.root.iter():
+                if safe_localname(pm) != "Placemark":
+                    continue
+
+                # Nama Placemark — dicari tanpa bergantung pada namespace.
+                pm_name = ""
+                for el in pm.iter():
+                    if safe_localname(el) == "name" and el.text:
+                        pm_name = el.text.strip().upper()
+                        break
+
+                if "FDT" not in pm_name:
+                    continue
+
+                fdt_match = re.search(r'\bFDT\s*(\d+)\b', pm_name, re.IGNORECASE)
+                fdt_key = f"FDT {int(fdt_match.group(1)):02d}" if fdt_match else "FDT 01"
+
+                # Yang pertama ditemukan yang dipakai; jangan ditimpa titik lain
+                # yang kebetulan juga menyebut FDT (mis. label kabel).
+                if fdt_key in fdt_coords:
+                    continue
+
+                coords = self._placemark_coords(pm)
+                if coords:
+                    fdt_coords[fdt_key] = coords
         except Exception as e:
             print("Error in get_all_fdt_coords:", e)
+
+        print(f"[apd] Koordinat FDT terbaca: {fdt_coords}")
         return fdt_coords
     
     def process(self) -> Dict[str, Any]:
@@ -686,7 +762,11 @@ class APDEngine:
             if not lat_fdt and all_fdt_coords:
                 lat_fdt, lon_fdt = next(iter(all_fdt_coords.values()))
             if lat_fdt and lon_fdt:
-                ws["N6"].value = f": {lat_fdt},{lon_fdt}"
+                # Format mengikuti placeholder pada template:
+                #   ": -6.702440°, 108.455580°"
+                ws["N6"].value = f": {lat_fdt}\u00b0, {lon_fdt}\u00b0"
+            else:
+                print(f"[apd] PERINGATAN: koordinat FDT tidak ditemukan untuk {fdt_name}; N6 dibiarkan apa adanya")
             
             # Set cluster/location name
             ws["C5"].value = lokasi_nama_clean

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { Play, Volume2, VolumeX, Maximize2, ExternalLink } from "lucide-react"
+import { useState } from "react"
+import { Play, VolumeX, ExternalLink } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface YouTubePlayerProps {
@@ -20,23 +20,30 @@ export function YouTubePlayer({
 }: YouTubePlayerProps) {
   const [loaded, setLoaded] = useState(false)
   const [started, setStarted] = useState(autoplay)
-  const iframeRef = useRef<HTMLIFrameElement>(null)
 
   if (!videoId) return null
 
-  const embedUrl = `https://www.youtube.com/embed/${videoId}?${new URLSearchParams({
+  // ID video dibersihkan: hanya karakter yang dipakai YouTube. Tanpa ini,
+  // nilai yang mengandung ? atau & akan merusak query string embed.
+  const safeId = videoId.replace(/[^A-Za-z0-9_-]/g, "")
+
+  const embedUrl = `https://www.youtube.com/embed/${safeId}?${new URLSearchParams({
     autoplay: started ? "1" : "0",
-    mute: "1",           // required for autoplay in browsers
+    // Autoplay hanya boleh tanpa suara. Kalau pemutaran dimulai oleh klik
+    // pengguna, kebijakan browser tidak lagi mewajibkan mute — sebelumnya
+    // nilai ini selalu "1" sehingga video hasil klik pun tetap bisu.
+    mute: autoplay ? "1" : "0",
     rel: "0",            // don't show related videos from other channels
     modestbranding: "1", // minimal YouTube branding
     playsinline: "1",    // plays inline on iOS
-    enablejsapi: "1",
   }).toString()}`
 
   return (
     <div className={cn("relative w-full overflow-hidden rounded-xl bg-black/40 border border-white/10", className)}>
-      {/* Skeleton loader while iframe loads */}
-      {!loaded && (
+      {/* Skeleton loader — hanya saat iframe benar-benar sedang dimuat.
+          Tanpa syarat `started`, spinner ini tampil selamanya di balik
+          tombol play ketika autoplay dimatikan. */}
+      {started && !loaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
           <div className="flex flex-col items-center gap-3">
             <div className="h-10 w-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
@@ -63,7 +70,6 @@ export function YouTubePlayer({
       <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
         {started && (
           <iframe
-            ref={iframeRef}
             src={embedUrl}
             title={title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -83,7 +89,7 @@ export function YouTubePlayer({
           </span>
         </div>
         <a
-          href={`https://www.youtube.com/watch?v=${videoId}`}
+          href={`https://www.youtube.com/watch?v=${safeId}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors"

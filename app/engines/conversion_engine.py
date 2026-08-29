@@ -804,6 +804,33 @@ def convert_dxf_to_kml(content: bytes, utm_zone: int, is_southern: bool) -> byte
                     "type": "polyline"
                 })
                 
+    # Gabungkan POINT dan CIRCLE yang berada di titik yang sama persis.
+    #
+    # convert_kml_to_dxf menulis TIGA entity untuk setiap placemark titik:
+    # CIRCLE (penanda visual radius 1 m), POINT, dan TEXT (label). Saat
+    # dikonversi balik, CIRCLE dan POINT terbaca sebagai dua titik terpisah
+    # di koordinat identik. Label TEXT hanya menempel ke salah satunya,
+    # sehingga yang lain keluar sebagai placemark tanpa nama ("Node-POINT")
+    # dan setiap titik tergandakan.
+    #
+    # Pembulatan 3 desimal = 1 mm dalam satuan meter UTM: cukup untuk
+    # menyatukan entity yang memang setumpuk, tapi tidak akan pernah
+    # menggabungkan dua objek berbeda.
+    deduped = {}
+    for pt in points:
+        key = (pt["layer"], round(pt["x"], 3), round(pt["y"], 3))
+        existing = deduped.get(key)
+        if existing is None:
+            deduped[key] = pt
+        elif existing["type"] == "circle" and pt["type"] == "point":
+            # POINT lebih bermakna daripada CIRCLE sebagai representasi titik
+            pt["name"] = pt["name"] or existing["name"]
+            deduped[key] = pt
+
+    if len(deduped) != len(points):
+        print(f"[dxf2kml] Titik setumpuk digabung: {len(points)} -> {len(deduped)}")
+    points = list(deduped.values())
+
     # Match TEXT labels to close POINTS/CIRCLES or LINES (proximity search)
     unmatched_texts = []
     for t in texts:

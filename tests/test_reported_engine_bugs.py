@@ -46,7 +46,8 @@ coords = eng.get_all_fdt_coords()
 check("FDT 01 terbaca", "FDT 01" in coords, "-> %s" % (coords.get("FDT 01"),))
 check("FDT 02 terbaca (dalam sub-folder / anak langsung)", "FDT 02" in coords,
       "-> %s" % (coords.get("FDT 02"),))
-check("koordinat benar", coords.get("FDT 01") == ("-6.19600", "106.83000"),
+# Presisi 6 desimal, menyamai format placeholder pada template APD
+check("koordinat benar", coords.get("FDT 01") == ("-6.196000", "106.830000"),
       "-> %s" % (coords.get("FDT 01"),))
 
 

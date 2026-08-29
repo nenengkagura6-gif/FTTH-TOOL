@@ -40,11 +40,24 @@ function dmsToDD(
 /** Converts Decimal Degrees to DMS components */
 function ddToDMS(dd: number): { degrees: number; minutes: number; seconds: number } {
   const absDd = Math.abs(dd)
-  const degrees = Math.floor(absDd)
+  let degrees = Math.floor(absDd)
   const minutesFull = (absDd - degrees) * 60
-  const minutes = Math.floor(minutesFull)
-  const seconds = (minutesFull - minutes) * 60
-  return { degrees, minutes, seconds: Math.round(seconds * 10000) / 10000 }
+  let minutes = Math.floor(minutesFull)
+  let seconds = Math.round((minutesFull - minutes) * 60 * 10000) / 10000
+
+  // Pembulatan detik bisa menghasilkan tepat 60, yang bukan DMS sah.
+  // Contoh: -6.999999999 dulu tampil sebagai 6°59'60.0000" — seharusnya
+  // 7°0'0". Naikkan ke satuan di atasnya.
+  if (seconds >= 60) {
+    seconds = 0
+    minutes += 1
+  }
+  if (minutes >= 60) {
+    minutes = 0
+    degrees += 1
+  }
+
+  return { degrees, minutes, seconds }
 }
 
 /** Determines hemisphere direction from DD value */
