@@ -48,14 +48,13 @@ ALTER TABLE public.processing_jobs
 -- ====================================================================
 -- VERIFIKASI — statement terakhir, hasilnya yang tampil
 -- ====================================================================
+-- CATATAN: PostgreSQL menyimpan constraint ini sebagai
+--   CHECK ((tool_name = ANY (ARRAY['kml_to_boq'::text, ...])))
+-- bukan sebagai IN (...) sederhana. Pemeriksaan yang mencoba mengurai
+-- daftarnya dengan regex akan gagal dan mengembalikan NULL. Cukup cek
+-- apakah nama tool-nya ada di dalam teks definisi.
 SELECT
-    ('auto_placemark' = ANY (
-        string_to_array(
-            replace(replace(substring(pg_get_constraintdef(oid)
-                            from '\(([^)]*)\)$'), '''', ''), ' ', ''),
-            ','
-        )
-    )) AS auto_placemark_diizinkan,
+    pg_get_constraintdef(oid) LIKE '%auto_placemark%' AS auto_placemark_diizinkan,
     pg_get_constraintdef(oid) AS definisi
 FROM pg_constraint
 WHERE conname = 'processing_jobs_tool_name_check';
