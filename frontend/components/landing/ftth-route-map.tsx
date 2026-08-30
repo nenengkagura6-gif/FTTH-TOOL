@@ -1,150 +1,215 @@
+"use client"
+
+import { useEffect, useRef, useState } from "react"
+
 /**
- * Peta rute FTTH yang menggambar dirinya sendiri.
+ * Skema jaringan FTTH yang menggambar dirinya sendiri.
  *
- * Ini satu-satunya elemen "berani" di halaman depan; semua section lain
- * dijaga tetap tenang. Alasannya sederhana: keunikan sebuah landing page
- * datang dari subjeknya, bukan dari efek. Geometri rute fiber — trunk dari
- * FDT, cabang ke FAT, sisir drop ke homepass — adalah kosakata visual yang
- * tidak akan pernah muncul di landing SaaS mana pun.
+ * Ini satu-satunya elemen "berani" di halaman depan; section lain dijaga
+ * tenang. Keunikan sebuah landing page datang dari subjeknya — dan
+ * topologi FTTH (feeder dari OLT, FDT, splitter ke FAT, sisir drop ke
+ * homepass, di dalam batas cluster) adalah kosakata visual yang tidak akan
+ * pernah muncul di landing SaaS mana pun.
  *
- * Catatan teknis:
- *  - Murni SVG + CSS. Tidak ada JavaScript, tidak ada gambar, tidak ada
- *    request tambahan. Bobotnya hanya markup.
- *  - Garis digambar dengan pathLength="1", jadi dasharray tidak perlu tahu
- *    panjang asli tiap path.
- *  - Animasi berjalan SEKALI lalu berhenti (fill-mode forwards, tanpa
- *    iterate). Latar yang berdenyut terus adalah salah satu tanda paling
- *    khas halaman generik.
- *  - Semua warna memakai token tema, jadi ikut benar di mode terang.
- *  - Properti `opacity` dipakai oleh animasi, jadi peredupan visual
- *    memakai fill-opacity / stroke-opacity agar tidak saling menimpa.
- *  - Aturan prefers-reduced-motion global di globals.css memangkas durasi
- *    ke ~0, dan karena fill-mode forwards, hasilnya langsung tampil utuh.
+ * Catatan teknis
+ * --------------
+ * • Murni SVG + CSS. Tanpa gambar, tanpa request tambahan.
+ * • Garis dipakai `pathLength={1}` sehingga dasharray tidak perlu tahu
+ *   panjang asli tiap path.
+ * • Animasi diulang setiap kali masuk layar, lewat atribut `data-play`.
+ *   Nilai awalnya "true" di markup, jadi kalau JavaScript tidak berjalan
+ *   sama sekali, animasinya tetap main sekali saat muat dan berakhir di
+ *   keadaan lengkap (fill-mode forwards). Tidak ada jalur kegagalan yang
+ *   menyembunyikan konten — berbeda dari pola whileInView + once:true yang
+ *   dulu membuat section kosong permanen ketika observer luput memicu.
+ * • Warna memakai token tema, jadi ikut benar di mode terang.
+ * • prefers-reduced-motion dihormati lewat aturan global di globals.css.
  */
 
-const NODE_FDT = { x: 88, y: 210 }
-const FAT_1 = { x: 392, y: 118 }
-const FAT_2 = { x: 392, y: 302 }
-
-/** Sisir drop homepass di kanan tiap FAT. */
-const HP_1 = [70, 118, 166]
-const HP_2 = [254, 302, 350]
+const FDT = { x: 112, y: 240 }
+const BRANCH_X = 262
+const FAT_X = 410
+const FATS = [
+  { y: 120, label: "FAT 01", ratio: "1:8", jarak: "±180 m" },
+  { y: 240, label: "FAT 02", ratio: "1:8", jarak: "±240 m" },
+  { y: 360, label: "FAT 03", ratio: "1:16", jarak: "±310 m" },
+]
+const COMB_X = 548
+const DROP_X = 616
+/** Simpangan vertikal tiap homepass dari FAT induknya. */
+const HP_OFFSET = [-42, 0, 42]
 
 export function FtthRouteMap({ className }: { className?: string }) {
+  const ref = useRef<SVGSVGElement>(null)
+  const [play, setPlay] = useState(true)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === "undefined") return
+
+    // Dimatikan saat keluar layar, dinyalakan lagi saat kembali — itulah
+    // yang membuat animasinya hidup ulang tiap kali di-scroll.
+    const io = new IntersectionObserver(
+      ([entry]) => setPlay(entry.isIntersecting),
+      { threshold: 0.25 }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
   return (
     <svg
-      viewBox="0 0 720 420"
+      ref={ref}
+      data-play={play ? "true" : "false"}
+      viewBox="0 0 780 480"
       role="img"
-      aria-label="Skema jaringan FTTH: satu FDT bercabang ke dua FAT, masing-masing melayani tiga homepass"
+      aria-label="Skema jaringan FTTH: feeder dari OLT menuju FDT, bercabang ke tiga FAT dengan splitter, masing-masing melayani tiga homepass di dalam satu batas cluster"
       className={className}
       fill="none"
     >
       <defs>
-        {/* Grid teknis — mengacu pada kertas kerja drafter, bukan hiasan */}
-        <pattern id="rm-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-          <path
-            d="M 24 0 L 0 0 0 24"
-            stroke="var(--pattern-line)"
-            strokeWidth="1"
-            fill="none"
-          />
+        <pattern id="rm-grid" width="26" height="26" patternUnits="userSpaceOnUse">
+          <path d="M 26 0 L 0 0 0 26" stroke="var(--pattern-line)" strokeWidth="1" />
         </pattern>
-        <linearGradient id="rm-fade" x1="0" y1="0" x2="1" y2="0">
+        <linearGradient id="rm-edge" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="var(--background)" stopOpacity="1" />
-          <stop offset="18%" stopColor="var(--background)" stopOpacity="0" />
-          <stop offset="82%" stopColor="var(--background)" stopOpacity="0" />
+          <stop offset="14%" stopColor="var(--background)" stopOpacity="0" />
+          <stop offset="86%" stopColor="var(--background)" stopOpacity="0" />
           <stop offset="100%" stopColor="var(--background)" stopOpacity="1" />
         </linearGradient>
+        {/* Jalur yang dilalui pulsa cahaya — meniru sinyal di dalam serat */}
+        <path id="rm-feeder" d={`M 8 ${FDT.y} H ${FDT.x - 17}`} />
       </defs>
 
-      <rect width="720" height="420" fill="url(#rm-grid)" />
+      <rect width="780" height="480" fill="url(#rm-grid)" />
 
-      <g className="rm-lines" stroke="var(--primary)" strokeLinecap="round">
+      {/* ---- Batas cluster: bentuk tak beraturan, seperti poligon boundary asli ---- */}
+      <path
+        className="rm-draw rm-d0"
+        pathLength={1}
+        d="M 60 62 L 690 44 L 726 250 L 664 438 L 214 452 L 46 336 Z"
+        stroke="var(--muted-foreground)"
+        strokeOpacity={0.35}
+        strokeWidth="1.25"
+        strokeDasharray="6 5"
+      />
+      <text
+        className="rm-fade rm-d0"
+        x="66" y="46" fontSize="10" fontFamily="var(--font-mono)"
+        fill="var(--muted-foreground)" fillOpacity={0.65} letterSpacing="0.12em"
+      >
+        BOUNDARY CLUSTER
+      </text>
+
+      <g stroke="var(--primary)" strokeLinecap="round">
+        {/* Feeder dari OLT */}
+        <path className="rm-draw rm-d0" pathLength={1} strokeWidth="2.5" strokeOpacity={0.55}
+              d={`M 8 ${FDT.y} H ${FDT.x - 17}`} />
+
         {/* Trunk FDT -> titik cabang */}
-        <path className="rm-draw rm-d0" pathLength={1} strokeWidth="2.5"
-              d={`M ${NODE_FDT.x + 14} ${NODE_FDT.y} H 248`} />
+        <path className="rm-draw rm-d1" pathLength={1} strokeWidth="2.5"
+              d={`M ${FDT.x + 17} ${FDT.y} H ${BRANCH_X}`} />
 
-        {/* Cabang ke FAT 01 (naik) dan FAT 02 (turun) */}
-        <path className="rm-draw rm-d1" pathLength={1} strokeWidth="2"
-              d={`M 248 ${NODE_FDT.y} V ${FAT_1.y + 10} Q 248 ${FAT_1.y} 258 ${FAT_1.y} H ${FAT_1.x - 11}`} />
-        <path className="rm-draw rm-d1" pathLength={1} strokeWidth="2"
-              d={`M 248 ${NODE_FDT.y} V ${FAT_2.y - 10} Q 248 ${FAT_2.y} 258 ${FAT_2.y} H ${FAT_2.x - 11}`} />
+        {/* Cabang ke tiap FAT */}
+        {FATS.map((f, i) => {
+          const naik = f.y < FDT.y
+          const d =
+            f.y === FDT.y
+              ? `M ${BRANCH_X} ${FDT.y} H ${FAT_X - 13}`
+              : `M ${BRANCH_X} ${FDT.y} V ${naik ? f.y + 14 : f.y - 14} Q ${BRANCH_X} ${f.y} ${BRANCH_X + 14} ${f.y} H ${FAT_X - 13}`
+          return (
+            <path key={`br-${i}`} className="rm-draw rm-d2" pathLength={1}
+                  strokeWidth="2" d={d} />
+          )
+        })}
 
         {/* Batang sisir drop */}
-        <path className="rm-draw rm-d2" pathLength={1} strokeWidth="1.5" opacity={0.55}
-              d={`M ${FAT_1.x + 11} ${FAT_1.y} H 556`} />
-        <path className="rm-draw rm-d2" pathLength={1} strokeWidth="1.5" opacity={0.55}
-              d={`M ${FAT_2.x + 11} ${FAT_2.y} H 556`} />
+        {FATS.map((f, i) => (
+          <path key={`comb-${i}`} className="rm-draw rm-d3" pathLength={1}
+                strokeWidth="1.5" strokeOpacity={0.5}
+                d={`M ${FAT_X + 13} ${f.y} H ${COMB_X}`} />
+        ))}
 
         {/* Drop ke tiap homepass */}
-        {HP_1.map((y) => (
-          <path key={`h1-${y}`} className="rm-draw rm-d3" pathLength={1}
-                strokeWidth="1.25" opacity={0.4}
-                d={`M 556 ${FAT_1.y} Q 580 ${FAT_1.y} 580 ${y} H 606`} />
-        ))}
-        {HP_2.map((y) => (
-          <path key={`h2-${y}`} className="rm-draw rm-d3" pathLength={1}
-                strokeWidth="1.25" opacity={0.4}
-                d={`M 556 ${FAT_2.y} Q 580 ${FAT_2.y} 580 ${y} H 606`} />
-        ))}
+        {FATS.map((f, fi) =>
+          HP_OFFSET.map((dy, di) => (
+            <path key={`hp-${fi}-${di}`} className="rm-draw rm-d4" pathLength={1}
+                  strokeWidth="1.25" strokeOpacity={0.35}
+                  d={`M ${COMB_X} ${f.y} Q ${COMB_X + 26} ${f.y} ${COMB_X + 26} ${f.y + dy} H ${DROP_X}`} />
+          ))
+        )}
       </g>
 
+      {/* ---- Pulsa cahaya menyusuri feeder: sinyal masuk ke FDT ---- */}
+      <circle className="rm-pulse" r="3.5" fill="var(--primary)" />
+
       {/* ---- Node ---- */}
-      <g className="rm-nodes">
-        {/* FDT: persegi — perangkat aktif, bukan titik pasif */}
-        <g className="rm-pop rm-d0">
-          <rect
-            x={NODE_FDT.x - 13} y={NODE_FDT.y - 13} width="26" height="26" rx="4"
-            fill="var(--background)" stroke="var(--primary)" strokeWidth="2.5"
-          />
-          <rect
-            x={NODE_FDT.x - 5} y={NODE_FDT.y - 5} width="10" height="10" rx="1.5"
-            fill="var(--primary)"
-          />
+      <g>
+        {/* FDT — persegi, perangkat aktif */}
+        <g className="rm-pop rm-d1">
+          <rect x={FDT.x - 16} y={FDT.y - 16} width="32" height="32" rx="5"
+                fill="var(--background)" stroke="var(--primary)" strokeWidth="2.5" />
+          <rect x={FDT.x - 6} y={FDT.y - 6} width="12" height="12" rx="2"
+                fill="var(--primary)" />
         </g>
 
-        {/* FAT: lingkaran */}
-        {[FAT_1, FAT_2].map((n, i) => (
-          <g key={`fat-${i}`} className={`rm-pop rm-d${i === 0 ? 1 : 1}`}>
-            <circle cx={n.x} cy={n.y} r="10"
-                    fill="var(--background)" stroke="var(--primary)" strokeWidth="2" />
-            <circle cx={n.x} cy={n.y} r="3.5" fill="var(--primary)" />
+        {/* FAT — lingkaran dengan inti */}
+        {FATS.map((f, i) => (
+          <g key={`fat-${i}`} className="rm-pop rm-d2">
+            <circle cx={FAT_X} cy={f.y} r="12" fill="var(--background)"
+                    stroke="var(--primary)" strokeWidth="2" />
+            <circle cx={FAT_X} cy={f.y} r="4" fill="var(--primary)" />
           </g>
         ))}
 
-        {/* Homepass: titik kecil berongga */}
-        {[...HP_1, ...HP_2].map((y, i) => (
-          <circle key={`hp-${i}`} className="rm-pop rm-d3"
-                  cx="612" cy={y} r="4.5"
-                  fill="var(--background)" stroke="var(--primary)"
-                  strokeWidth="1.5" strokeOpacity={0.75} />
-        ))}
+        {/* Homepass — titik kecil berongga */}
+        {FATS.map((f, fi) =>
+          HP_OFFSET.map((dy, di) => (
+            <circle key={`hpn-${fi}-${di}`} className="rm-pop rm-d4"
+                    cx={DROP_X + 6} cy={f.y + dy} r="4.5"
+                    fill="var(--background)" stroke="var(--primary)"
+                    strokeWidth="1.5" strokeOpacity={0.7} />
+          ))
+        )}
       </g>
 
-      {/* ---- Label: mono, kecil, tenang ---- */}
-      <g className="rm-labels" fontFamily="var(--font-mono)" fill="var(--muted-foreground)">
-        <text x={NODE_FDT.x} y={NODE_FDT.y + 40} fontSize="12" textAnchor="middle"
-              className="rm-fade rm-d0" letterSpacing="0.08em">FDT 01</text>
+      {/* ---- Anotasi teknis ---- */}
+      <g fontFamily="var(--font-mono)" fill="var(--muted-foreground)">
+        <text className="rm-fade rm-d0" x="10" y={FDT.y - 12} fontSize="9"
+              fillOpacity={0.6} letterSpacing="0.1em">OLT</text>
 
-        <text x={FAT_1.x} y={FAT_1.y - 22} fontSize="11" textAnchor="middle"
-              className="rm-fade rm-d1" letterSpacing="0.08em">FAT 01</text>
-        <text x={FAT_2.x} y={FAT_2.y + 30} fontSize="11" textAnchor="middle"
-              className="rm-fade rm-d1" letterSpacing="0.08em">FAT 02</text>
+        <text className="rm-fade rm-d1" x={FDT.x} y={FDT.y + 40} fontSize="12"
+              textAnchor="middle" letterSpacing="0.08em">FDT 01</text>
+        <text className="rm-fade rm-d1" x={FDT.x} y={FDT.y + 54} fontSize="9"
+              textAnchor="middle" fillOpacity={0.6} letterSpacing="0.1em">48 CORE</text>
 
-        <text x="632" y={HP_1[0] + 4} fontSize="10" className="rm-fade rm-d3"
-              fillOpacity={0.8} letterSpacing="0.06em">HP-001</text>
-        <text x="632" y={HP_2[2] + 4} fontSize="10" className="rm-fade rm-d3"
-              fillOpacity={0.8} letterSpacing="0.06em">HP-006</text>
+        {FATS.map((f, i) => (
+          <g key={`lbl-${i}`}>
+            <text className="rm-fade rm-d2" x={FAT_X} y={f.y - 22} fontSize="10.5"
+                  textAnchor="middle" letterSpacing="0.08em">{f.label}</text>
+            <text className="rm-fade rm-d3" x={FAT_X + 70} y={f.y - 8} fontSize="9"
+                  textAnchor="middle" fillOpacity={0.55} letterSpacing="0.08em">
+              {f.ratio}
+            </text>
+            <text className="rm-fade rm-d3" x={(BRANCH_X + FAT_X) / 2} y={f.y - 8}
+                  fontSize="8.5" textAnchor="middle" fillOpacity={0.45}
+                  letterSpacing="0.06em">{f.jarak}</text>
+          </g>
+        ))}
 
-        {/* Koordinat asli — detail domain yang tidak akan ada di template */}
-        <text x={NODE_FDT.x - 14} y="386" fontSize="10" className="rm-fade rm-d3"
-              fillOpacity={0.6} letterSpacing="0.04em">
+        <text className="rm-fade rm-d4" x={DROP_X + 20} y={FATS[0].y + HP_OFFSET[0] + 4}
+              fontSize="9.5" fillOpacity={0.7} letterSpacing="0.06em">HP-001</text>
+        <text className="rm-fade rm-d4" x={DROP_X + 20} y={FATS[2].y + HP_OFFSET[2] + 4}
+              fontSize="9.5" fillOpacity={0.7} letterSpacing="0.06em">HP-009</text>
+
+        {/* Koordinat nyata — detail domain yang tidak ada di template mana pun */}
+        <text className="rm-fade rm-d4" x="62" y="440" fontSize="9.5"
+              fillOpacity={0.55} letterSpacing="0.04em">
           -6.702440&#176;, 108.455580&#176;
         </text>
       </g>
 
-      {/* Tepi kiri-kanan dilembutkan agar menyatu dengan halaman */}
-      <rect width="720" height="420" fill="url(#rm-fade)" pointerEvents="none" />
+      <rect width="780" height="480" fill="url(#rm-edge)" pointerEvents="none" />
     </svg>
   )
 }
