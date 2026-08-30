@@ -94,6 +94,11 @@ export function ToolPage({
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [progressMessage, setProgressMessage] = useState<string>("")
   const [outputFilename, setOutputFilename] = useState<string | null>(null)
+  // Fakta nyata dari baris job, dipakai di layar hasil.
+  const [jobStats, setJobStats] = useState<{ bytes: number | null; ms: number | null }>({
+    bytes: null,
+    ms: null,
+  })
   const [activeTab, setActiveTab] = useState<"tool" | "tutorial">("tool")
   
   const primaryInputRef = useRef<HTMLInputElement>(null)
@@ -444,21 +449,15 @@ export function ToolPage({
         }
         
         if (job.status === 'queued' || job.status === 'processing') {
-          // Use real progress from backend if available, otherwise artificial progress
-          setProgress(prev => {
-            if (job.progress_percent && job.progress_percent > 0) {
-              return job.progress_percent
-            }
-            // Artificial progress: slow increments that asymptotically approach 90%
-            if (job.status === 'queued') {
-              // Slow progress while queued (5% → 15%)
-              return prev < 15 ? prev + 1 : 15
-            }
-            // Faster progress during processing (up to 90%)
-            const remaining = 90 - prev
-            const increment = Math.max(1, Math.floor(remaining * 0.15))
-            return Math.min(prev + increment, 90)
-          })
+          // Hanya angka dari backend. Versi lama merangkak sendiri secara
+          // asimtotis ke 90% tanpa hubungan dengan pekerjaan sebenarnya —
+          // angka yang berbohong. Kalau backend belum mengirim persentase,
+          // progress dibiarkan null dan bar-nya jadi indeterminate.
+          setProgress(
+            typeof job.progress_percent === 'number' && job.progress_percent > 0
+              ? job.progress_percent
+              : 0
+          )
 
           // setProgressMessage dipanggil lewat bentuk fungsional. Callback
           // setInterval menutup nilai progressMessage dari render saat
@@ -473,6 +472,10 @@ export function ToolPage({
           setProgress(100)
           setProgressMessage('Selesai!')
           setOutputFilename(job.output_filename)
+          setJobStats({
+            bytes: job.output_file_size_bytes ?? null,
+            ms: job.processing_time_ms ?? null,
+          })
           
           const finalUrl = job.output_file_url
           if (finalUrl) {
@@ -506,6 +509,7 @@ export function ToolPage({
     setResultUrl(null)
     setProgressMessage("")
     setOutputFilename(null)
+    setJobStats({ bytes: null, ms: null })
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     releaseBlobUrl()
   }
@@ -549,7 +553,7 @@ export function ToolPage({
               <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-balance">
                 {title}
               </h1>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-danger/10 text-danger border border-danger/20">
                 <ShieldAlert className="h-3 w-3" />
                 {locale === "id" ? "TERBATAS" : "RESTRICTED"}
               </span>
@@ -559,13 +563,13 @@ export function ToolPage({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm">
+          <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm">
             <h2 className="text-sm font-medium">{locale === "id" ? "Format didukung" : "Supported formats"}</h2>
             <ul className="mt-3 flex flex-wrap gap-2">
               {acceptedFormats.map((f) => (
                 <li
                   key={f}
-                  className="font-mono text-xs px-2 py-1 rounded-md border border-white/10 bg-white/[0.03] text-muted-foreground"
+                  className="font-mono text-xs px-2 py-1 rounded-md border border-border bg-surface-1 text-muted-foreground"
                 >
                   {f}
                 </li>
@@ -576,9 +580,9 @@ export function ToolPage({
 
         {/* Main — Locked overlay */}
         <div className="space-y-5">
-          <div className="relative rounded-2xl border border-red-500/20 bg-card/40 backdrop-blur-sm overflow-hidden">
+          <div className="relative rounded-2xl border border-danger/20 bg-card/40 backdrop-blur-sm overflow-hidden">
             {/* Blurred mock content */}
-            <div className="p-5 border-b border-white/10 opacity-20 blur-[2px] pointer-events-none select-none">
+            <div className="p-5 border-b border-border opacity-20 blur-[2px] pointer-events-none select-none">
               <h2 className="text-base font-medium">Upload files</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 Drag and drop or click to browse
@@ -586,8 +590,8 @@ export function ToolPage({
             </div>
 
             <div className="p-5 opacity-10 blur-[3px] pointer-events-none select-none">
-              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-white/10 px-6 py-12">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-background">
+              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border px-6 py-12">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background">
                   <Upload className="h-5 w-5 text-primary" />
                 </div>
                 <div className="text-center">
@@ -600,10 +604,10 @@ export function ToolPage({
             {/* Upgrade / Reset CTA overlay */}
             <div className="absolute inset-0 flex items-center justify-center bg-background/85 backdrop-blur-[2px] p-6">
               <div className="text-center max-w-md">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500/20 to-rose-600/20 ring-1 ring-red-500/30 mb-4 animate-pulse">
-                  <ShieldAlert className="h-8 w-8 text-red-400" />
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-danger/20 to-danger/20 ring-1 ring-danger/30 mb-4 animate-pulse">
+                  <ShieldAlert className="h-8 w-8 text-danger" />
                 </div>
-                <h3 className="text-lg font-semibold text-red-400">
+                <h3 className="text-lg font-semibold text-danger">
                   {locale === "id" ? "Batas Perangkat Tercapai" : "Device Limit Reached"}
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
@@ -619,7 +623,7 @@ export function ToolPage({
                     <button
                       onClick={handleResetDevices}
                       disabled={resettingDevices}
-                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:from-blue-500 hover:to-indigo-500 transition-all shadow-lg shadow-blue-500/20 cursor-pointer disabled:opacity-50"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-blue-500/20 cursor-pointer disabled:opacity-50"
                     >
                       {resettingDevices ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -631,7 +635,7 @@ export function ToolPage({
                   ) : (
                     <button
                       onClick={() => showUpgradeModal(featureKey)}
-                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 px-6 py-2.5 text-sm font-semibold text-white hover:from-red-400 hover:to-rose-500 transition-all shadow-lg shadow-red-500/20 cursor-pointer"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-danger to-danger/90 px-6 py-2.5 text-sm font-semibold text-white hover:from-danger hover:to-danger transition-all shadow-lg shadow-red-500/20 cursor-pointer"
                     >
                       <Zap className="h-4 w-4" />
                       {locale === "id" ? "Upgrade Akun Sekarang" : "Upgrade Account Now"}
@@ -659,7 +663,7 @@ export function ToolPage({
               <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-balance">
                 {title}
               </h1>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-warning/10 text-warning border border-warning/20">
                 <Crown className="h-3 w-3" />
                 PRO
               </span>
@@ -669,13 +673,13 @@ export function ToolPage({
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm">
+          <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm">
             <h2 className="text-sm font-medium">Supported formats</h2>
             <ul className="mt-3 flex flex-wrap gap-2">
               {acceptedFormats.map((f) => (
                 <li
                   key={f}
-                  className="font-mono text-xs px-2 py-1 rounded-md border border-white/10 bg-white/[0.03] text-muted-foreground"
+                  className="font-mono text-xs px-2 py-1 rounded-md border border-border bg-surface-1 text-muted-foreground"
                 >
                   {f}
                 </li>
@@ -686,9 +690,9 @@ export function ToolPage({
 
         {/* Main — Locked overlay */}
         <div className="space-y-5">
-          <div className="relative rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden">
+          <div className="relative rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden">
             {/* Blurred mock content */}
-            <div className="p-5 border-b border-white/10 opacity-30 blur-[2px] pointer-events-none select-none">
+            <div className="p-5 border-b border-border opacity-30 blur-[2px] pointer-events-none select-none">
               <h2 className="text-base font-medium">Upload files</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 Drag and drop or click to browse
@@ -696,8 +700,8 @@ export function ToolPage({
             </div>
 
             <div className="p-5 opacity-20 blur-[3px] pointer-events-none select-none">
-              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-white/10 px-6 py-12">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-background">
+              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border px-6 py-12">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background">
                   <Upload className="h-5 w-5 text-primary" />
                 </div>
                 <div className="text-center">
@@ -710,19 +714,19 @@ export function ToolPage({
             {/* Upgrade CTA overlay */}
             <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
               <div className="text-center max-w-sm px-6">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/20 ring-1 ring-amber-500/30 mb-4">
-                  <Lock className="h-8 w-8 text-amber-400" />
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-warning/20 to-warning/20 ring-1 ring-warning/30 mb-4">
+                  <Lock className="h-8 w-8 text-warning" />
                 </div>
                 <h3 className="text-lg font-semibold">
                   This tool requires{" "}
-                  <span className="text-amber-400">Pro</span>
+                  <span className="text-warning">Pro</span>
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Upgrade your plan to unlock {title} and all other premium tools.
                 </p>
                 <button
                   onClick={() => showUpgradeModal(featureKey)}
-                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-3 text-sm font-semibold text-black hover:from-amber-400 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/20"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-warning to-warning/90 px-6 py-3 text-sm font-semibold text-black hover:from-warning hover:to-warning transition-all shadow-lg shadow-amber-500/20"
                 >
                   <Zap className="h-4 w-4" />
                   Upgrade to Pro
@@ -751,13 +755,13 @@ export function ToolPage({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm">
+        <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm">
           <h2 className="text-sm font-medium">Supported formats</h2>
           <ul className="mt-3 flex flex-wrap gap-2">
             {acceptedFormats.map((f) => (
               <li
                 key={f}
-                className="font-mono text-xs px-2 py-1 rounded-md border border-white/10 bg-white/[0.03] text-muted-foreground"
+                className="font-mono text-xs px-2 py-1 rounded-md border border-border bg-surface-1 text-muted-foreground"
               >
                 {f}
               </li>
@@ -765,7 +769,7 @@ export function ToolPage({
           </ul>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm">
+        <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm">
           <h2 className="text-sm font-medium">Processing notes</h2>
           <ul className="mt-3 space-y-2">
             {processingNotes.map((n, i) => (
@@ -803,7 +807,7 @@ export function ToolPage({
       <div className="space-y-5">
         {/* Tab header — only shown when tutorial is available */}
         {hasTutorial && (
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/10 w-fit">
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-1 border border-border w-fit">
             <button
               type="button"
               id="tab-tool"
@@ -859,14 +863,14 @@ export function ToolPage({
 
               {/* Step-by-step guide */}
               {tutorialEntry && tutorialEntry.steps.length > 0 && (
-                <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden">
-                  <div className="p-4 border-b border-white/10">
+                <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden">
+                  <div className="p-4 border-b border-border">
                     <h2 className="text-sm font-semibold">Panduan Langkah-demi-Langkah</h2>
                     <p className="text-xs text-muted-foreground mt-0.5">Ikuti langkah berikut untuk menggunakan tool ini</p>
                   </div>
                   <ol className="divide-y divide-white/5">
                     {tutorialEntry.steps.map((step, i) => (
-                      <li key={i} className="flex items-start gap-4 p-4 hover:bg-white/[0.02] transition-colors">
+                      <li key={i} className="flex items-start gap-4 p-4 hover:bg-surface-1 transition-colors">
                         <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold ring-1 ring-primary/20 mt-0.5">
                           {i + 1}
                         </span>
@@ -882,8 +886,8 @@ export function ToolPage({
 
               {/* Sample file download */}
               {tutorialEntry?.sampleFileUrl && (
-                <div className="rounded-2xl border border-white/10 bg-card/40 p-4 flex items-center gap-4">
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20">
+                <div className="rounded-2xl border border-border bg-card/40 p-4 flex items-center gap-4">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-success/10 text-success ring-1 ring-success/20">
                     <Download className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -894,7 +898,7 @@ export function ToolPage({
                     href={tutorialEntry.sampleFileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-shrink-0 inline-flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                    className="flex-shrink-0 inline-flex items-center gap-2 rounded-lg bg-success/10 border border-success/20 px-3 py-2 text-xs font-medium text-success hover:bg-success/20 transition-colors"
                   >
                     <Download className="h-3.5 w-3.5" />
                     Download
@@ -906,7 +910,7 @@ export function ToolPage({
               <button
                 type="button"
                 onClick={() => setActiveTab("tool")}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-white/[0.05] transition-colors"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-1 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
               >
                 <Wrench className="h-4 w-4" />
                 Mulai gunakan tool
@@ -924,8 +928,8 @@ export function ToolPage({
               transition={{ duration: 0.2 }}
               className="space-y-5"
             >
-              <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden">
-                <div className="p-5 border-b border-white/10">
+              <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden">
+                <div className="p-5 border-b border-border">
                   <h2 className="text-base font-medium">Upload files</h2>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Drag and drop or click to browse
@@ -954,7 +958,7 @@ export function ToolPage({
                       "relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 cursor-pointer transition-all",
                       isDragging
                         ? "border-primary bg-primary/5"
-                        : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]",
+                        : "border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2",
                     )}
                     aria-label="Upload primary file"
                   >
@@ -967,7 +971,7 @@ export function ToolPage({
                     />
                     <div
                       className={cn(
-                        "flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-background transition-all",
+                        "flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background transition-all",
                         isDragging && "scale-110 border-primary/50",
                       )}
                     >
@@ -990,7 +994,7 @@ export function ToolPage({
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 8 }}
-                        className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3"
+                        className="flex items-center gap-3 rounded-lg border border-border bg-surface-1 p-3"
                       >
                         <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-primary/20">
                           <FileText className="h-4 w-4" />
@@ -1023,8 +1027,8 @@ export function ToolPage({
                       </label>
                       <div className="mt-2">
                         {template ? (
-                          <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-white/5 ring-1 ring-white/10">
+                          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-1 p-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-surface-2 ring-1 ring-white/10">
                               <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -1048,7 +1052,7 @@ export function ToolPage({
                           <button
                             type="button"
                             onClick={() => templateInputRef.current?.click()}
-                            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 bg-transparent px-4 py-3 text-sm text-muted-foreground hover:border-white/20 hover:text-foreground transition-colors"
+                            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-transparent px-4 py-3 text-sm text-muted-foreground hover:border-border-strong hover:text-foreground transition-colors"
                           >
                             <FileSpreadsheet className="h-4 w-4" />
                             Add Excel template (.xlsx)
@@ -1074,7 +1078,7 @@ export function ToolPage({
                             Uploading to Cloud...
                           </span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
                           <div className="h-full bg-gradient-to-r from-primary/70 to-primary w-full animate-pulse" />
                         </div>
                       </div>
@@ -1085,15 +1089,26 @@ export function ToolPage({
                             <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
                             {progressMessage || (progress < 10 ? "Antrian..." : "Sedang diproses...")}
                           </span>
-                          <span className="font-mono">{progress}%</span>
+                          {/* Persentase hanya ditampilkan kalau backend
+                              benar-benar mengirimkannya. */}
+                          <span className="font-mono">
+                            {progress > 0 ? `${progress}%` : "—"}
+                          </span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
+                          {progress > 0 ? (
                           <motion.div
-                            className="h-full bg-gradient-to-r from-blue-500/70 to-blue-500"
+                            className="h-full bg-primary"
                             initial={{ width: 0 }}
                             animate={{ width: `${progress}%` }}
-                            transition={{ duration: 0.5 }}
+                            transition={{ duration: 0.4 }}
                           />
+                          ) : (
+                            /* Backend belum mengirim persentase. Bar berjalan
+                               tanpa nilai — jujur bahwa proses sedang berjalan
+                               tanpa mengarang angka. */
+                            <div className="h-full w-1/3 rounded-full bg-primary animate-indeterminate" />
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -1105,7 +1120,7 @@ export function ToolPage({
                           "w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
                           primary && status !== "success"
                             ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                            : "bg-white/5 text-muted-foreground cursor-not-allowed",
+                            : "bg-surface-2 text-muted-foreground cursor-not-allowed",
                         )}
                       >
                         Process file
@@ -1129,10 +1144,47 @@ export function ToolPage({
                         <CheckCircle2 className="h-4 w-4" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-sm font-medium">Processing complete</h3>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Your file is ready to download.
-                        </p>
+                        <h3 className="text-sm font-medium">
+                          {locale === "id" ? "Pemrosesan selesai" : "Processing complete"}
+                        </h3>
+
+                        {/* Fakta nyata dari baris job. Menyebut nama berkas,
+                            ukuran, dan lama proses memberi alasan untuk
+                            percaya hasilnya — dan datanya memang sudah ada. */}
+                        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+                          {outputFilename && (
+                            <div className="min-w-0">
+                              <dt className="font-mono text-3xs uppercase tracking-[0.14em] text-muted-foreground/70">
+                                {locale === "id" ? "Berkas" : "File"}
+                              </dt>
+                              <dd className="mt-0.5 truncate font-mono text-2xs text-foreground/85">
+                                {outputFilename}
+                              </dd>
+                            </div>
+                          )}
+                          {jobStats.bytes != null && (
+                            <div>
+                              <dt className="font-mono text-3xs uppercase tracking-[0.14em] text-muted-foreground/70">
+                                {locale === "id" ? "Ukuran" : "Size"}
+                              </dt>
+                              <dd className="mt-0.5 font-mono text-2xs text-foreground/85">
+                                {formatMb(jobStats.bytes)}
+                              </dd>
+                            </div>
+                          )}
+                          {jobStats.ms != null && (
+                            <div>
+                              <dt className="font-mono text-3xs uppercase tracking-[0.14em] text-muted-foreground/70">
+                                {locale === "id" ? "Lama proses" : "Took"}
+                              </dt>
+                              <dd className="mt-0.5 font-mono text-2xs text-foreground/85">
+                                {jobStats.ms < 1000
+                                  ? `${jobStats.ms} ms`
+                                  : `${(jobStats.ms / 1000).toFixed(1)} s`}
+                              </dd>
+                            </div>
+                          )}
+                        </dl>
                         <div className="mt-4 flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -1145,7 +1197,7 @@ export function ToolPage({
                           <button
                             type="button"
                             onClick={handleReset}
-                            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm hover:border-white/30 transition-colors"
+                            className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-4 py-2 text-sm hover:border-border-strong transition-colors"
                           >
                             Process another
                           </button>

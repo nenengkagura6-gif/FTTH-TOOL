@@ -32,15 +32,15 @@ const toolLabels: Record<string, string> = {
 const toolColors: Record<string, string> = {
   kml_to_boq: "bg-cyan-500",
   kml_to_database: "bg-violet-500",
-  kml_duplicate_checker: "bg-emerald-500",
-  otdr_analyzer: "bg-amber-500",
-  opm_calculator: "bg-rose-500",
+  kml_duplicate_checker: "bg-success",
+  otdr_analyzer: "bg-warning",
+  opm_calculator: "bg-danger",
   kml_to_csv: "bg-indigo-500",
   kml_to_shp: "bg-blue-500",
   shp_to_kml: "bg-teal-500",
   kml_to_dxf: "bg-orange-500",
   dxf_to_kml: "bg-lime-500",
-  kml_extractor: "bg-yellow-500",
+  kml_extractor: "bg-warning",
 }
 
 interface AnalyticsData {
@@ -155,16 +155,14 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Total Jobs", value: data.stats.totalJobs, icon: Activity, color: "text-primary" },
-          { label: "Success Rate", value: `${data.stats.successRate}%`, icon: TrendingUp, color: "text-emerald-400" },
-          { label: "Completed", value: data.stats.completed, icon: CheckCircle2, color: "text-emerald-400" },
-          { label: "Failed", value: data.stats.failed, icon: XCircle, color: "text-red-400" },
+          { label: "Success Rate", value: `${data.stats.successRate}%`, icon: TrendingUp, color: "text-success" },
+          { label: "Completed", value: data.stats.completed, icon: CheckCircle2, color: "text-success" },
+          { label: "Failed", value: data.stats.failed, icon: XCircle, color: "text-danger" },
         ].map((stat, i) => (
           <motion.div
             key={stat.label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm p-5"
+transition={{ delay: i * 0.05 }}
+            className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm p-5"
           >
             <div className="flex items-center gap-2 text-muted-foreground mb-3">
               <stat.icon className={cn("h-4 w-4", stat.color)} />
@@ -178,52 +176,52 @@ export default function AnalyticsPage() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
         {/* Daily Chart */}
-        <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm p-5">
+        <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm p-5">
           <h2 className="text-sm font-medium mb-4">Jobs · Last 14 days</h2>
           <div className="flex items-end gap-1 h-40">
             {data.dailyChart.map((day, i) => (
               <div key={day.date} className="flex-1 flex flex-col items-center gap-1 group relative">
                 {/* Tooltip */}
                 <div className="absolute -top-10 left-1/2 -translate-x-1/2 hidden group-hover:block z-10">
-                  <div className="bg-card border border-white/10 rounded-lg px-2 py-1 text-[10px] whitespace-nowrap shadow-lg">
+                  <div className="bg-card border border-border rounded-lg px-2 py-1 text-2xs whitespace-nowrap shadow-lg">
                     <p className="font-medium">{day.date.slice(5)}</p>
-                    <p className="text-emerald-400">✓ {day.completed}</p>
-                    {day.failed > 0 && <p className="text-red-400">✗ {day.failed}</p>}
+                    <p className="text-success">✓ {day.completed}</p>
+                    {day.failed > 0 && <p className="text-danger">✗ {day.failed}</p>}
                   </div>
                 </div>
                 {/* Bar */}
                 <div className="w-full flex flex-col gap-px" style={{ height: `${(day.total / maxDaily) * 100}%`, minHeight: day.total > 0 ? '4px' : '2px' }}>
                   {day.completed > 0 && (
                     <div
-                      className="w-full bg-emerald-500/70 rounded-t-sm"
+                      className="w-full bg-success/70 rounded-t-sm"
                       style={{ flex: day.completed }}
                     />
                   )}
                   {day.failed > 0 && (
                     <div
-                      className="w-full bg-red-500/70 rounded-b-sm"
+                      className="w-full bg-danger/70 rounded-b-sm"
                       style={{ flex: day.failed }}
                     />
                   )}
                   {day.total === 0 && (
-                    <div className="w-full bg-white/5 rounded-sm h-full" />
+                    <div className="w-full bg-surface-2 rounded-sm h-full" />
                   )}
                 </div>
                 {/* Label (every other) */}
                 {i % 2 === 0 && (
-                  <span className="text-[9px] text-muted-foreground/50">{day.date.slice(8)}</span>
+                  <span className="text-3xs text-muted-foreground/50">{day.date.slice(8)}</span>
                 )}
               </div>
             ))}
           </div>
-          <div className="mt-3 flex items-center gap-4 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500/70" /> Completed</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-500/70" /> Failed</span>
+          <div className="mt-3 flex items-center gap-4 text-2xs text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success/70" /> Completed</span>
+            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-danger/70" /> Failed</span>
           </div>
         </div>
 
         {/* Tool Usage */}
-        <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm p-5">
+        <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm p-5">
           <h2 className="text-sm font-medium mb-4">Tool Usage</h2>
           <div className="space-y-3">
             {Object.entries(data.toolUsage)
@@ -234,7 +232,7 @@ export default function AnalyticsPage() {
                     <span className="text-muted-foreground">{toolLabels[tool] || tool}</span>
                     <span className="font-mono font-medium">{count}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${(count / totalToolUsage) * 100}%` }}
@@ -252,13 +250,13 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Quota Card */}
-      <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm p-5">
+      <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium flex items-center gap-2">
-            <Zap className="h-4 w-4 text-amber-400" />
+            <Zap className="h-4 w-4 text-warning" />
             Quota Usage
           </h2>
-          <span className="text-xs text-muted-foreground capitalize px-2 py-0.5 rounded-md border border-white/10 bg-white/[0.03]">
+          <span className="text-xs text-muted-foreground capitalize px-2 py-0.5 rounded-md border border-border bg-surface-1">
             {data.quota.plan} plan
           </span>
         </div>
@@ -268,14 +266,14 @@ export default function AnalyticsPage() {
               <span className="text-3xl font-semibold">{data.quota.used}</span>
               <span className="text-sm text-muted-foreground">/ {data.quota.limit}</span>
             </div>
-            <div className="h-3 rounded-full bg-white/5 overflow-hidden">
+            <div className="h-3 rounded-full bg-surface-2 overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.min(quotaPercent, 100)}%` }}
-                transition={{ duration: 0.8 }}
+                transition={{ duration: 0.4 }}
                 className={cn(
                   "h-full rounded-full",
-                  quotaPercent > 90 ? "bg-red-500" : quotaPercent > 70 ? "bg-amber-500" : "bg-primary"
+                  quotaPercent > 90 ? "bg-danger" : quotaPercent > 70 ? "bg-warning" : "bg-primary"
                 )}
               />
             </div>

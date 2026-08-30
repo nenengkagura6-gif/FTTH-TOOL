@@ -9,14 +9,10 @@ export function CtaBanner({ locale = "en" }: { locale?: string }) {
   const t = translations[locale as "en" | "id"] || translations.en
 
   return (
-    <section className="relative isolate py-24 sm:py-32">
+    <section className="relative isolate py-16 sm:py-20">
       <div className="mx-auto max-w-5xl px-6">
         <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="relative overflow-hidden rounded-3xl border border-white/10 bg-card/40 px-8 py-16 sm:px-16 sm:py-20 text-center backdrop-blur-sm"
+          className="reveal relative overflow-hidden rounded-2xl border border-border bg-card/40 px-8 py-16 sm:px-16 sm:py-20 text-center backdrop-blur-sm"
         >
           {/* Hardware blueprint corner brackets */}
           <div className="tech-bracket-tl opacity-60" />
@@ -53,7 +49,7 @@ export function CtaBanner({ locale = "en" }: { locale?: string }) {
               </div>
               <Link
                 href={`/${locale}/pricing`}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-6 py-3 text-sm font-medium text-foreground transition-colors hover:border-white/30"
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-1 px-6 py-3 text-sm font-medium text-foreground transition-colors hover:border-border-strong"
               >
                 {t.nav.pricing}
               </Link>

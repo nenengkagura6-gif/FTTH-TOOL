@@ -101,7 +101,7 @@ export default async function AboutPage({ params }: PageProps) {
             {values.map((v) => (
               <div
                 key={v.title}
-                className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm"
+                className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
                   <v.icon className="h-4 w-4" />
@@ -118,7 +118,7 @@ export default async function AboutPage({ params }: PageProps) {
 
         {/* Stats */}
         <section className="relative mx-auto max-w-6xl px-6 py-12">
-          <div className="rounded-3xl border border-white/10 bg-card/40 p-8 sm:p-12 backdrop-blur-sm">
+          <div className="rounded-2xl border border-border bg-card/40 p-8 sm:p-12 backdrop-blur-sm">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
               {stats.map((s) => (
                 <div key={s.label} className="text-center sm:text-left">
@@ -148,11 +148,11 @@ export default async function AboutPage({ params }: PageProps) {
           <ol className="relative space-y-8">
             <span
               aria-hidden="true"
-              className="absolute left-[14px] top-2 bottom-2 w-px bg-white/10"
+              className="absolute left-[14px] top-2 bottom-2 w-px bg-surface-3"
             />
             {timeline.map((t) => (
               <li key={t.year} className="relative pl-12">
-                <span className="absolute left-0 top-1 flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-background">
+                <span className="absolute left-0 top-1 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background">
                   <span className="h-2 w-2 rounded-full bg-primary" />
                 </span>
                 <p className="text-xs font-mono text-muted-foreground">
@@ -172,7 +172,7 @@ export default async function AboutPage({ params }: PageProps) {
           id="contact"
           className="relative mx-auto max-w-4xl px-6 py-16 scroll-mt-24"
         >
-          <div className="relative group rounded-3xl border border-white/10 bg-card/40 p-8 sm:p-12 backdrop-blur-sm text-center transition-all duration-300 hover:border-white/20">
+          <div className="relative group rounded-2xl border border-border bg-card/40 p-8 sm:p-12 backdrop-blur-sm text-center transition-all duration-300 hover:border-border-strong">
             <div className="tech-bracket-tl opacity-30 group-hover:opacity-100 transition-opacity" />
             <div className="tech-bracket-tr opacity-30 group-hover:opacity-100 transition-opacity" />
             <div className="tech-bracket-bl opacity-30 group-hover:opacity-100 transition-opacity" />

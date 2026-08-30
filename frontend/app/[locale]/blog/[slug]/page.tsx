@@ -164,7 +164,7 @@ export default async function BlogPostPage({ params }: PageProps) {
           {/* Article Header */}
           <div className="mb-10">
             {post.image && (
-              <div className="relative w-full aspect-video rounded-2xl border border-white/10 overflow-hidden mb-8 shadow-2xl">
+              <div className="relative w-full aspect-video rounded-2xl border border-border overflow-hidden mb-8 shadow-2xl">
                 <img
                   src={post.image}
                   alt={post.title}
@@ -178,7 +178,7 @@ export default async function BlogPostPage({ params }: PageProps) {
             <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-balance leading-[1.15] mb-6">
               {post.title}
             </h1>
-            <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground border-y border-white/10 py-4">
+            <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground border-y border-border py-4">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
                 <span>{post.date}</span>
@@ -201,7 +201,7 @@ export default async function BlogPostPage({ params }: PageProps) {
             {/* Sidebar with CTAs */}
             <aside className="space-y-6 lg:sticky lg:top-28">
               {/* Tool CTA Card */}
-              <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-card/60 p-6 backdrop-blur-sm">
+              <div className="relative overflow-hidden rounded-2xl border border-border bg-card/60 p-6 backdrop-blur-sm">
                 <div className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-primary/10 blur-2xl" />
                 
                 <div className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 mb-4">
@@ -222,7 +222,7 @@ export default async function BlogPostPage({ params }: PageProps) {
                         "flex items-center justify-between w-full px-4 py-2.5 rounded-xl text-xs font-medium transition-all group cursor-pointer",
                         link.primary
                           ? "bg-primary text-primary-foreground hover:bg-primary/95 shadow-lg shadow-primary/15"
-                          : "border border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.05] text-foreground"
+                          : "border border-border hover:border-border-strong bg-surface-1 hover:bg-surface-2 text-foreground"
                       )}
                     >
                       {link.label}
@@ -233,7 +233,7 @@ export default async function BlogPostPage({ params }: PageProps) {
               </div>
 
               {/* Need help Card */}
-              <div className="rounded-2xl border border-white/10 bg-white/[0.01] p-6 text-center">
+              <div className="rounded-2xl border border-border bg-surface-1 p-6 text-center">
                 <HelpCircle className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
                 <h4 className="text-sm font-medium mb-1">{t.blog.feedbackTitle}</h4>
                 <p className="text-xs text-muted-foreground mb-4">
@@ -251,16 +251,16 @@ export default async function BlogPostPage({ params }: PageProps) {
 
           {/* Related Articles Footer */}
           {relatedPosts.length > 0 && (
-            <div className="mt-20 pt-10 border-t border-white/10">
+            <div className="mt-20 pt-10 border-t border-border">
               <h2 className="text-xl font-semibold mb-8">{t.blog.relatedArticles}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {relatedPosts.map((relatedPost) => (
                   <Link
                     key={relatedPost.slug}
                     href={`/${locale}/blog/${relatedPost.slug}`}
-                    className="group block rounded-2xl border border-white/10 bg-card/30 p-5 hover:border-white/20 transition-all hover:bg-card/50"
+                    className="group block rounded-2xl border border-border bg-card/30 p-5 hover:border-border-strong transition-all hover:bg-card/50"
                   >
-                    <span className="text-[10px] font-semibold text-primary uppercase tracking-wider">
+                    <span className="text-2xs font-semibold text-primary uppercase tracking-wider">
                       {relatedPost.category}
                     </span>
                     <h3 className="text-base font-semibold group-hover:text-primary transition-colors mt-2 mb-2 line-clamp-1">
@@ -269,7 +269,7 @@ export default async function BlogPostPage({ params }: PageProps) {
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-4">
                       {relatedPost.excerpt}
                     </p>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground group-hover:underline">
+                    <span className="inline-flex items-center gap-1 text-2xs font-medium text-foreground group-hover:underline">
                       {t.blog.readMore} <ArrowRight className="h-3 w-3" />
                     </span>
                   </Link>

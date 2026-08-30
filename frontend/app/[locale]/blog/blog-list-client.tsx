@@ -77,7 +77,7 @@ export function BlogListClient({ posts, locale = "en" }: { posts: BlogPost[]; lo
             placeholder={t.blog.searchPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full h-10 rounded-full border border-white/10 bg-white/[0.03] pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-white/30 transition-colors"
+            className="w-full h-10 rounded-full border border-border bg-surface-1 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-border-strong transition-colors"
           />
         </div>
         <div className="flex flex-wrap gap-2">
@@ -90,7 +90,7 @@ export function BlogListClient({ posts, locale = "en" }: { posts: BlogPost[]; lo
                 "px-3 py-1.5 rounded-full text-xs border transition-colors cursor-pointer",
                 active === c
                   ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-white/[0.03] text-muted-foreground border-white/10 hover:border-white/30 hover:text-foreground",
+                  : "bg-surface-1 text-muted-foreground border-border hover:border-border-strong hover:text-foreground",
               )}
             >
               {categoryLabels[c] || c}
@@ -102,17 +102,13 @@ export function BlogListClient({ posts, locale = "en" }: { posts: BlogPost[]; lo
       {/* Featured */}
       {showFeatured && featured && (
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
           className="mb-12"
         >
           <Link
             href={`/${locale}/blog/${featured.slug}`}
-            className="group relative grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 rounded-3xl border border-white/10 bg-card/40 p-6 sm:p-8 backdrop-blur-sm transition-all hover:border-white/20"
+            className="group relative grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 rounded-2xl border border-border bg-card/40 p-6 sm:p-8 backdrop-blur-sm transition-all hover:border-border-strong"
           >
-            <div className="relative aspect-[16/9] lg:aspect-auto rounded-2xl overflow-hidden bg-gradient-to-br from-primary/20 via-primary/5 to-transparent border border-white/5">
+            <div className="relative aspect-[16/9] lg:aspect-auto rounded-2xl overflow-hidden bg-gradient-to-br from-primary/20 via-primary/5 to-transparent border border-border/60">
               {featured.image ? (
                 <img
                   src={featured.image}
@@ -142,7 +138,7 @@ export function BlogListClient({ posts, locale = "en" }: { posts: BlogPost[]; lo
               </p>
               <div className="mt-5 flex items-center gap-3 text-xs text-muted-foreground">
                 <span>{featured.date}</span>
-                <span className="h-1 w-1 rounded-full bg-white/20" />
+                <span className="h-1 w-1 rounded-full bg-surface-3" />
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {featured.readTime} {t.blog.readTimeSuffix}
@@ -158,16 +154,12 @@ export function BlogListClient({ posts, locale = "en" }: { posts: BlogPost[]; lo
         {filtered.map((post, i) => (
           <motion.article
             key={post.slug}
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-50px" }}
-            transition={{ duration: 0.4, delay: i * 0.04 }}
           >
             <Link
               href={`/${locale}/blog/${post.slug}`}
-              className="group flex flex-col h-full rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden hover:border-white/20 transition-colors"
+              className="group flex flex-col h-full rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden hover:border-border-strong transition-colors"
             >
-              <div className="relative aspect-[16/10] bg-gradient-to-br from-primary/15 via-primary/[0.04] to-transparent overflow-hidden border-b border-white/5">
+              <div className="relative aspect-[16/10] bg-gradient-to-br from-primary/15 via-primary/[0.04] to-transparent overflow-hidden border-b border-border/60">
                 {post.image ? (
                   <img
                     src={post.image}
@@ -178,7 +170,7 @@ export function BlogListClient({ posts, locale = "en" }: { posts: BlogPost[]; lo
                   <div className="absolute inset-0 grid-bg opacity-50" />
                 )}
                 <div className="absolute top-3 left-3 z-10">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-primary bg-background/80 backdrop-blur-sm ring-1 ring-primary/30 rounded-full px-2 py-0.5">
+                  <span className="text-2xs font-medium uppercase tracking-wider text-primary bg-background/80 backdrop-blur-sm ring-1 ring-primary/30 rounded-full px-2 py-0.5">
                     {categoryLabels[post.category] || post.category}
                   </span>
                 </div>
@@ -190,7 +182,7 @@ export function BlogListClient({ posts, locale = "en" }: { posts: BlogPost[]; lo
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed line-clamp-3 flex-1">
                   {post.excerpt}
                 </p>
-                <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-muted-foreground">
+                <div className="mt-4 pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                   <span>{post.date}</span>
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
@@ -210,7 +202,7 @@ export function BlogListClient({ posts, locale = "en" }: { posts: BlogPost[]; lo
       )}
 
       {/* Newsletter */}
-      <div className="mt-20 rounded-3xl border border-white/10 bg-card/40 p-8 sm:p-10 backdrop-blur-sm text-center">
+      <div className="mt-20 rounded-2xl border border-border bg-card/40 p-8 sm:p-10 backdrop-blur-sm text-center">
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">
           {t.blog.newsletterTitle}
         </h2>
@@ -222,7 +214,7 @@ export function BlogListClient({ posts, locale = "en" }: { posts: BlogPost[]; lo
             type="email"
             required
             placeholder="you@company.com"
-            className="flex-1 h-10 rounded-full border border-white/10 bg-white/[0.03] px-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-white/30 transition-colors"
+            className="flex-1 h-10 rounded-full border border-border bg-surface-1 px-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-border-strong transition-colors"
           />
           <button
             type="submit"

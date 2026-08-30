@@ -39,7 +39,7 @@ export function YouTubePlayer({
   }).toString()}`
 
   return (
-    <div className={cn("relative w-full overflow-hidden rounded-xl bg-black/40 border border-white/10", className)}>
+    <div className={cn("relative w-full overflow-hidden rounded-xl bg-black/40 border border-border", className)}>
       {/* Skeleton loader — hanya saat iframe benar-benar sedang dimuat.
           Tanpa syarat `started`, spinner ini tampil selamanya di balik
           tombol play ketika autoplay dimatikan. */}
@@ -84,7 +84,7 @@ export function YouTubePlayer({
       <div className="flex items-center justify-between px-3 py-2 bg-black/20">
         <div className="flex items-center gap-2">
           <VolumeX className="h-3 w-3 text-muted-foreground/60" />
-          <span className="text-[10px] text-muted-foreground/60">
+          <span className="text-2xs text-muted-foreground/60">
             Klik ikon 🔊 di video untuk suara
           </span>
         </div>
@@ -92,7 +92,7 @@ export function YouTubePlayer({
           href={`https://www.youtube.com/watch?v=${safeId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-primary transition-colors"
+          className="flex items-center gap-1 text-2xs text-muted-foreground/60 hover:text-primary transition-colors"
         >
           <ExternalLink className="h-3 w-3" />
           YouTube

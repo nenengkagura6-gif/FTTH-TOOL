@@ -83,7 +83,7 @@ export default async function DocsPage({ params }: PageProps) {
             {sections.map((s) => (
               <div
                 key={s.title}
-                className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm"
+                className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
@@ -126,11 +126,11 @@ export default async function DocsPage({ params }: PageProps) {
               : "Daftar, unggah file KML, dan unduh hasil BOQ pertama Anda dalam waktu kurang dari lima menit."}
           </p>
 
-          <div className="mt-6 rounded-2xl border border-white/10 bg-card/60 backdrop-blur-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10 bg-white/[0.03]">
-              <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
-              <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
-              <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
+          <div className="mt-6 rounded-2xl border border-border bg-card/60 backdrop-blur-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-surface-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-surface-3" />
+              <span className="h-2.5 w-2.5 rounded-full bg-surface-3" />
+              <span className="h-2.5 w-2.5 rounded-full bg-surface-3" />
               <div className="ml-2 inline-flex items-center gap-2 text-xs text-muted-foreground">
                 <Terminal className="h-3 w-3" />
                 <span>terminal</span>
@@ -159,7 +159,7 @@ $ curl -O https://api.ftthtools.my.id/v1/jobs/$ID/download`}</code>
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Link
               href="/dashboard/kml-boq"
-              className="group rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm hover:border-white/20 transition-colors"
+              className="group rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm hover:border-border-strong transition-colors"
             >
               <Map className="h-4 w-4 text-primary" />
               <p className="mt-3 text-sm font-medium group-hover:text-primary transition-colors">
@@ -168,7 +168,7 @@ $ curl -O https://api.ftthtools.my.id/v1/jobs/$ID/download`}</code>
             </Link>
             <Link
               href="/dashboard/kml-database-hp"
-              className="group rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm hover:border-white/20 transition-colors"
+              className="group rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm hover:border-border-strong transition-colors"
             >
               <Database className="h-4 w-4 text-primary" />
               <p className="mt-3 text-sm font-medium group-hover:text-primary transition-colors">
@@ -177,7 +177,7 @@ $ curl -O https://api.ftthtools.my.id/v1/jobs/$ID/download`}</code>
             </Link>
             <Link
               href="/dashboard/kml-checker"
-              className="group rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm hover:border-white/20 transition-colors"
+              className="group rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm hover:border-border-strong transition-colors"
             >
               <ShieldCheck className="h-4 w-4 text-primary" />
               <p className="mt-3 text-sm font-medium group-hover:text-primary transition-colors">

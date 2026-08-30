@@ -81,33 +81,33 @@ export function UpgradeModalProvider({ children }: { children: ReactNode }) {
                             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                             className="fixed inset-0 z-[101] flex items-center justify-center p-4"
                         >
-                            <div className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-gradient-to-b from-card to-background shadow-2xl overflow-hidden">
+                            <div className="relative w-full max-w-lg rounded-2xl border border-border bg-gradient-to-b from-card to-background shadow-2xl overflow-hidden">
                                 {/* Glow effect */}
-                                <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+                                <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-warning/10 rounded-full blur-3xl pointer-events-none" />
 
                                 {/* Close button */}
                                 <button
                                     onClick={hideUpgradeModal}
-                                    className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors z-10"
+                                    className="absolute top-4 right-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-3 transition-colors z-10"
                                 >
                                     <X className="h-4 w-4" />
                                 </button>
 
                                 {/* Header */}
                                 <div className="relative px-6 pt-8 pb-4 text-center">
-                                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/20 ring-1 ring-amber-500/30 mb-4">
-                                        <Crown className="h-7 w-7 text-amber-400" />
+                                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-warning/20 to-warning/20 ring-1 ring-warning/30 mb-4">
+                                        <Crown className="h-7 w-7 text-warning" />
                                     </div>
 
                                     {featureLabel ? (
                                         <>
-                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 text-xs font-medium border border-amber-500/20 mb-3">
+                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warning/10 text-warning text-xs font-medium border border-warning/20 mb-3">
                                                 <Lock className="h-3 w-3" />
                                                 Pro Feature
                                             </div>
                                             <h2 className="text-xl font-semibold">
                                                 Upgrade to unlock{' '}
-                                                <span className="text-amber-400">{featureLabel}</span>
+                                                <span className="text-warning">{featureLabel}</span>
                                             </h2>
                                             <p className="mt-2 text-sm text-muted-foreground">
                                                 This feature requires a Pro subscription. Upgrade now to unlock all premium tools.
@@ -117,7 +117,7 @@ export function UpgradeModalProvider({ children }: { children: ReactNode }) {
                                         <>
                                             <h2 className="text-xl font-semibold">
                                                 Upgrade to{' '}
-                                                <span className="text-amber-400">Pro</span>
+                                                <span className="text-warning">Pro</span>
                                             </h2>
                                             <p className="mt-2 text-sm text-muted-foreground">
                                                 Unlock all premium tools and features for your FTTH workflow.
@@ -128,15 +128,15 @@ export function UpgradeModalProvider({ children }: { children: ReactNode }) {
 
                                 {/* Features list */}
                                 <div className="px-6 pb-2">
-                                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                                    <div className="rounded-xl border border-border bg-surface-1 p-4">
                                         <div className="flex items-center gap-2 mb-3">
-                                            <Sparkles className="h-4 w-4 text-amber-400" />
+                                            <Sparkles className="h-4 w-4 text-warning" />
                                             <span className="text-sm font-medium">Everything in Pro:</span>
                                         </div>
                                         <ul className="space-y-2">
                                             {PRO_FEATURES.map((feature, i) => (
                                                 <li key={i} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                                                    <Check className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                                    <Check className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
                                                     <span>{feature}</span>
                                                 </li>
                                             ))}
@@ -160,7 +160,7 @@ export function UpgradeModalProvider({ children }: { children: ReactNode }) {
                                                 setIsProcessing(false)
                                             }
                                         }}
-                                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3 text-sm font-semibold text-black hover:from-amber-400 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50"
+                                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-warning to-warning/90 px-4 py-3 text-sm font-semibold text-black hover:from-warning hover:to-warning transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50"
                                     >
                                         {isProcessing ? (
                                             <div className="h-4 w-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
@@ -173,7 +173,7 @@ export function UpgradeModalProvider({ children }: { children: ReactNode }) {
                                     <button
                                         disabled={isProcessing}
                                         onClick={hideUpgradeModal}
-                                        className="w-full inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors disabled:opacity-30"
+                                        className="w-full inline-flex items-center justify-center rounded-xl border border-border bg-surface-1 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors disabled:opacity-30"
                                     >
                                         Maybe later
                                     </button>

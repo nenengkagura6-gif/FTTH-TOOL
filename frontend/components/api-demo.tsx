@@ -54,7 +54,7 @@ export function ApiDemo() {
             Backend Status
             <span className={`w-3 h-3 rounded-full ${
               backendOnline === null ? 'bg-gray-400' :
-              backendOnline ? 'bg-green-500' : 'bg-red-500'
+              backendOnline ? 'bg-success' : 'bg-danger'
             }`} />
           </CardTitle>
         </CardHeader>
@@ -129,8 +129,8 @@ export function ApiDemo() {
           </Button>
 
           {result && (
-            <Alert className="bg-green-50 border-green-200">
-              <CheckCircle className="h-4 w-4 text-green-600" />
+            <Alert className="bg-success/10 border-success/30">
+              <CheckCircle className="h-4 w-4 text-success/90" />
               <AlertDescription className="flex items-center justify-between">
                 <span>File processed successfully!</span>
                 <Button variant="outline" size="sm" onClick={downloadResult}>

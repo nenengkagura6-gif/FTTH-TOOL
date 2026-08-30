@@ -142,7 +142,7 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
         "fixed top-4 left-1/2 -translate-x-1/2 z-50",
         "flex flex-col items-start",
         "px-4 sm:px-5 pt-3 pb-2.5",
-        "border border-white/10",
+        "border border-border",
         "bg-background/60 backdrop-blur-xl",
         "w-[calc(100%-1.5rem)] sm:w-auto",
         "transition-all duration-300",
@@ -169,7 +169,7 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
           <button
             type="button"
             onClick={toggleLanguage}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs border border-white/10 bg-white/[0.03] text-muted-foreground rounded-full hover:border-white/30 hover:text-foreground transition-colors font-medium cursor-pointer"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs border border-border bg-surface-1 text-muted-foreground rounded-full hover:border-border-strong hover:text-foreground transition-colors font-medium cursor-pointer"
           >
             <Globe className="h-3 w-3" />
             <span className="uppercase">{locale === "en" ? "ID" : "EN"}</span>
@@ -179,7 +179,7 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
           <button
             type="button"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="flex items-center justify-center w-8 h-8 border border-white/10 bg-white/[0.03] text-muted-foreground rounded-full hover:border-white/30 hover:text-foreground transition-colors cursor-pointer"
+            className="flex items-center justify-center w-8 h-8 border border-border bg-surface-1 text-muted-foreground rounded-full hover:border-border-strong hover:text-foreground transition-colors cursor-pointer"
             aria-label="Toggle theme"
           >
             {mounted && theme === "dark" ? (
@@ -200,7 +200,7 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
             <>
               <Link
                 href="/login"
-                className="px-4 py-1.5 text-sm border border-white/10 bg-white/[0.03] text-muted-foreground rounded-full hover:border-white/30 hover:text-foreground transition-colors"
+                className="px-4 py-1.5 text-sm border border-border bg-surface-1 text-muted-foreground rounded-full hover:border-border-strong hover:text-foreground transition-colors"
               >
                 {t.nav.login}
               </Link>
@@ -219,7 +219,7 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
 
         <button
           type="button"
-          className="md:hidden flex items-center justify-center w-9 h-9 text-foreground rounded-full hover:bg-white/5 transition-colors"
+          className="md:hidden flex items-center justify-center w-9 h-9 text-foreground rounded-full hover:bg-surface-2 transition-colors"
           onClick={() => setIsOpen(!isOpen)}
           aria-label={isOpen ? "Close menu" : "Open menu"}
           aria-expanded={isOpen}
@@ -245,13 +245,13 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
               key={item.href}
               href={item.href}
               onClick={() => setIsOpen(false)}
-              className="text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors py-2 px-3 rounded-lg"
+              className="text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors py-2 px-3 rounded-lg"
             >
               {item.label}
             </Link>
           ))}
         </nav>
-        <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-white/10">
+        <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border">
           {/* Mobile Language Switcher */}
           <button
             type="button"
@@ -259,7 +259,7 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
               setIsOpen(false)
               toggleLanguage()
             }}
-            className="flex items-center justify-center gap-1 px-4 py-2 text-sm text-center border border-white/10 bg-white/[0.03] text-foreground rounded-full hover:border-white/30 transition-colors cursor-pointer"
+            className="flex items-center justify-center gap-1 px-4 py-2 text-sm text-center border border-border bg-surface-1 text-foreground rounded-full hover:border-border-strong transition-colors cursor-pointer"
           >
             <Globe className="h-4 w-4" />
             <span>Switch to {locale === "en" ? "Bahasa Indonesia (ID)" : "English (EN)"}</span>
@@ -272,7 +272,7 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
               setIsOpen(false)
               setTheme(theme === "dark" ? "light" : "dark")
             }}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm text-center border border-white/10 bg-white/[0.03] text-foreground rounded-full hover:border-white/30 transition-colors cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm text-center border border-border bg-surface-1 text-foreground rounded-full hover:border-border-strong transition-colors cursor-pointer"
           >
             {mounted && theme === "dark" ? (
               <>
@@ -300,7 +300,7 @@ export function SiteNavbar({ locale = "en" }: { locale?: string }) {
               <Link
                 href="/login"
                 onClick={() => setIsOpen(false)}
-                className="px-4 py-2 text-sm text-center border border-white/10 bg-white/[0.03] text-foreground rounded-full hover:border-white/30 transition-colors"
+                className="px-4 py-2 text-sm text-center border border-border bg-surface-1 text-foreground rounded-full hover:border-border-strong transition-colors"
               >
                 {t.nav.login}
               </Link>

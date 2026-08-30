@@ -53,7 +53,7 @@ export function LegalContent({ sections }: LegalLayoutProps) {
                     className={cn(
                       "block text-sm py-1.5 px-3 rounded-md transition-colors",
                       activeId === s.id
-                        ? "text-foreground bg-white/5"
+                        ? "text-foreground bg-surface-2"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >

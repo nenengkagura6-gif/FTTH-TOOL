@@ -94,7 +94,7 @@ export default function OpmCalculatorPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-6 items-start">
         {/* Input Parameters Form */}
-        <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm space-y-6">
+        <div className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm space-y-6">
           <h2 className="text-lg font-medium flex items-center gap-2">
             <Activity className="h-5 w-5 text-primary" />
             Path Parameters
@@ -107,7 +107,7 @@ export default function OpmCalculatorPage() {
               <select
                 value={wavelength}
                 onChange={(e) => setWavelength(Number(e.target.value))}
-                className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
               >
                 {wavelengths.map((w) => (
                   <option key={w.value} value={w.value} className="bg-neutral-900">
@@ -125,7 +125,7 @@ export default function OpmCalculatorPage() {
                 step="0.1"
                 value={txPower}
                 onChange={(e) => setTxPower(Number(e.target.value))}
-                className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
               />
             </div>
 
@@ -138,7 +138,7 @@ export default function OpmCalculatorPage() {
                 min="0"
                 value={length}
                 onChange={(e) => setLength(Math.max(0, Number(e.target.value)))}
-                className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
               />
             </div>
 
@@ -151,7 +151,7 @@ export default function OpmCalculatorPage() {
                 min="0"
                 value={safetyMargin}
                 onChange={(e) => setSafetyMargin(Math.max(0, Number(e.target.value)))}
-                className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
               />
             </div>
 
@@ -163,7 +163,7 @@ export default function OpmCalculatorPage() {
                 min="0"
                 value={splices}
                 onChange={(e) => setSplices(Math.max(0, Number(e.target.value)))}
-                className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
               />
             </div>
 
@@ -175,7 +175,7 @@ export default function OpmCalculatorPage() {
                 min="0"
                 value={connectors}
                 onChange={(e) => setConnectors(Math.max(0, Number(e.target.value)))}
-                className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
               />
             </div>
 
@@ -185,7 +185,7 @@ export default function OpmCalculatorPage() {
               <select
                 value={splitter1}
                 onChange={(e) => setSplitter1(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
               >
                 {splitters.map((s) => (
                   <option key={s.ratio} value={s.ratio} className="bg-neutral-900">
@@ -201,7 +201,7 @@ export default function OpmCalculatorPage() {
               <select
                 value={splitter2}
                 onChange={(e) => setSplitter2(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
               >
                 {splitters.filter((s) => s.ratio !== "1:64").map((s) => (
                   <option key={s.ratio} value={s.ratio} className="bg-neutral-900">
@@ -213,17 +213,17 @@ export default function OpmCalculatorPage() {
           </div>
 
           {/* Interactive Schematic Diagram */}
-          <div className="pt-4 border-t border-white/10">
+          <div className="pt-4 border-t border-border">
             <h3 className="text-xs text-muted-foreground font-medium mb-3">Optical Path Visualizer</h3>
-            <div className="flex items-center justify-between p-4 bg-white/[0.01] border border-white/5 rounded-2xl overflow-x-auto text-[10px] gap-4">
+            <div className="flex items-center justify-between p-4 bg-surface-1 border border-border/60 rounded-2xl overflow-x-auto text-2xs gap-4">
               <div className="flex flex-col items-center gap-1.5 text-center min-w-[50px]">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary">TX</div>
                 <span className="font-semibold text-foreground">OLT</span>
                 <span className="text-muted-foreground">{txPower.toFixed(1)} dBm</span>
               </div>
-              <div className="h-px bg-white/20 flex-1 min-w-[30px]" />
+              <div className="h-px bg-surface-3 flex-1 min-w-[30px]" />
               <div className="flex flex-col items-center gap-1.5 text-center min-w-[50px]">
-                <div className="h-8 w-8 rounded-lg bg-neutral-800 border border-white/10 flex items-center justify-center text-muted-foreground font-semibold">
+                <div className="h-8 w-8 rounded-lg bg-neutral-800 border border-border flex items-center justify-center text-muted-foreground font-semibold">
                   {length}k
                 </div>
                 <span className="font-semibold text-foreground">Fiber</span>
@@ -231,7 +231,7 @@ export default function OpmCalculatorPage() {
               </div>
               {splitter1 !== "None" && (
                 <>
-                  <div className="h-px bg-white/20 flex-1 min-w-[30px]" />
+                  <div className="h-px bg-surface-3 flex-1 min-w-[30px]" />
                   <div className="flex flex-col items-center gap-1.5 text-center min-w-[50px]">
                     <div className="h-8 w-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-bold text-blue-400">ODC</div>
                     <span className="font-semibold text-foreground">{splitter1}</span>
@@ -241,7 +241,7 @@ export default function OpmCalculatorPage() {
               )}
               {splitter2 !== "None" && (
                 <>
-                  <div className="h-px bg-white/20 flex-1 min-w-[30px]" />
+                  <div className="h-px bg-surface-3 flex-1 min-w-[30px]" />
                   <div className="flex flex-col items-center gap-1.5 text-center min-w-[50px]">
                     <div className="h-8 w-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center font-bold text-teal-400">ODP</div>
                     <span className="font-semibold text-foreground">{splitter2}</span>
@@ -249,14 +249,14 @@ export default function OpmCalculatorPage() {
                   </div>
                 </>
               )}
-              <div className="h-px bg-white/20 flex-1 min-w-[30px]" />
+              <div className="h-px bg-surface-3 flex-1 min-w-[30px]" />
               <div className="flex flex-col items-center gap-1.5 text-center min-w-[50px]">
                 <div className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold border ${
                   results.status === "safe" 
                     ? "bg-primary/10 border-primary/20 text-primary" 
                     : results.status === "warning" 
-                      ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-400" 
-                      : "bg-red-500/10 border-red-500/20 text-red-400"
+                      ? "bg-warning/10 border-warning/20 text-warning" 
+                      : "bg-danger/10 border-danger/20 text-danger"
                 }`}>RX</div>
                 <span className="font-semibold text-foreground">ONT</span>
                 <span className="text-muted-foreground">{results.rxPower.toFixed(2)} dBm</span>
@@ -268,14 +268,14 @@ export default function OpmCalculatorPage() {
         {/* Results Panel */}
         <div className="space-y-6">
           {/* Main Calculation Card */}
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm text-center relative overflow-hidden">
+          <div className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm text-center relative overflow-hidden">
             <div className={`absolute inset-0 pointer-events-none opacity-5 blur-2xl ${
-              results.status === "safe" ? "bg-primary" : results.status === "warning" ? "bg-yellow-500" : "bg-red-500"
+              results.status === "safe" ? "bg-primary" : results.status === "warning" ? "bg-warning" : "bg-danger"
             }`} />
 
             <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Estimated Rx Power</span>
             <div className={`text-4xl sm:text-5xl font-bold tracking-tight mt-2 ${
-              results.status === "safe" ? "text-primary" : results.status === "warning" ? "text-yellow-400" : "text-red-400"
+              results.status === "safe" ? "text-primary" : results.status === "warning" ? "text-warning" : "text-danger"
             }`}>
               {results.rxPower.toFixed(2)} <span className="text-xl font-normal text-muted-foreground">dBm</span>
             </div>
@@ -290,8 +290,8 @@ export default function OpmCalculatorPage() {
               ) : (
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ring-1 ${
                   results.status === "warning" 
-                    ? "bg-yellow-500/10 text-yellow-400 ring-yellow-500/20" 
-                    : "bg-red-500/10 text-red-400 ring-red-500/20"
+                    ? "bg-warning/10 text-warning ring-warning/20" 
+                    : "bg-danger/10 text-danger ring-danger/20"
                 }`}>
                   <ShieldAlert className="h-3.5 w-3.5" />
                   {results.message}
@@ -305,8 +305,8 @@ export default function OpmCalculatorPage() {
           </div>
 
           {/* Loss Breakdown Card */}
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm space-y-4">
-            <h3 className="text-sm font-medium border-b border-white/10 pb-2">Loss Breakdown</h3>
+          <div className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm space-y-4">
+            <h3 className="text-sm font-medium border-b border-border pb-2">Loss Breakdown</h3>
             
             <div className="space-y-3 text-sm">
               <div className="flex justify-between items-center">
@@ -337,7 +337,7 @@ export default function OpmCalculatorPage() {
                 <span className="text-muted-foreground">Safety / Repair margin</span>
                 <span className="font-medium">-{safetyMargin.toFixed(2)} dB</span>
               </div>
-              <div className="flex justify-between items-center pt-2 border-t border-white/10 font-semibold text-foreground">
+              <div className="flex justify-between items-center pt-2 border-t border-border font-semibold text-foreground">
                 <span>Total Attenuation Loss</span>
                 <span>-{results.totalLoss.toFixed(2)} dB</span>
               </div>
@@ -345,7 +345,7 @@ export default function OpmCalculatorPage() {
           </div>
 
           {/* Guidelines */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.01] p-5 space-y-3">
+          <div className="rounded-2xl border border-border bg-surface-1 p-5 space-y-3">
             <h4 className="text-xs font-semibold flex items-center gap-1.5 text-foreground uppercase tracking-wider">
               <Info className="h-4 w-4 text-primary" />
               Standard ITU-T Rec. Loss Targets

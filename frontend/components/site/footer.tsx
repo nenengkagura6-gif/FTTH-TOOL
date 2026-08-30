@@ -25,7 +25,7 @@ export function SiteFooter({ locale = "en" }: { locale?: string }) {
   ]
 
   return (
-    <footer className="relative border-t border-white/10 bg-background">
+    <footer className="relative border-t border-border bg-background">
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
           <div className="col-span-2 md:col-span-1">
@@ -52,21 +52,21 @@ export function SiteFooter({ locale = "en" }: { locale?: string }) {
               <a
                 href="#"
                 aria-label="Twitter"
-                className="w-8 h-8 flex items-center justify-center rounded-full border border-white/10 text-muted-foreground hover:text-foreground hover:border-white/30 transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-border-strong transition-colors"
               >
                 <Twitter className="h-4 w-4" />
               </a>
               <a
                 href="#"
                 aria-label="GitHub"
-                className="w-8 h-8 flex items-center justify-center rounded-full border border-white/10 text-muted-foreground hover:text-foreground hover:border-white/30 transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-border-strong transition-colors"
               >
                 <Github className="h-4 w-4" />
               </a>
               <a
                 href="#"
                 aria-label="LinkedIn"
-                className="w-8 h-8 flex items-center justify-center rounded-full border border-white/10 text-muted-foreground hover:text-foreground hover:border-white/30 transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-border-strong transition-colors"
               >
                 <Linkedin className="h-4 w-4" />
               </a>
@@ -126,7 +126,7 @@ export function SiteFooter({ locale = "en" }: { locale?: string }) {
           </div>
         </div>
 
-        <div className="mt-14 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-14 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} {siteConfig.org}. All rights reserved.
           </p>

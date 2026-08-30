@@ -351,14 +351,14 @@ export default function SpliceManagerPage() {
         <div className="flex gap-2">
           <button
             onClick={handleReset}
-            className="h-10 px-4 rounded-xl text-sm font-medium border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-colors cursor-pointer flex items-center gap-2"
+            className="h-10 px-4 rounded-xl text-sm font-medium border border-border bg-surface-1 hover:bg-surface-3 transition-colors cursor-pointer flex items-center gap-2"
           >
             <RefreshCw className="h-4 w-4" />
             Reset
           </button>
           <button
             onClick={handleExportCSV}
-            className="h-10 px-4 rounded-xl text-sm font-medium border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-colors cursor-pointer flex items-center gap-2 text-primary"
+            className="h-10 px-4 rounded-xl text-sm font-medium border border-border bg-surface-1 hover:bg-surface-3 transition-colors cursor-pointer flex items-center gap-2 text-primary"
           >
             <Download className="h-4 w-4" />
             Ekspor CSV
@@ -378,7 +378,7 @@ export default function SpliceManagerPage() {
         
         {/* Left Side: Parameters Settings Form */}
         <div className="space-y-6 no-print">
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm space-y-6">
+          <div className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm space-y-6">
             <h2 className="text-lg font-medium flex items-center gap-2 text-foreground">
               <Settings className="h-5 w-5 text-primary" />
               Parameter Konfigurasi
@@ -393,7 +393,7 @@ export default function SpliceManagerPage() {
                   value={fdtName}
                   onChange={(e) => setFdtName(e.target.value)}
                   placeholder="Contoh: ODC-MJK-FA"
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30 text-foreground"
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong text-foreground"
                 />
               </div>
 
@@ -407,7 +407,7 @@ export default function SpliceManagerPage() {
                     className={`h-9 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
                       standard === "Telkom"
                         ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-white/[0.03] text-muted-foreground border-white/10 hover:border-white/20"
+                        : "bg-surface-1 text-muted-foreground border-border hover:border-border-strong"
                     }`}
                   >
                     Telkom Indonesia
@@ -418,7 +418,7 @@ export default function SpliceManagerPage() {
                     className={`h-9 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
                       standard === "TIA"
                         ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-white/[0.03] text-muted-foreground border-white/10 hover:border-white/20"
+                        : "bg-surface-1 text-muted-foreground border-border hover:border-border-strong"
                     }`}
                   >
                     TIA-598-C
@@ -437,7 +437,7 @@ export default function SpliceManagerPage() {
                       setCapacity(cap)
                       if (startCore > cap) setStartCore(1)
                     }}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30 text-foreground bg-neutral-900"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong text-foreground bg-neutral-900"
                   >
                     {capacities.map((c) => (
                       <option key={c} value={c} className="bg-neutral-900 text-foreground">
@@ -452,7 +452,7 @@ export default function SpliceManagerPage() {
                   <select
                     value={coresPerTube}
                     onChange={(e) => setCoresPerTube(Number(e.target.value))}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30 text-foreground bg-neutral-900"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong text-foreground bg-neutral-900"
                   >
                     <option value={12} className="bg-neutral-900 text-foreground">12 (Standar)</option>
                     <option value={6} className="bg-neutral-900 text-foreground">6 (Legacy)</option>
@@ -461,7 +461,7 @@ export default function SpliceManagerPage() {
                 </div>
               </div>
 
-              <div className="border-t border-white/10 my-4" />
+              <div className="border-t border-border my-4" />
 
               {/* FAT allocation settings */}
               <div className="space-y-1.5">
@@ -471,7 +471,7 @@ export default function SpliceManagerPage() {
                   value={fatBaseName}
                   onChange={(e) => setFatBaseName(e.target.value)}
                   placeholder="Contoh: ODP-MJK-FA/"
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30 text-foreground"
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong text-foreground"
                 />
               </div>
 
@@ -484,7 +484,7 @@ export default function SpliceManagerPage() {
                     max="144"
                     value={numFat || ""}
                     onChange={(e) => setNumFat(Math.min(144, Math.max(1, Number(e.target.value))))}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30 text-foreground"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong text-foreground"
                   />
                 </div>
 
@@ -493,7 +493,7 @@ export default function SpliceManagerPage() {
                   <select
                     value={coresPerFat}
                     onChange={(e) => setCoresPerFat(Number(e.target.value))}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30 text-foreground bg-neutral-900"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong text-foreground bg-neutral-900"
                   >
                     <option value={1} className="bg-neutral-900 text-foreground">1 Core</option>
                     <option value={2} className="bg-neutral-900 text-foreground">2 Core</option>
@@ -507,7 +507,7 @@ export default function SpliceManagerPage() {
                   <select
                     value={fatCoreScheme}
                     onChange={(e) => setFatCoreScheme(e.target.value as "all_active" | "active_backup")}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30 text-foreground bg-neutral-900"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong text-foreground bg-neutral-900"
                   >
                     <option value="active_backup" className="bg-neutral-900 text-foreground">1 Aktif (Splitter 1:16), 1 Idle (Backup)</option>
                     <option value="all_active" className="bg-neutral-900 text-foreground">Semua Aktif (Misal: 2 Splitter)</option>
@@ -524,15 +524,15 @@ export default function SpliceManagerPage() {
                   max={capacity}
                   value={startCore || ""}
                   onChange={(e) => setStartCore(Math.min(capacity, Math.max(1, Number(e.target.value))))}
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30 text-foreground"
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong text-foreground"
                 />
               </div>
             </div>
 
             {/* Error alerts */}
             {summaryMetrics.exceedsCapacity && (
-              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3.5 flex gap-3 text-xs text-rose-300">
-                <AlertTriangle className="h-5 w-5 shrink-0 text-rose-400" />
+              <div className="rounded-xl border border-danger/20 bg-danger/10 p-3.5 flex gap-3 text-xs text-danger">
+                <AlertTriangle className="h-5 w-5 shrink-0 text-danger" />
                 <div className="space-y-1">
                   <span className="font-semibold">Kapasitas Kabel Melebihi Batas!</span>
                   <p className="leading-relaxed opacity-90">
@@ -543,14 +543,14 @@ export default function SpliceManagerPage() {
             )}
 
             {/* Info guides */}
-            <div className="rounded-xl border border-white/5 bg-white/[0.01] p-3 text-xs text-muted-foreground space-y-1.5">
+            <div className="rounded-xl border border-border/60 bg-surface-1 p-3 text-xs text-muted-foreground space-y-1.5">
               <span className="font-semibold text-foreground block">Mnemonic Kode Warna ({standard}):</span>
               {standard === "Telkom" ? (
-                <p className="font-mono text-[11px] leading-relaxed">
+                <p className="font-mono text-2xs leading-relaxed">
                   Biru, Jingga, Hijau, Cokelat, Abu-abu, Putih, Merah, Hitam, Kuning, Ungu, Pink, Toska.
                 </p>
               ) : (
-                <p className="font-mono text-[11px] leading-relaxed">
+                <p className="font-mono text-2xs leading-relaxed">
                   Blue, Orange, Green, Brown, Slate, White, Red, Black, Yellow, Violet, Rose, Aqua.
                 </p>
               )}
@@ -559,12 +559,12 @@ export default function SpliceManagerPage() {
 
           {/* Quick Info Box Summary */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-xl border border-white/10 bg-card/40 p-4 backdrop-blur-sm text-center">
-              <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Core Terpasang</span>
+            <div className="rounded-xl border border-border bg-card/40 p-4 backdrop-blur-sm text-center">
+              <span className="text-2xs text-muted-foreground font-semibold uppercase block">Core Terpasang</span>
               <div className="text-xl font-bold mt-1 text-primary">{Math.min(capacity, summaryMetrics.totalAllocated)} C</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-card/40 p-4 backdrop-blur-sm text-center">
-              <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Core Cadangan (Spare)</span>
+            <div className="rounded-xl border border-border bg-card/40 p-4 backdrop-blur-sm text-center">
+              <span className="text-2xs text-muted-foreground font-semibold uppercase block">Core Cadangan (Spare)</span>
               <div className="text-xl font-bold mt-1 text-foreground">{summaryMetrics.spares} C</div>
             </div>
           </div>
@@ -579,12 +579,12 @@ export default function SpliceManagerPage() {
             <p className="text-sm">FDT (ODC): {fdtName} | Kapasitas: {capacity} Core | Standar Warna: {standard}</p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm space-y-6 print-card">
+          <div className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm space-y-6 print-card">
             
             {/* Header of tables - Tabs and Search */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 no-print">
               {/* Tab Selector */}
-              <div className="flex bg-white/[0.03] p-1 rounded-xl border border-white/10 self-start">
+              <div className="flex bg-surface-1 p-1 rounded-xl border border-border self-start">
                 <button
                   onClick={() => {
                     setActiveTab("fdt")
@@ -623,7 +623,7 @@ export default function SpliceManagerPage() {
                   placeholder={activeTab === "fdt" ? "Cari core, warna, ODP..." : "Cari ODP, core..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-9 pl-9 pr-3 rounded-lg border border-white/10 bg-white/[0.03] text-xs focus:outline-none focus:border-white/30 text-foreground"
+                  className="w-full h-9 pl-9 pr-3 rounded-lg border border-border bg-surface-1 text-xs focus:outline-none focus:border-border-strong text-foreground"
                 />
               </div>
             </div>
@@ -641,7 +641,7 @@ export default function SpliceManagerPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm border-collapse print-table">
                   <thead>
-                    <tr className="border-b border-white/10 text-muted-foreground text-xs font-semibold uppercase">
+                    <tr className="border-b border-border text-muted-foreground text-xs font-semibold uppercase">
                       <th className="py-3 px-4 w-[90px]">Core FDT</th>
                       <th className="py-3 px-4 w-[160px]">Tube No & Warna</th>
                       <th className="py-3 px-4 w-[160px]">Core No & Warna</th>
@@ -654,12 +654,12 @@ export default function SpliceManagerPage() {
                     {filteredFdtRows.map((row) => (
                       <tr
                         key={row.fdtCore}
-                        className={`border-b border-white/5 transition-colors duration-150 ${
+                        className={`border-b border-border/60 transition-colors duration-150 ${
                           row.status === "Active"
                             ? "hover:bg-primary/[0.02] bg-primary/[0.01]"
                             : row.status === "Backup"
-                            ? "hover:bg-amber-500/[0.02] bg-amber-500/[0.01]"
-                            : "hover:bg-white/[0.01] opacity-75"
+                            ? "hover:bg-warning/[0.02] bg-warning/[0.01]"
+                            : "hover:bg-surface-1 opacity-75"
                         }`}
                       >
                         {/* Core FDT */}
@@ -671,7 +671,7 @@ export default function SpliceManagerPage() {
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2">
                             <span
-                              className="h-4 w-7 rounded-sm border border-white/20 inline-block shadow-inner print-badge"
+                              className="h-4 w-7 rounded-sm border border-border-strong inline-block shadow-inner print-badge"
                               style={{ backgroundColor: row.tubeHex }}
                             />
                             <span className="font-medium text-foreground text-xs">
@@ -684,7 +684,7 @@ export default function SpliceManagerPage() {
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2">
                             <span
-                              className="h-4 w-7 rounded-sm border border-white/20 inline-block shadow-inner print-badge"
+                              className="h-4 w-7 rounded-sm border border-border-strong inline-block shadow-inner print-badge"
                               style={{ backgroundColor: row.coreHex }}
                             />
                             <span className="font-medium text-foreground text-xs">
@@ -714,17 +714,17 @@ export default function SpliceManagerPage() {
                         {/* Status badge */}
                         <td className="py-3.5 px-4 text-right no-print">
                           {row.status === "Active" ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-2xs font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full">
                               <CheckCircle2 className="h-3 w-3" />
                               Active
                             </span>
                           ) : row.status === "Backup" ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-2xs font-bold text-warning bg-warning/10 border border-warning/20 px-2 py-0.5 rounded-full">
                               <Info className="h-3 w-3" />
                               Idle/Backup
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground bg-white/[0.02] border border-white/5 px-2 py-0.5 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-2xs font-medium text-muted-foreground bg-surface-1 border border-border/60 px-2 py-0.5 rounded-full">
                               Spare
                             </span>
                           )}
@@ -741,7 +741,7 @@ export default function SpliceManagerPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm border-collapse print-table">
                   <thead>
-                    <tr className="border-b border-white/10 text-muted-foreground text-xs font-semibold uppercase">
+                    <tr className="border-b border-border text-muted-foreground text-xs font-semibold uppercase">
                       <th className="py-3 px-4 w-[160px]">Nama Box FAT</th>
                       <th className="py-3 px-4 w-[100px]">Core ODP</th>
                       <th className="py-3 px-4">Koneksi Splicing FDT</th>
@@ -752,7 +752,7 @@ export default function SpliceManagerPage() {
                     {filteredFatRows.map((row) => (
                       <tr
                         key={row.fatIndex}
-                        className="border-b border-white/5 hover:bg-white/[0.01]"
+                        className="border-b border-border/60 hover:bg-surface-1"
                       >
                         {/* FAT Name */}
                         <td className="py-4 px-4 font-semibold text-primary align-top">
@@ -771,15 +771,15 @@ export default function SpliceManagerPage() {
                                   Core #{ac.fatCoreIndex}
                                   {!ac.isExceedingCable && (
                                     ac.coreStatus === "Backup" ? (
-                                      <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold uppercase shrink-0">Idle</span>
+                                      <span className="text-3xs px-1 py-0.5 rounded bg-warning/10 text-warning border border-warning/20 font-bold uppercase shrink-0">Idle</span>
                                     ) : (
-                                      <span className="text-[8px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold uppercase shrink-0">Aktif</span>
+                                      <span className="text-3xs px-1 py-0.5 rounded bg-success/10 text-success border border-success/20 font-bold uppercase shrink-0">Aktif</span>
                                     )
                                   )}
                                 </span>
                                 
                                 {ac.isExceedingCable ? (
-                                  <span className="text-xs font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
+                                  <span className="text-xs font-semibold text-danger bg-danger/10 border border-danger/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                                     <AlertTriangle className="h-3.5 w-3.5" />
                                     Tidak Terkoneksi (Kapasitas Cable Habis)
                                   </span>
@@ -792,7 +792,7 @@ export default function SpliceManagerPage() {
                                       <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground">Tube:</span>
                                         <span
-                                          className="h-3.5 w-6 rounded-sm border border-white/20 inline-block print-badge"
+                                          className="h-3.5 w-6 rounded-sm border border-border-strong inline-block print-badge"
                                           style={{ backgroundColor: ac.tubeHex }}
                                         />
                                         <span className="font-medium text-foreground font-sans">
@@ -803,7 +803,7 @@ export default function SpliceManagerPage() {
                                       <div className="flex items-center gap-2">
                                         <span className="text-muted-foreground">Core:</span>
                                         <span
-                                          className="h-3.5 w-6 rounded-sm border border-white/20 inline-block print-badge"
+                                          className="h-3.5 w-6 rounded-sm border border-border-strong inline-block print-badge"
                                           style={{ backgroundColor: ac.coreHex }}
                                         />
                                         <span className="font-medium text-foreground font-sans">
@@ -825,7 +825,7 @@ export default function SpliceManagerPage() {
             )}
 
             {/* Educational Help Footer Card */}
-            <div className="border-t border-white/10 pt-6 no-print">
+            <div className="border-t border-border pt-6 no-print">
               <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-2">
                 <Info className="h-3.5 w-3.5 text-primary" />
                 Cara Membaca Splicing Joint Manager:
@@ -833,7 +833,7 @@ export default function SpliceManagerPage() {
               <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4 leading-relaxed">
                 <li>Kolom <strong>Core FDT</strong> menunjukkan nomor core fisik pada kabel distribusi.</li>
                 <li>Setiap Tube berisi <strong>{coresPerTube} core</strong>. Contoh: Core 13 diletakkan di Tube #2 (Oranye) Core ke-1 (Biru).</li>
-                <li>Bila core dipetakan ke FAT, ia akan tercatat sebagai status <strong className="text-emerald-400">Active</strong> dan target splicing ODP-nya akan tertera.</li>
+                <li>Bila core dipetakan ke FAT, ia akan tercatat sebagai status <strong className="text-success">Active</strong> dan target splicing ODP-nya akan tertera.</li>
                 <li><strong>Cetak PDF</strong> akan menghasilkan selembar kertas A4 siap cetak yang ramah printer tinta dengan warna latar belakang putih bersih secara otomatis.</li>
               </ul>
             </div>

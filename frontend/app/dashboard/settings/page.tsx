@@ -86,7 +86,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Security & Device Limits */}
-      <section className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm space-y-4">
+      <section className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400 ring-1 ring-blue-500/20">
@@ -106,7 +106,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 flex items-center justify-between">
+          <div className="rounded-xl border border-border bg-surface-1 p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {currentDevice?.type === "mobile" ? (
                 <Smartphone className="h-5 w-5 text-primary" />
@@ -118,10 +118,10 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium">{currentDevice?.name || "Desktop Browser"}</p>
               </div>
             </div>
-            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="flex h-2 w-2 rounded-full bg-success animate-pulse" />
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 flex items-center justify-between">
+          <div className="rounded-xl border border-border bg-surface-1 p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">Status Perangkat Terdaftar</p>
               <p className="text-sm font-medium">
@@ -131,7 +131,7 @@ export default function SettingsPage() {
             <button
               onClick={handleResetDevices}
               disabled={resetting || loading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-foreground transition-all cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-2 hover:bg-surface-3 border border-border text-foreground transition-all cursor-pointer disabled:opacity-50"
             >
               {resetting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 text-blue-400" />}
               Reset Perangkat
@@ -140,7 +140,7 @@ export default function SettingsPage() {
         </div>
 
         {message && (
-          <div className="flex items-center gap-2 p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs">
+          <div className="flex items-center gap-2 p-3 rounded-lg border border-success/20 bg-success/10 text-success text-xs">
             <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
             <span>{message}</span>
           </div>
@@ -148,7 +148,7 @@ export default function SettingsPage() {
       </section>
 
       {/* Profile */}
-      <section className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm">
+      <section className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm">
         <h2 className="text-base font-medium">Profile</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Nama dan informasi identitas pengguna.
@@ -158,21 +158,21 @@ export default function SettingsPage() {
             <label className="text-xs text-muted-foreground">Full name</label>
             <input
               defaultValue="Nusa Hytoria"
-              className="mt-1.5 w-full h-9 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm focus:outline-none focus:border-white/30 transition-colors"
+              className="mt-1.5 w-full h-9 rounded-lg border border-border bg-surface-1 px-3 text-sm focus:outline-none focus:border-border-strong transition-colors"
             />
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Email</label>
             <input
               defaultValue="engineer@ftthtools.my.id"
-              className="mt-1.5 w-full h-9 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm focus:outline-none focus:border-white/30 transition-colors"
+              className="mt-1.5 w-full h-9 rounded-lg border border-border bg-surface-1 px-3 text-sm focus:outline-none focus:border-border-strong transition-colors"
             />
           </div>
         </div>
       </section>
 
       {/* Workspace */}
-      <section className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm">
+      <section className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm">
         <h2 className="text-base font-medium">Workspace</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Defaults yang diterapkan pada setiap pemrosesan tool.
@@ -184,14 +184,14 @@ export default function SettingsPage() {
             </label>
             <input
               defaultValue="JKT-FTTH"
-              className="mt-1.5 w-full h-9 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm focus:outline-none focus:border-white/30 transition-colors"
+              className="mt-1.5 w-full h-9 rounded-lg border border-border bg-surface-1 px-3 text-sm focus:outline-none focus:border-border-strong transition-colors"
             />
           </div>
           <div>
             <label className="text-xs text-muted-foreground">
               Distance unit
             </label>
-            <select className="mt-1.5 w-full h-9 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm focus:outline-none focus:border-white/30 transition-colors">
+            <select className="mt-1.5 w-full h-9 rounded-lg border border-border bg-surface-1 px-3 text-sm focus:outline-none focus:border-border-strong transition-colors">
               <option>Meters</option>
               <option>Kilometers</option>
             </select>

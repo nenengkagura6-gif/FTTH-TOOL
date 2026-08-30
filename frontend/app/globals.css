@@ -40,6 +40,23 @@
   --sidebar-ring: oklch(0.60 0.14 200);
   /* Garis grid/dot dekoratif — gelap di light, terang di dark */
   --pattern-line: oklch(0 0 0 / 0.055);
+
+  /* Tangga permukaan. Di mode terang, bidang yang "naik" sedikit lebih
+     GELAP dari halaman — kebalikan dari mode gelap. Inilah yang tidak bisa
+     dilakukan `bg-white/[0.03]`: ia selalu memutih, jadi di latar terang
+     kartunya lenyap. */
+  --surface-1: oklch(0 0 0 / 0.025);
+  --surface-2: oklch(0 0 0 / 0.045);
+  --surface-3: oklch(0 0 0 / 0.080);
+  --border-strong: oklch(0 0 0 / 0.16);
+
+  /* Warna status. Nilai LIGHT sengaja lebih pekat: shade -400 Tailwind
+     yang dipakai sebelumnya dirancang untuk latar gelap, dan di atas
+     halaman terang kontrasnya jatuh sehingga teksnya pucat. */
+  --success: oklch(0.55 0.14 155);
+  --warning: oklch(0.58 0.14 75);
+  --danger:  oklch(0.55 0.20 27);
+  --danger-foreground: oklch(0.99 0 0);
 }
 
 .dark {
@@ -71,6 +88,20 @@
   --sidebar-border: oklch(1 0 0 / 0.08);
   --sidebar-ring: oklch(0.78 0.15 200);
   --pattern-line: oklch(1 0 0 / 0.04);
+
+  /* Tangga permukaan versi gelap — nilainya menyamai hardcode lama
+     (bg-white/[0.03], /5, /10) supaya tampilan dark tidak berubah. */
+  --surface-1: oklch(1 0 0 / 0.030);
+  --surface-2: oklch(1 0 0 / 0.055);
+  --surface-3: oklch(1 0 0 / 0.100);
+  --border-strong: oklch(1 0 0 / 0.18);
+
+  /* Versi gelap menyamai shade -400 yang dipakai sebelumnya, supaya
+     tampilan dark tidak berubah. */
+  --success: oklch(0.78 0.16 158);
+  --warning: oklch(0.82 0.15 80);
+  --danger:  oklch(0.71 0.19 25);
+  --danger-foreground: oklch(0.14 0 0);
 }
 
 @theme inline {
@@ -94,6 +125,22 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+
+  /* Dua langkah di bawah text-xs, untuk label padat dan badge. Sebelumnya
+     ditulis sebagai ukuran arbitrer (8/9/10/11px) yang dipilih ad-hoc di
+     135 tempat — tanpa skala, ukuran kecil jadi tidak pernah konsisten. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: 0.875rem;
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-chart-1: var(--chart-1);
@@ -430,3 +477,55 @@
 .rm-nodes .rm-d0 { animation-delay: 900ms; }
 .rm-nodes .rm-d1 { animation-delay: 1500ms; }
 .rm-nodes .rm-d3 { animation-delay: 2150ms; }
+
+/* ==================================================
+   Reveal saat di-scroll — versi yang tidak bisa tersangkut
+
+   Versi framer-motion sebelumnya memakai IntersectionObserver dengan
+   `once: true`. Kalau observer tidak sempat memicu (scroll cepat,
+   pemulihan posisi scroll, tab latar), konten tetap di opacity 0
+   SELAMANYA dan section terlihat kosong.
+
+   Di sini animasinya CSS murni dan digerakkan scroll-timeline. Kuncinya:
+   keadaan DASAR elemen adalah TERLIHAT. Animasi hanya ditambahkan di
+   dalam @supports — jadi pada browser yang belum mendukungnya (Safari,
+   Firefox), konten tampil apa adanya. Tidak ada jalur kegagalan yang
+   menyembunyikan konten.
+   ================================================== */
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: reveal-in linear both;
+    animation-timeline: view();
+    /* Mulai tepat sebelum elemen masuk layar, selesai saat sepertiga
+       tingginya sudah terlihat — cukup terasa tanpa membuat menunggu. */
+    animation-range: entry 5% cover 22%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      animation: none;
+    }
+  }
+}
+
+/* Bar progres tanpa nilai — dipakai saat backend belum mengirim
+   persentase. Lebih jujur daripada mengarang angka yang merangkak. */
+@keyframes indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.animate-indeterminate {
+  animation: indeterminate 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}

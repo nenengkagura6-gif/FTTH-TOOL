@@ -22,17 +22,26 @@ export function Hero({ locale = "en" }: { locale?: string }) {
 
   return (
     <section className="relative isolate overflow-hidden border-b border-border">
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 pt-28 pb-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-8 lg:pt-32 lg:pb-28">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 pt-24 pb-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-8 lg:pt-28 lg:pb-20">
         {/* ---------- Kolom kiri: teks, tenang ---------- */}
         <div>
           {/* Penanda kategori, bukan badge "✨ Powered by AI" */}
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground">
             {isId ? "Otomatisasi Perencanaan FTTH" : "FTTH Planning Automation"}
           </p>
 
           <h1 className="mt-5 font-display text-4xl font-semibold leading-[1.06] tracking-tight text-balance sm:text-5xl lg:text-6xl">
-            {t.hero.titleLead}{" "}
-            <span className="text-primary">{t.hero.titleAccent}</span>
+            {isId ? (
+              <>
+                Platform Otomatisasi{" "}
+                <span className="text-primary">FTTH Tool</span> Modern
+              </>
+            ) : (
+              <>
+                Modern <span className="text-primary">FTTH Tool</span>{" "}
+                Automation Platform
+              </>
+            )}
           </h1>
 
           <p className="mt-6 max-w-lg text-base leading-relaxed text-muted-foreground text-pretty">
@@ -62,7 +71,7 @@ export function Hero({ locale = "en" }: { locale?: string }) {
               { k: isId ? "Keluaran" : "Output", v: "XLSX · CSV · KML · DXF" },
             ].map((item) => (
               <div key={item.k}>
-                <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
+                <dt className="font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground/70">
                   {item.k}
                 </dt>
                 <dd className="mt-1 font-mono text-xs text-foreground/80">{item.v}</dd>

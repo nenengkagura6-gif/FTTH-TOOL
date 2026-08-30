@@ -192,11 +192,11 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-white/10 bg-background/70 backdrop-blur-xl px-4 sm:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/70 backdrop-blur-xl px-4 sm:px-6">
       <button
         type="button"
         onClick={onMenuClick}
-        className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+        className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
         aria-label="Open sidebar"
       >
         <Menu className="h-4 w-4" />
@@ -207,11 +207,11 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex items-center gap-2 w-full h-9 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-sm text-muted-foreground hover:border-white/20 hover:bg-white/[0.05] transition-all text-left cursor-pointer"
+          className="flex items-center gap-2 w-full h-9 rounded-lg border border-border bg-surface-1 px-3 text-sm text-muted-foreground hover:border-border-strong hover:bg-surface-2 transition-all text-left cursor-pointer"
         >
           <Search className="h-4 w-4 shrink-0" />
           <span>{t.searchPlaceholder}</span>
-          <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-white/10 bg-white/5 px-1.5 font-mono text-[10px] font-medium text-muted-foreground ml-auto">
+          <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-surface-2 px-1.5 font-mono text-2xs font-medium text-muted-foreground ml-auto">
             <span className="text-xs">⌘</span>K
           </kbd>
         </button>
@@ -222,7 +222,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors cursor-pointer"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors cursor-pointer"
           aria-label="Search"
         >
           <Search className="h-4 w-4" />
@@ -234,7 +234,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
         <button
           type="button"
           onClick={toggleLanguage}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs border border-white/10 bg-white/[0.03] text-muted-foreground rounded-lg hover:border-white/30 hover:text-foreground transition-colors font-medium cursor-pointer"
+          className="flex items-center gap-1 px-3 py-1.5 text-xs border border-border bg-surface-1 text-muted-foreground rounded-lg hover:border-border-strong hover:text-foreground transition-colors font-medium cursor-pointer"
         >
           <Globe className="h-3 w-3" />
           <span className="uppercase">{currentLocale === "en" ? "ID" : "EN"}</span>
@@ -244,7 +244,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
         <button
           type="button"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="flex items-center justify-center w-9 h-9 border border-white/10 bg-white/[0.03] text-muted-foreground rounded-lg hover:border-white/30 hover:text-foreground transition-colors cursor-pointer"
+          className="flex items-center justify-center w-9 h-9 border border-border bg-surface-1 text-muted-foreground rounded-lg hover:border-border-strong hover:text-foreground transition-colors cursor-pointer"
           aria-label="Toggle theme"
         >
           {mounted && theme === "dark" ? (
@@ -264,7 +264,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
               "relative inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-all cursor-pointer",
               showNotifications 
                 ? "border-primary/30 bg-primary/5 text-primary" 
-                : "border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/5"
+                : "border-border text-muted-foreground hover:text-foreground hover:bg-surface-2"
             )}
           >
             <Bell className="h-4 w-4" />
@@ -274,8 +274,8 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
           </button>
 
           {showNotifications && (
-            <div className="fixed top-16 left-4 right-4 w-auto md:absolute md:top-full md:right-0 md:left-auto md:w-96 rounded-xl border border-white/10 bg-card/95 backdrop-blur-xl shadow-2xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 mb-1">
+            <div className="fixed top-16 left-4 right-4 w-auto md:absolute md:top-full md:right-0 md:left-auto md:w-96 rounded-xl border border-border bg-card/95 backdrop-blur-xl shadow-2xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-border mb-1">
                 <span className="text-sm font-semibold text-foreground">
                   {notifT[currentLocale].title}
                 </span>
@@ -314,8 +314,8 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
                       className={cn(
                         "w-full text-left flex gap-3 rounded-lg p-2.5 transition-all text-sm cursor-pointer",
                         readIds.includes(n.id) 
-                          ? "text-muted-foreground hover:bg-white/5" 
-                          : "bg-white/[0.02] text-foreground hover:bg-white/5 border-l-2 border-primary pl-2"
+                          ? "text-muted-foreground hover:bg-surface-2" 
+                          : "bg-surface-1 text-foreground hover:bg-surface-2 border-l-2 border-primary pl-2"
                       )}
                     >
                       <div className="flex-1 min-w-0">
@@ -323,7 +323,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
                           <span className={cn("font-medium truncate text-xs sm:text-sm", !readIds.includes(n.id) && "text-foreground")}>
                             {n.title[currentLocale]}
                           </span>
-                          <span className="text-[10px] text-muted-foreground shrink-0">
+                          <span className="text-2xs text-muted-foreground shrink-0">
                             {n.time[currentLocale]}
                           </span>
                         </div>
@@ -343,7 +343,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
         <div className="group relative">
           <button
             type="button"
-            className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-white/5 transition-colors"
+            className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-surface-2 transition-colors"
             aria-label="User menu"
           >
             {profile?.avatar_url ? (
@@ -365,16 +365,16 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
           </button>
 
           {/* Dropdown */}
-          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 absolute right-0 top-full mt-1 w-56 rounded-xl border border-white/10 bg-card/95 backdrop-blur-xl shadow-2xl p-1.5 z-50">
-            <div className="px-3 py-2 border-b border-white/10 mb-1">
+          <div className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 absolute right-0 top-full mt-1 w-56 rounded-xl border border-border bg-card/95 backdrop-blur-xl shadow-2xl p-1.5 z-50">
+            <div className="px-3 py-2 border-b border-border mb-1">
               <p className="text-sm font-medium truncate">{displayName}</p>
               <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               {profile && (
                 <div className="mt-1.5 flex items-center gap-1.5">
-                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary ring-1 ring-primary/20 capitalize">
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-medium text-primary ring-1 ring-primary/20 capitalize">
                     {profile.plan}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-2xs text-muted-foreground">
                     {profile.quota_used}/{profile.quota_limit} {t.quotaUsed}
                   </span>
                 </div>
@@ -383,7 +383,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
             <button
               type="button"
               onClick={signOut}
-              className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+              className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
             >
               <LogOut className="h-4 w-4" />
               {t.signOut}
@@ -395,7 +395,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
       {/* Global Command Search Dialog */}
       <CommandDialog open={open} onOpenChange={setOpen}>
         <CommandInput placeholder={t.searchPlaceholder} />
-        <CommandList className="border-t border-white/5 p-1 bg-card">
+        <CommandList className="border-t border-border/60 p-1 bg-card">
           <CommandEmpty>{t.noResults}</CommandEmpty>
           {TOOL_CATEGORIES.map((category) => {
               const tools = getToolsByCategory(category.id)
@@ -413,15 +413,15 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
                           setOpen(false)
                           router.push(item.href)
                         }}
-                        className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-white/5 rounded-lg text-foreground hover:text-primary transition-all duration-150"
+                        className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-surface-2 rounded-lg text-foreground hover:text-primary transition-all duration-150"
                       >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/5 text-muted-foreground">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
                           <item.icon className="h-4 w-4 shrink-0" />
                         </div>
                         <div className="flex flex-col flex-1 min-w-0">
                           <span className="font-medium text-sm truncate">{translation.title}</span>
                           {translation.description && (
-                            <span className="text-[10px] text-muted-foreground truncate">{translation.description}</span>
+                            <span className="text-2xs text-muted-foreground truncate">{translation.description}</span>
                           )}
                         </div>
                       </CommandItem>
@@ -437,9 +437,9 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
                 setOpen(false)
                 router.push("/dashboard")
               }}
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-white/5 rounded-lg text-foreground hover:text-primary transition-all duration-150"
+              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-surface-2 rounded-lg text-foreground hover:text-primary transition-all duration-150"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/5 text-muted-foreground">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
                 <LayoutDashboard className="h-4 w-4 shrink-0" />
               </div>
               <span className="font-medium text-sm">{t.overview}</span>
@@ -450,9 +450,9 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
                 setOpen(false)
                 router.push("/dashboard/history")
               }}
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-white/5 rounded-lg text-foreground hover:text-primary transition-all duration-150"
+              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-surface-2 rounded-lg text-foreground hover:text-primary transition-all duration-150"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/5 text-muted-foreground">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-surface-2 text-muted-foreground">
                 <History className="h-4 w-4 shrink-0" />
               </div>
               <span className="font-medium text-sm">{t.history}</span>
@@ -468,9 +468,9 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
                 setOpen(false)
                 signOut()
               }}
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-red-500/10 rounded-lg text-red-400 transition-all duration-150"
+              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-danger/10 rounded-lg text-danger transition-all duration-150"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-red-500/10 text-red-400">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-danger/10 text-danger">
                 <LogOut className="h-4 w-4 shrink-0" />
               </div>
               <span className="font-medium text-sm">{t.signOut}</span>

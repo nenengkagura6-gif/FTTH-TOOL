@@ -94,20 +94,20 @@ const categoryCardAccent: Record<string, {
     subtitleBadge: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
   },
   amber: {
-    gradient: "from-amber-500/20",
-    dotBg: "bg-gradient-to-br from-amber-500 to-orange-500",
-    borderHover: "hover:border-amber-500/40",
+    gradient: "from-warning/20",
+    dotBg: "bg-gradient-to-br from-warning to-orange-500",
+    borderHover: "hover:border-warning/40",
     shadowHover: "hover:shadow-amber-500/10",
-    iconActiveBg: "group-hover:bg-amber-500 group-active:bg-amber-500",
-    subtitleBadge: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    iconActiveBg: "group-hover:bg-warning group-active:bg-warning",
+    subtitleBadge: "bg-warning/10 text-warning border-warning/20",
   },
   emerald: {
-    gradient: "from-emerald-500/20",
-    dotBg: "bg-gradient-to-br from-emerald-500 to-green-500",
-    borderHover: "hover:border-emerald-500/40",
+    gradient: "from-success/20",
+    dotBg: "bg-gradient-to-br from-success to-success",
+    borderHover: "hover:border-success/40",
     shadowHover: "hover:shadow-emerald-500/10",
-    iconActiveBg: "group-hover:bg-emerald-500 group-active:bg-emerald-500",
-    subtitleBadge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    iconActiveBg: "group-hover:bg-success group-active:bg-success",
+    subtitleBadge: "bg-success/10 text-success border-success/20",
   },
 }
 
@@ -239,25 +239,22 @@ export default function DashboardPage() {
     return (
       <motion.div
         key={tool.href}
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: i * 0.04 }}
-        whileTap={{ scale: 0.97 }}
+whileTap={{ scale: 0.97 }}
       >
         {isLocked ? (
           <button
             type="button"
             onClick={() => tool.featureKey && showUpgradeModal(tool.featureKey)}
             className={cn(
-              "group relative block h-full w-full text-left overflow-hidden rounded-2xl border border-border bg-card/90 p-5 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-amber-500/40 hover:shadow-xl hover:shadow-amber-500/10 opacity-70",
+              "group relative block h-full w-full text-left overflow-hidden rounded-2xl border border-border bg-card/90 p-5 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-warning/40 hover:shadow-xl hover:shadow-amber-500/10 opacity-70",
             )}
           >
-            <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-amber-500/10 opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
+            <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full bg-warning/10 opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
             <div className="relative flex items-start justify-between">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 text-muted-foreground/50 ring-1 ring-white/10">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2 text-muted-foreground/50 ring-1 ring-white/10">
                 <tool.icon className="h-4 w-4" />
               </div>
-              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400/80 border border-amber-500/20">
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-warning/10 text-warning/80 border border-warning/20">
                 <Lock className="h-2.5 w-2.5" />
                 PRO
               </span>
@@ -319,10 +316,7 @@ export default function DashboardPage() {
         {statCards.map((s, i) => (
           <motion.div
             key={s.label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: i * 0.05 }}
-            whileHover={{ y: -2 }}
+whileHover={{ y: -2 }}
             className="group relative rounded-2xl border border-border bg-card/90 p-4 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5"
           >
             <div className="flex items-center justify-between">
@@ -355,10 +349,7 @@ export default function DashboardPage() {
         return (
           <motion.section
             key={category.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.15 + catIdx * 0.1 }}
-          >
+>
             {/* Category header */}
             <div className="flex items-center gap-3 mb-4">
               {/* Gradient accent bar */}
@@ -375,7 +366,7 @@ export default function DashboardPage() {
                 </h2>
               </div>
               <span className={cn(
-                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border",
+                "inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium border",
                 accent.subtitleBadge,
               )}>
                 {categorySubtitle}
@@ -406,9 +397,9 @@ export default function DashboardPage() {
               {recentJobs.map((job) => (
                 <li
                   key={job.id}
-                  className="flex items-center gap-3 p-4 hover:bg-white/[0.02] transition-colors"
+                  className="flex items-center gap-3 p-4 hover:bg-surface-1 transition-colors"
                 >
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-white/5 ring-1 ring-white/10">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-surface-2 ring-1 ring-white/10">
                     <Files className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -422,14 +413,14 @@ export default function DashboardPage() {
                       {timeAgo(job.created_at, locale)}
                     </span>
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-2xs font-medium ring-1 ${
                         job.status === "completed"
                           ? "bg-primary/10 text-primary ring-primary/20"
                           : job.status === "failed"
-                            ? "bg-red-500/10 text-red-400 ring-red-500/20"
+                            ? "bg-danger/10 text-danger ring-danger/20"
                             : job.status === "processing"
-                              ? "bg-yellow-500/10 text-yellow-400 ring-yellow-500/20"
-                              : "bg-white/5 text-muted-foreground ring-white/10"
+                              ? "bg-warning/10 text-warning ring-warning/20"
+                              : "bg-surface-2 text-muted-foreground ring-white/10"
                       }`}
                     >
                       <span
@@ -437,9 +428,9 @@ export default function DashboardPage() {
                           job.status === "completed"
                             ? "bg-primary"
                             : job.status === "failed"
-                              ? "bg-red-400"
+                              ? "bg-danger"
                               : job.status === "processing"
-                                ? "bg-yellow-400 animate-pulse"
+                                ? "bg-warning animate-pulse"
                                : "bg-muted-foreground"
                         }`}
                       />

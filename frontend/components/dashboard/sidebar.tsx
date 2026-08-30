@@ -59,18 +59,18 @@ const categoryAccentMap: Record<string, {
     activeText: "text-cyan-400",
   },
   amber: {
-    dot: "bg-gradient-to-br from-amber-500 to-orange-500",
-    barGradient: "from-amber-500/60 to-orange-500/60",
-    activeBg: "bg-amber-500/10",
+    dot: "bg-gradient-to-br from-warning to-orange-500",
+    barGradient: "from-warning/60 to-orange-500/60",
+    activeBg: "bg-warning/10",
     activeBorder: "border-l-amber-500",
-    activeText: "text-amber-400",
+    activeText: "text-warning",
   },
   emerald: {
-    dot: "bg-gradient-to-br from-emerald-500 to-green-500",
-    barGradient: "from-emerald-500/60 to-green-500/60",
-    activeBg: "bg-emerald-500/10",
+    dot: "bg-gradient-to-br from-success to-success",
+    barGradient: "from-success/60 to-success/60",
+    activeBg: "bg-success/10",
     activeBorder: "border-l-emerald-500",
-    activeText: "text-emerald-400",
+    activeText: "text-success",
   },
 }
 
@@ -144,21 +144,21 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             }}
             className={cn(
               "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all w-full text-left",
-              "text-muted-foreground/50 hover:bg-white/5 hover:text-muted-foreground",
+              "text-muted-foreground/50 hover:bg-surface-2 hover:text-muted-foreground",
             )}
           >
             <item.icon className="h-4 w-4 flex-shrink-0 opacity-40" />
             {!collapsed && (
               <>
                 <span className="truncate flex-1 opacity-60">{translatedTitle}</span>
-                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-400/80 border border-amber-500/20">
+                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium bg-warning/10 text-warning/80 border border-warning/20">
                   <Lock className="h-2.5 w-2.5" />
                   PRO
                 </span>
               </>
             )}
             {collapsed && (
-              <Lock className="absolute top-1 right-1 h-2.5 w-2.5 text-amber-400/60" />
+              <Lock className="absolute top-1 right-1 h-2.5 w-2.5 text-warning/60" />
             )}
           </button>
         </li>
@@ -177,7 +177,7 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                   "text-foreground",
                   accent ? accent.activeBg : "bg-primary/10",
                 )
-              : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+              : "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
           )}
           aria-current={active ? "page" : undefined}
         >
@@ -224,7 +224,7 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       <aside
         className={cn(
           "fixed lg:sticky top-0 z-50 lg:z-30 h-screen flex-shrink-0 transition-all duration-300 ease-out",
-          "bg-sidebar/90 backdrop-blur-xl border-r border-white/10",
+          "bg-sidebar/90 backdrop-blur-xl border-r border-border",
           collapsed ? "lg:w-16" : "lg:w-64",
           "w-72 lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
@@ -233,7 +233,7 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       >
         <div className="flex h-full flex-col">
           {/* Logo */}
-          <div className="flex h-16 items-center justify-between px-4 border-b border-white/10">
+          <div className="flex h-16 items-center justify-between px-4 border-b border-border">
             <Link
               href="/"
               className="flex items-center gap-2"
@@ -275,7 +275,7 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             </ul>
 
             {/* Divider between system & tools */}
-            <div className="my-3 h-px bg-white/[0.06]" />
+            <div className="my-3 h-px bg-surface-2" />
 
             {/* Tool categories */}
             <div className="flex flex-col gap-1">
@@ -295,8 +295,8 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                       onClick={() => toggleCategory(category.id)}
                       className={cn(
                         "group flex items-center gap-2 w-full rounded-lg px-3 py-2 transition-all",
-                        "hover:bg-white/[0.04]",
-                        hasActiveChild && !isExpanded && "bg-white/[0.03]",
+                        "hover:bg-surface-2",
+                        hasActiveChild && !isExpanded && "bg-surface-1",
                         collapsed && "lg:justify-center lg:px-0",
                       )}
                       aria-expanded={isExpanded}
@@ -318,12 +318,12 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                               {categoryLabel}
                             </span>
                             {isExpanded && (
-                              <span className="text-[11px] text-muted-foreground/50 block leading-tight mt-0.5 font-normal">
+                              <span className="text-2xs text-muted-foreground/50 block leading-tight mt-0.5 font-normal">
                                 {categorySubtitle}
                               </span>
                             )}
                             {!isExpanded && (
-                              <span className="text-[10px] text-muted-foreground/40 block leading-tight mt-0.5">
+                              <span className="text-2xs text-muted-foreground/40 block leading-tight mt-0.5">
                                 {tools.length} {locale === "id" ? "alat" : "tools"}
                               </span>
                             )}
@@ -376,12 +376,12 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           </nav>
 
           {/* Footer */}
-          <div className="border-t border-white/10 p-3">
+          <div className="border-t border-border p-3">
             <ul className="flex flex-col gap-1">
               <li>
                 <Link
                   href={`/${locale}/docs`}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors"
                 >
                   <HelpCircle className="h-4 w-4 flex-shrink-0" />
                   {!collapsed && <span>{locale === "id" ? "Dokumentasi" : "Docs"}</span>}
@@ -390,7 +390,7 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               <li>
                 <Link
                   href="/dashboard/settings"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground transition-colors"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors"
                 >
                   <Settings className="h-4 w-4 flex-shrink-0" />
                   {!collapsed && <span>{locale === "id" ? "Pengaturan" : "Settings"}</span>}
@@ -400,7 +400,7 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                 <button
                   type="button"
                   onClick={signOut}
-                  className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-white/5 hover:text-red-400 transition-colors"
+                  className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-surface-2 hover:text-danger transition-colors"
                 >
                   <LogOut className="h-4 w-4 flex-shrink-0" />
                   {!collapsed && <span>{locale === "id" ? "Keluar" : "Sign out"}</span>}
@@ -410,20 +410,20 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
             {/* User info + plan badge */}
             {!collapsed && user && (
-              <div className="mt-3 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/5">
+              <div className="mt-3 px-3 py-2 rounded-lg bg-surface-1 border border-border/60">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium truncate">{displayName}</p>
                   <span className={cn(
-                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border",
+                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium border",
                     planInfo.badge,
                   )}>
                     {plan !== 'free' && <Crown className="h-2.5 w-2.5" />}
                     {planInfo.label}
                   </span>
                 </div>
-                <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+                <p className="text-2xs text-muted-foreground truncate">{user.email}</p>
                 {profile && (
-                  <p className="text-[9px] text-muted-foreground mt-1 font-mono">
+                  <p className="text-3xs text-muted-foreground mt-1 font-mono">
                     {profile.quota_used}/{profile.quota_limit} {locale === "id" ? "terpakai" : "used"}
                   </p>
                 )}
@@ -433,7 +433,7 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             <button
               type="button"
               onClick={() => setCollapsed(!collapsed)}
-              className="hidden lg:flex mt-3 items-center justify-center w-full h-8 rounded-lg border border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+              className="hidden lg:flex mt-3 items-center justify-center w-full h-8 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               <ChevronLeft

@@ -235,7 +235,7 @@ export default function DxfKmlPage() {
         </div>
 
         {/* Configuration parameters */}
-        <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm space-y-4">
+        <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm space-y-4">
           <h2 className="text-sm font-medium">Proyeksi Geografis</h2>
           <p className="text-xs text-muted-foreground">
             Sistem memerlukan zona UTM gambar Anda agar dapat memproyeksikan koordinat meter kembali ke derajat GPS.
@@ -253,7 +253,7 @@ export default function DxfKmlPage() {
                 max="60"
                 value={utmZone}
                 onChange={(e) => setUtmZone(Math.max(1, Math.min(60, parseInt(e.target.value) || 48)))}
-                className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary transition-colors"
+                className="w-full bg-surface-1 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary transition-colors"
               />
             </div>
             
@@ -265,7 +265,7 @@ export default function DxfKmlPage() {
                 id="hemisphereSelect"
                 value={isSouthern ? "south" : "north"}
                 onChange={(e) => setIsSouthern(e.target.value === "south")}
-                className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary transition-colors"
+                className="w-full bg-surface-1 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary transition-colors"
               >
                 <option value="south" className="bg-neutral-900">Southern (S) - e.g. Indonesia Selatan</option>
                 <option value="north" className="bg-neutral-900">Northern (N) - e.g. Indonesia Utara</option>
@@ -274,10 +274,10 @@ export default function DxfKmlPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm">
+        <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm">
           <h2 className="text-sm font-medium">Supported formats</h2>
           <ul className="mt-3 flex flex-wrap gap-2">
-            <li className="font-mono text-xs px-2 py-1 rounded-md border border-white/10 bg-white/[0.03] text-muted-foreground">
+            <li className="font-mono text-xs px-2 py-1 rounded-md border border-border bg-surface-1 text-muted-foreground">
               .dxf
             </li>
           </ul>
@@ -286,8 +286,8 @@ export default function DxfKmlPage() {
 
       {/* Main upload card */}
       <div className="space-y-5">
-        <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden">
-          <div className="p-5 border-b border-white/10">
+        <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden">
+          <div className="p-5 border-b border-border">
             <h2 className="text-base font-medium">Upload drawing</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Drag and drop or click to browse DXF file
@@ -316,7 +316,7 @@ export default function DxfKmlPage() {
                 "relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 cursor-pointer transition-all",
                 isDragging
                   ? "border-primary bg-primary/5"
-                  : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]",
+                  : "border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2",
               )}
               aria-label="Upload DXF file"
             >
@@ -329,7 +329,7 @@ export default function DxfKmlPage() {
               />
               <div
                 className={cn(
-                  "flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-background transition-all",
+                  "flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background transition-all",
                   isDragging && "scale-110 border-primary/50",
                 )}
               >
@@ -352,7 +352,7 @@ export default function DxfKmlPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
-                  className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3"
+                  className="flex items-center gap-3 rounded-lg border border-border bg-surface-1 p-3"
                 >
                   <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-primary/20">
                     <FileText className="h-4 w-4" />
@@ -386,7 +386,7 @@ export default function DxfKmlPage() {
                       Uploading to Cloud...
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-primary/70 to-primary w-full animate-pulse" />
                   </div>
                 </div>
@@ -399,7 +399,7 @@ export default function DxfKmlPage() {
                     </span>
                     <span className="font-mono">{progress}%</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
                     <motion.div
                       className="h-full bg-gradient-to-r from-blue-500/70 to-blue-500"
                       initial={{ width: 0 }}
@@ -417,7 +417,7 @@ export default function DxfKmlPage() {
                     "w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer",
                     primary && status !== "success"
                       ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                      : "bg-white/5 text-muted-foreground cursor-not-allowed",
+                      : "bg-surface-2 text-muted-foreground cursor-not-allowed",
                   )}
                 >
                   Process file
@@ -457,7 +457,7 @@ export default function DxfKmlPage() {
                     <button
                       type="button"
                       onClick={handleReset}
-                      className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm hover:border-white/30 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-4 py-2 text-sm hover:border-border-strong transition-colors cursor-pointer"
                     >
                       Process another
                     </button>

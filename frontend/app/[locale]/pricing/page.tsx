@@ -374,7 +374,7 @@ export default function PricingPage({ params }: PageProps) {
 
         {lastRejectedPayment && (
           <section className="mx-auto max-w-4xl px-6 mt-4">
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-400 flex items-start gap-3 backdrop-blur-sm">
+            <div className="rounded-2xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger flex items-start gap-3 backdrop-blur-sm">
               <ShieldAlert className="h-5 w-5 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="font-semibold">
@@ -402,15 +402,11 @@ export default function PricingPage({ params }: PageProps) {
               return (
                 <motion.div
                   key={plan.name}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.4, delay: i * 0.08 }}
                   whileTap={{ scale: 0.98 }}
                   onMouseEnter={() => setHoveredIndex(i)}
                   onTouchStart={() => setHoveredIndex(i)}
                   className={cn(
-                    "group relative flex flex-col rounded-3xl border p-8 backdrop-blur-sm shadow-md transition-all duration-300 cursor-pointer",
+                    "group relative flex flex-col rounded-2xl border p-8 backdrop-blur-sm shadow-md transition-all duration-300 cursor-pointer",
                     isHighlighted
                       ? "border-primary bg-card/95 shadow-xl shadow-primary/10 scale-[1.02] z-10"
                       : "border-border bg-card/60 shadow-black/5 dark:shadow-black/20 scale-[0.98] opacity-80",
@@ -423,7 +419,7 @@ export default function PricingPage({ params }: PageProps) {
 
                   {plan.target === "pro" && (
                     <span className={cn(
-                      "absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-wider transition-all duration-300",
+                      "absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-2xs font-medium uppercase tracking-wider transition-all duration-300",
                       isHighlighted
                         ? "bg-primary text-primary-foreground scale-105"
                         : "bg-muted text-muted-foreground"
@@ -440,7 +436,7 @@ export default function PricingPage({ params }: PageProps) {
                             {plan.originalPrice}
                           </span>
                           {plan.promoLabel && (
-                            <span className="text-[10px] bg-red-500/10 border border-red-500/20 text-red-400 font-medium px-2 py-0.5 rounded">
+                            <span className="text-2xs bg-danger/10 border border-danger/20 text-danger font-medium px-2 py-0.5 rounded">
                               {plan.promoLabel}
                             </span>
                           )}
@@ -488,7 +484,7 @@ export default function PricingPage({ params }: PageProps) {
                     isCurrentPlan ? (
                       <button
                         disabled
-                        className="mt-8 inline-flex items-center justify-center rounded-full py-2.5 text-sm font-medium border border-white/5 bg-white/[0.02] text-muted-foreground cursor-not-allowed w-full"
+                        className="mt-8 inline-flex items-center justify-center rounded-full py-2.5 text-sm font-medium border border-border/60 bg-surface-1 text-muted-foreground cursor-not-allowed w-full"
                       >
                         {locale === "en" ? "Current Plan" : "Paket Aktif"}
                       </button>
@@ -496,14 +492,14 @@ export default function PricingPage({ params }: PageProps) {
                       pendingPayment.plan === plan.target ? (
                         <button
                           disabled
-                          className="mt-8 inline-flex items-center justify-center rounded-full py-2.5 text-sm font-medium border border-yellow-500/20 bg-yellow-500/5 text-yellow-400 cursor-not-allowed w-full animate-pulse"
+                          className="mt-8 inline-flex items-center justify-center rounded-full py-2.5 text-sm font-medium border border-warning/20 bg-warning/5 text-warning cursor-not-allowed w-full animate-pulse"
                         >
                           {locale === "en" ? "Pending Verification" : "Menunggu Verifikasi"}
                         </button>
                       ) : (
                         <button
                           disabled
-                          className="mt-8 inline-flex items-center justify-center rounded-full py-2.5 text-sm font-medium border border-white/5 bg-white/[0.02] text-muted-foreground/40 cursor-not-allowed w-full"
+                          className="mt-8 inline-flex items-center justify-center rounded-full py-2.5 text-sm font-medium border border-border/60 bg-surface-1 text-muted-foreground/40 cursor-not-allowed w-full"
                         >
                           {plan.cta.label}
                         </button>
@@ -515,7 +511,7 @@ export default function PricingPage({ params }: PageProps) {
                           "mt-8 inline-flex items-center justify-center rounded-full py-2.5 text-sm font-medium transition-all duration-300 cursor-pointer w-full",
                           isHighlighted
                             ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20"
-                            : "border border-white/10 bg-white/[0.03] text-foreground hover:border-white/30",
+                            : "border border-border bg-surface-1 text-foreground hover:border-border-strong",
                         )}
                       >
                         {plan.cta.label}
@@ -528,7 +524,7 @@ export default function PricingPage({ params }: PageProps) {
                         "mt-8 inline-flex items-center justify-center rounded-full py-2.5 text-sm font-medium transition-all duration-300 w-full",
                         isHighlighted
                           ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20"
-                          : "border border-white/10 bg-white/[0.03] text-foreground hover:border-white/30",
+                          : "border border-border bg-surface-1 text-foreground hover:border-border-strong",
                       )}
                     >
                       {plan.cta.label}
@@ -545,7 +541,7 @@ export default function PricingPage({ params }: PageProps) {
             {locale === "en" ? "Compare plans" : "Perbandingan paket"}
           </h2>
 
-          <div className="mt-10 rounded-3xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden">
+          <div className="mt-10 rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden">
             <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr] divide-x divide-white/10">
               <div className="p-4 text-xs uppercase tracking-wider text-muted-foreground font-medium">
                 {locale === "en" ? "Feature" : "Fitur"}
@@ -615,7 +611,7 @@ export default function PricingPage({ params }: PageProps) {
             {faqs.map((f) => (
               <details
                 key={f.q}
-                className="group rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm"
+                className="group rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm"
               >
                 <summary className="flex items-center justify-between cursor-pointer text-sm font-medium">
                   {f.q}
@@ -638,7 +634,6 @@ export default function PricingPage({ params }: PageProps) {
           <>
             {/* Backdrop */}
             <motion.div
-              initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => {
@@ -649,19 +644,18 @@ export default function PricingPage({ params }: PageProps) {
 
             {/* Modal */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="fixed inset-0 z-[101] flex items-center justify-center p-4"
             >
-              <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-gradient-to-b from-card to-background shadow-2xl overflow-hidden p-6 max-h-[90vh] overflow-y-auto">
+              <div className="relative w-full max-w-md rounded-2xl border border-border bg-gradient-to-b from-card to-background shadow-2xl overflow-hidden p-6 max-h-[90vh] overflow-y-auto">
                 
                 {/* Close */}
                 {checkoutStatus !== "processing" && (
                   <button
                     onClick={() => setShowCheckout(false)}
-                    className="absolute top-4 right-4 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors cursor-pointer"
+                    className="absolute top-4 right-4 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-3 transition-colors cursor-pointer"
                   >
                     &times;
                   </button>
@@ -703,8 +697,8 @@ export default function PricingPage({ params }: PageProps) {
                   </div>
                 ) : checkoutStatus === "error" ? (
                   <div className="flex flex-col items-center justify-center py-10 gap-4 text-center">
-                    <ShieldAlert className="h-16 w-16 text-red-500" />
-                    <h3 className="text-xl font-bold text-red-400">
+                    <ShieldAlert className="h-16 w-16 text-danger" />
+                    <h3 className="text-xl font-bold text-danger">
                       {locale === "en" ? "Submission Failed" : "Pengiriman Gagal"}
                     </h3>
                     <p className="text-sm text-muted-foreground">
@@ -714,7 +708,7 @@ export default function PricingPage({ params }: PageProps) {
                     </p>
                     <button
                       onClick={() => setCheckoutStatus("idle")}
-                      className="mt-4 px-6 py-2 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600 transition-colors cursor-pointer"
+                      className="mt-4 px-6 py-2 bg-danger text-white rounded-full text-sm font-medium hover:bg-danger/90 transition-colors cursor-pointer"
                     >
                       {locale === "en" ? "Retry" : "Coba Lagi"}
                     </button>
@@ -733,7 +727,7 @@ export default function PricingPage({ params }: PageProps) {
                           ? (locale === "en" ? "Switch to Free plan" : "Kembali ke Paket Gratis")
                           : (locale === "en" ? "Upgrade Plan" : "Upgrade Paket")}
                       </h3>
-                      <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-white/5 border border-white/10 rounded-xl">
+                      <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-surface-2 border border-border rounded-xl">
                         <span className="text-sm text-muted-foreground">{selectedPlan.name}:</span>
                         <span className="text-sm font-bold text-foreground">
                           {selectedPlan.target === 'free' ? '$0' : `Rp ${getPlanPriceIDR(selectedPlan.target)}`}
@@ -744,7 +738,7 @@ export default function PricingPage({ params }: PageProps) {
                     {selectedPlan.target === "free" ? (
                       /* Free Confirmation */
                       <div className="space-y-6">
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.01] p-4 text-center leading-relaxed">
+                        <div className="rounded-2xl border border-border bg-surface-1 p-4 text-center leading-relaxed">
                           <p className="text-sm text-muted-foreground">
                             {locale === "en"
                               ? "Are you sure you want to downgrade to the Free plan? Access to premium conversion tools, unlimited duplicate checks, and priority queue will be disabled."
@@ -761,7 +755,7 @@ export default function PricingPage({ params }: PageProps) {
                           </button>
                           <button
                             onClick={() => setShowCheckout(false)}
-                            className="w-full py-2.5 border border-white/10 bg-white/[0.03] text-muted-foreground text-sm rounded-2xl hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
+                            className="w-full py-2.5 border border-border bg-surface-1 text-muted-foreground text-sm rounded-2xl hover:bg-surface-2 hover:text-foreground transition-colors cursor-pointer"
                           >
                             {locale === "en" ? "Cancel" : "Batal"}
                           </button>
@@ -771,7 +765,7 @@ export default function PricingPage({ params }: PageProps) {
                       /* Paid Invoice Flow - Bank Transfer */
                       <form onSubmit={handleSubmitPaymentConfirmation} className="space-y-4">
                         {/* Bank Details Area */}
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.01] p-4 space-y-3">
+                        <div className="rounded-2xl border border-border bg-surface-1 p-4 space-y-3">
                           <p className="text-xs font-semibold text-primary">
                             {locale === "en" ? "1. Transfer to our bank account:" : "1. Silakan transfer ke rekening berikut:"}
                           </p>
@@ -784,9 +778,9 @@ export default function PricingPage({ params }: PageProps) {
                               <span className="text-muted-foreground">{locale === "en" ? "Account Name" : "Nama Pemilik"}</span>
                               <span className="font-medium text-foreground">{BANK_HOLDER}</span>
                             </div>
-                            <div className="p-3 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between">
+                            <div className="p-3 bg-surface-2 border border-border rounded-xl flex items-center justify-between">
                               <div className="flex flex-col">
-                                <span className="text-[10px] text-muted-foreground">{locale === "en" ? "Account Number" : "Nomor Rekening"}</span>
+                                <span className="text-2xs text-muted-foreground">{locale === "en" ? "Account Number" : "Nomor Rekening"}</span>
                                 <span className="text-sm font-bold font-mono tracking-wider text-foreground">{BANK_ACCOUNT}</span>
                               </div>
                               <button
@@ -796,13 +790,13 @@ export default function PricingPage({ params }: PageProps) {
                                   setCopied(true)
                                   setTimeout(() => setCopied(false), 2000)
                                 }}
-                                className="p-2 border border-white/10 rounded-lg bg-white/[0.02] text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                                className="p-2 border border-border rounded-lg bg-surface-1 text-muted-foreground hover:text-foreground transition-all cursor-pointer"
                               >
                                 <Clipboard className="h-4 w-4" />
                               </button>
                             </div>
                             {copied && (
-                              <p className="text-[10px] text-center text-primary font-medium animate-pulse">
+                              <p className="text-2xs text-center text-primary font-medium animate-pulse">
                                 {locale === "en" ? "Copied to clipboard!" : "Nomor rekening berhasil disalin!"}
                               </p>
                             )}
@@ -815,7 +809,7 @@ export default function PricingPage({ params }: PageProps) {
                             {locale === "en" ? "2. Input transfer details:" : "2. Lengkapi detail transfer Anda:"}
                           </p>
                           <div>
-                            <label className="text-[11px] text-muted-foreground block mb-1">
+                            <label className="text-2xs text-muted-foreground block mb-1">
                               {locale === "en" ? "Sender Bank Name" : "Nama Bank Pengirim"}
                             </label>
                             <input
@@ -824,11 +818,11 @@ export default function PricingPage({ params }: PageProps) {
                               placeholder="e.g. BCA, Mandiri, BNI"
                               value={senderBank}
                               onChange={(e) => setSenderBank(e.target.value)}
-                              className="w-full h-10 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm focus:outline-none focus:border-primary/50 transition-colors"
+                              className="w-full h-10 rounded-xl border border-border bg-surface-1 px-3 text-sm focus:outline-none focus:border-primary/50 transition-colors"
                             />
                           </div>
                           <div>
-                            <label className="text-[11px] text-muted-foreground block mb-1">
+                            <label className="text-2xs text-muted-foreground block mb-1">
                               {locale === "en" ? "Sender Account Name" : "Nama Pemilik Rekening Pengirim"}
                             </label>
                             <input
@@ -837,11 +831,11 @@ export default function PricingPage({ params }: PageProps) {
                               placeholder="e.g. Budi Santoso"
                               value={senderName}
                               onChange={(e) => setSenderName(e.target.value)}
-                              className="w-full h-10 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm focus:outline-none focus:border-primary/50 transition-colors"
+                              className="w-full h-10 rounded-xl border border-border bg-surface-1 px-3 text-sm focus:outline-none focus:border-primary/50 transition-colors"
                             />
                           </div>
                           <div>
-                            <label className="text-[11px] text-muted-foreground block mb-1">
+                            <label className="text-2xs text-muted-foreground block mb-1">
                               {locale === "en" ? "Upload Transfer Receipt (Image/PDF)" : "Unggah Bukti Transfer (Gambar/PDF)"}
                             </label>
                             <input
@@ -859,7 +853,7 @@ export default function PricingPage({ params }: PageProps) {
                         </div>
 
                         {validationError && (
-                          <p className="text-xs text-red-400 text-center font-medium">
+                          <p className="text-xs text-danger text-center font-medium">
                             {validationError}
                           </p>
                         )}
@@ -875,7 +869,7 @@ export default function PricingPage({ params }: PageProps) {
                           <button
                             type="button"
                             onClick={() => setShowCheckout(false)}
-                            className="w-full py-2.5 border border-white/10 bg-white/[0.03] text-muted-foreground text-sm rounded-2xl hover:bg-white/[0.06] hover:text-foreground transition-colors cursor-pointer"
+                            className="w-full py-2.5 border border-border bg-surface-1 text-muted-foreground text-sm rounded-2xl hover:bg-surface-2 hover:text-foreground transition-colors cursor-pointer"
                           >
                             {locale === "en" ? "Cancel" : "Batal"}
                           </button>

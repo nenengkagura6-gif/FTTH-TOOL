@@ -42,17 +42,17 @@ const CATEGORY_CONFIG: Record<ToolCategory, { label: string; labelId: string; ic
     label: "Measurement & Testing",
     labelId: "Pengukuran & Testing",
     icon: Gauge,
-    color: "text-amber-400",
-    bg: "bg-amber-500/10",
-    border: "border-amber-500/20",
+    color: "text-warning",
+    bg: "bg-warning/10",
+    border: "border-warning/20",
   },
   utility: {
     label: "Utility",
     labelId: "Utilitas",
     icon: Wrench,
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/10",
-    border: "border-emerald-500/20",
+    color: "text-success",
+    bg: "bg-success/10",
+    border: "border-success/20",
   },
 }
 
@@ -89,18 +89,18 @@ function TutorialModal({ entry, onClose }: TutorialModalProps) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.97, y: 12 }}
           transition={{ duration: 0.2 }}
-          className="relative z-10 w-full max-w-4xl bg-card border border-white/10 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden my-auto"
+          className="relative z-10 w-full max-w-4xl bg-card border border-border rounded-2xl shadow-2xl shadow-black/40 overflow-hidden my-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-5 border-b border-white/10">
+          <div className="flex items-center justify-between p-5 border-b border-border">
             <div className="flex items-center gap-3">
               <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg ring-1", catConfig.bg, catConfig.border)}>
                 <catConfig.icon className={cn("h-4 w-4", catConfig.color)} />
               </div>
               <div>
                 <h2 className="text-base font-semibold">{entry.toolTitle}</h2>
-                <span className={cn("text-[11px] font-medium", catConfig.color)}>
+                <span className={cn("text-2xs font-medium", catConfig.color)}>
                   {catConfig.label}
                 </span>
               </div>
@@ -108,7 +108,7 @@ function TutorialModal({ entry, onClose }: TutorialModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -126,7 +126,7 @@ function TutorialModal({ entry, onClose }: TutorialModalProps) {
                   autoplay
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center gap-3 rounded-xl bg-white/[0.02] border border-white/10 py-16">
+                <div className="flex flex-col items-center justify-center gap-3 rounded-xl bg-surface-1 border border-border py-16">
                   <Video className="h-10 w-10 text-muted-foreground/30" />
                   <p className="text-sm text-muted-foreground">Video belum tersedia</p>
                 </div>
@@ -154,7 +154,7 @@ function TutorialModal({ entry, onClose }: TutorialModalProps) {
                 <ol className="space-y-3">
                   {entry.steps.map((step, i) => (
                     <li key={i} className="flex items-start gap-3">
-                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[11px] font-semibold ring-1 ring-primary/20 mt-0.5">
+                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-2xs font-semibold ring-1 ring-primary/20 mt-0.5">
                         {i + 1}
                       </span>
                       <div>
@@ -168,21 +168,21 @@ function TutorialModal({ entry, onClose }: TutorialModalProps) {
 
               {/* Download */}
               {entry.sampleFileUrl && (
-                <div className="p-5 border-t border-white/10">
+                <div className="p-5 border-t border-border">
                   <p className="text-xs text-muted-foreground mb-3">File contoh untuk dicoba</p>
                   <a
                     href={entry.sampleFileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 w-full rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 hover:bg-emerald-500/10 transition-colors group"
+                    className="flex items-center gap-3 w-full rounded-xl border border-success/20 bg-success/5 p-3 hover:bg-success/10 transition-colors group"
                   >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
                       <Download className="h-4 w-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-emerald-400">Download File Contoh</p>
+                      <p className="text-sm font-medium text-success">Download File Contoh</p>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-emerald-400/60 group-hover:translate-x-0.5 transition-transform" />
+                    <ChevronRight className="h-4 w-4 text-success/60 group-hover:translate-x-0.5 transition-transform" />
                   </a>
                 </div>
               )}
@@ -208,10 +208,7 @@ function TutorialCard({ entry, index, onClick }: TutorialCardProps) {
     <motion.button
       type="button"
       onClick={onClick}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.04 }}
-      whileHover={{ y: -2 }}
+whileHover={{ y: -2 }}
       className="group relative text-left rounded-2xl border border-border bg-card/90 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 overflow-hidden transition-all duration-300 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5"
     >
       {/* Thumbnail / Placeholder */}
@@ -236,13 +233,13 @@ function TutorialCard({ entry, index, onClick }: TutorialCardProps) {
           /* Coming soon placeholder */
           <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
             <Video className="h-8 w-8 text-muted-foreground/20" />
-            <span className="text-[11px] text-muted-foreground/40 font-medium">Video segera hadir</span>
+            <span className="text-2xs text-muted-foreground/40 font-medium">Video segera hadir</span>
           </div>
         )}
 
         {/* Category badge */}
         <div className={cn(
-          "absolute top-2 left-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border",
+          "absolute top-2 left-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-2xs font-medium border",
           catConfig.bg, catConfig.color, catConfig.border,
         )}>
           <catConfig.icon className="h-2.5 w-2.5" />
@@ -266,13 +263,13 @@ function TutorialCard({ entry, index, onClick }: TutorialCardProps) {
         {/* Steps preview */}
         <div className="mt-3 flex flex-wrap gap-1.5">
           {entry.steps.slice(0, 3).map((step, i) => (
-            <span key={i} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 bg-white/[0.03] border border-white/10 px-1.5 py-0.5 rounded">
+            <span key={i} className="inline-flex items-center gap-1 text-2xs text-muted-foreground/70 bg-surface-1 border border-border px-1.5 py-0.5 rounded">
               <span className="font-medium text-primary/70">{i + 1}.</span>
               {step.title}
             </span>
           ))}
           {entry.steps.length > 3 && (
-            <span className="inline-flex items-center text-[10px] text-muted-foreground/50 px-1.5 py-0.5">
+            <span className="inline-flex items-center text-2xs text-muted-foreground/50 px-1.5 py-0.5">
               +{entry.steps.length - 3} lainnya
             </span>
           )}
@@ -305,10 +302,7 @@ export default function TutorialsPage() {
     <div className="space-y-8 max-w-6xl">
       {/* Page header */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-      >
+>
         <div className="flex items-center gap-3 mb-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
             <BookOpen className="h-5 w-5" />
@@ -326,10 +320,7 @@ export default function TutorialsPage() {
 
       {/* Search + Filter Bar */}
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.05 }}
-        className="flex flex-col sm:flex-row gap-3"
+className="flex flex-col sm:flex-row gap-3"
       >
         {/* Search */}
         <div className="relative flex-1 max-w-sm">
@@ -339,12 +330,12 @@ export default function TutorialsPage() {
             placeholder="Cari tutorial..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-white/10 bg-white/[0.03] text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40 transition-colors"
+            className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-surface-1 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40 transition-colors"
           />
         </div>
 
         {/* Category filter */}
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/10 overflow-x-auto">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-1 border border-border overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveCategory("all")}
@@ -401,9 +392,7 @@ export default function TutorialsPage() {
         </div>
       ) : (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex flex-col items-center justify-center py-20 gap-4"
+className="flex flex-col items-center justify-center py-20 gap-4"
         >
           <BookOpen className="h-10 w-10 text-muted-foreground/30" />
           <p className="text-sm text-muted-foreground">Tidak ada tutorial yang ditemukan</p>

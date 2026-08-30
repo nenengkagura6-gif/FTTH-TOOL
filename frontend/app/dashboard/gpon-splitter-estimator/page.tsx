@@ -364,7 +364,7 @@ export default function GponSplitterEstimatorPage() {
           <select
             value={standardId}
             onChange={(e) => setStandardId(e.target.value)}
-            className="h-8 px-2 rounded-lg border border-white/10 bg-white/[0.03] text-xs font-semibold text-foreground focus:outline-none focus:border-white/20"
+            className="h-8 px-2 rounded-lg border border-border bg-surface-1 text-xs font-semibold text-foreground focus:outline-none focus:border-border-strong"
           >
             {standards.map((s) => (
               <option key={s.id} value={s.id} className="bg-neutral-900">
@@ -376,7 +376,7 @@ export default function GponSplitterEstimatorPage() {
       </div>
 
       {/* Topologies selector tabs */}
-      <div className="flex border-b border-white/10">
+      <div className="flex border-b border-border">
         <button
           type="button"
           onClick={() => setTopology("star")}
@@ -384,7 +384,7 @@ export default function GponSplitterEstimatorPage() {
             "flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all",
             topology === "star"
               ? "border-primary text-primary bg-primary/5"
-              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-white/[0.02]"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-surface-1"
           )}
         >
           <Layers className="h-4 w-4" />
@@ -397,7 +397,7 @@ export default function GponSplitterEstimatorPage() {
             "flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all",
             topology === "bus"
               ? "border-primary text-primary bg-primary/5"
-              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-white/[0.02]"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-surface-1"
           )}
         >
           <Network className="h-4 w-4" />
@@ -408,8 +408,8 @@ export default function GponSplitterEstimatorPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-6 items-start">
         {/* Left Side: Parameters */}
         <div className="space-y-6">
-          <div className="rounded-2xl border border-white/10 bg-card/30 p-6 backdrop-blur-md space-y-6">
-            <h2 className="text-lg font-bold flex items-center gap-2 border-b border-white/10 pb-3">
+          <div className="rounded-2xl border border-border bg-card/30 p-6 backdrop-blur-md space-y-6">
+            <h2 className="text-lg font-bold flex items-center gap-2 border-b border-border pb-3">
               <Activity className="h-5 w-5 text-primary animate-pulse" />
               {t.parameters}
             </h2>
@@ -423,7 +423,7 @@ export default function GponSplitterEstimatorPage() {
                   step="0.1"
                   value={txPower}
                   onChange={(e) => setTxPower(Number(e.target.value))}
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                 />
               </div>
 
@@ -432,7 +432,7 @@ export default function GponSplitterEstimatorPage() {
                 <select
                   value={wavelength}
                   onChange={(e) => setWavelength(Number(e.target.value))}
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all"
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all"
                 >
                   {wavelengths.map((w) => (
                     <option key={w.value} value={w.value} className="bg-neutral-900 text-xs">
@@ -450,7 +450,7 @@ export default function GponSplitterEstimatorPage() {
                   min="0"
                   value={safetyMargin}
                   onChange={(e) => setSafetyMargin(Math.max(0, Number(e.target.value)))}
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                 />
               </div>
             </div>
@@ -458,9 +458,7 @@ export default function GponSplitterEstimatorPage() {
             {/* Star Specific Parameters */}
             {topology === "star" && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-white/10"
+className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-border"
               >
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{t.distance}</label>
@@ -470,7 +468,7 @@ export default function GponSplitterEstimatorPage() {
                     min="0"
                     value={starDistance}
                     onChange={(e) => setStarDistance(Math.max(0, Number(e.target.value)))}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                   />
                 </div>
 
@@ -481,7 +479,7 @@ export default function GponSplitterEstimatorPage() {
                     min="0"
                     value={starSplices}
                     onChange={(e) => setStarSplices(Math.max(0, Number(e.target.value)))}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                   />
                 </div>
 
@@ -492,7 +490,7 @@ export default function GponSplitterEstimatorPage() {
                     min="0"
                     value={starConnectors}
                     onChange={(e) => setStarConnectors(Math.max(0, Number(e.target.value)))}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                   />
                 </div>
 
@@ -501,7 +499,7 @@ export default function GponSplitterEstimatorPage() {
                   <select
                     value={starSplitter1}
                     onChange={(e) => setStarSplitter1(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all"
                   >
                     {balancedSplitters.map((s) => (
                       <option key={s.ratio} value={s.ratio} className="bg-neutral-900">
@@ -516,7 +514,7 @@ export default function GponSplitterEstimatorPage() {
                   <select
                     value={starSplitter2}
                     onChange={(e) => setStarSplitter2(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all"
                   >
                     {balancedSplitters.map((s) => (
                       <option key={s.ratio} value={s.ratio} className="bg-neutral-900">
@@ -531,7 +529,7 @@ export default function GponSplitterEstimatorPage() {
                   <select
                     value={starSplitter3}
                     onChange={(e) => setStarSplitter3(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all"
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all"
                   >
                     {balancedSplitters.map((s) => (
                       <option key={s.ratio} value={s.ratio} className="bg-neutral-900">
@@ -546,9 +544,7 @@ export default function GponSplitterEstimatorPage() {
             {/* Bus Specific Node Configurator */}
             {topology === "bus" && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-6 pt-4 border-t border-white/10"
+className="space-y-6 pt-4 border-t border-border"
               >
                 {/* Node spacing & Preset buttons */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -559,7 +555,7 @@ export default function GponSplitterEstimatorPage() {
                         key={idx}
                         type="button"
                         onClick={() => applyPreset(idx)}
-                        className="px-2.5 py-1 text-[11px] rounded-lg border border-white/10 bg-white/[0.02] text-foreground hover:bg-white/[0.06] transition-colors"
+                        className="px-2.5 py-1 text-2xs rounded-lg border border-border bg-surface-1 text-foreground hover:bg-surface-2 transition-colors"
                       >
                         {preset.name}
                       </button>
@@ -583,10 +579,10 @@ export default function GponSplitterEstimatorPage() {
                     const nodeResults = busResults[i]
                     const statusColor =
                       nodeResults?.status === "safe"
-                        ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/5"
+                        ? "border-success/30 text-success bg-success/5"
                         : nodeResults?.status === "warning"
-                          ? "border-amber-500/30 text-amber-400 bg-amber-500/5"
-                          : "border-red-500/30 text-red-400 bg-red-500/5"
+                          ? "border-warning/30 text-warning bg-warning/5"
+                          : "border-danger/30 text-danger bg-danger/5"
 
                     return (
                       <button
@@ -597,11 +593,11 @@ export default function GponSplitterEstimatorPage() {
                           "flex flex-col items-center justify-between p-3.5 rounded-xl border text-center transition-all",
                           isSelected
                             ? "border-primary bg-primary/10 shadow-[0_0_10px_0_rgba(168,85,247,0.1)]"
-                            : "border-white/10 bg-white/[0.01] hover:border-white/20"
+                            : "border-border bg-surface-1 hover:border-border-strong"
                         )}
                       >
                         <div className="flex justify-between items-center w-full">
-                          <span className="text-[10px] text-muted-foreground font-bold">{node.name}</span>
+                          <span className="text-2xs text-muted-foreground font-bold">{node.name}</span>
                           {busNodes.length > 1 && (
                             <button
                               type="button"
@@ -609,14 +605,14 @@ export default function GponSplitterEstimatorPage() {
                                 e.stopPropagation()
                                 handleRemoveNode(node.id)
                               }}
-                              className="text-muted-foreground hover:text-red-400 opacity-40 hover:opacity-100 transition-all"
+                              className="text-muted-foreground hover:text-danger opacity-40 hover:opacity-100 transition-all"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           )}
                         </div>
                         <div className="my-2.5">
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-white/[0.04] text-foreground font-semibold">
+                          <span className="text-2xs px-2 py-0.5 rounded bg-surface-2 text-foreground font-semibold">
                             Tap {node.tapRatio}
                           </span>
                         </div>
@@ -630,7 +626,7 @@ export default function GponSplitterEstimatorPage() {
 
                 {/* Active node details editor */}
                 {activeNode && (
-                  <div className="rounded-xl border border-white/5 bg-white/[0.01] p-5 space-y-4">
+                  <div className="rounded-xl border border-border/60 bg-surface-1 p-5 space-y-4">
                     <h3 className="text-xs text-primary font-bold uppercase tracking-wider flex items-center gap-1.5">
                       <Settings className="h-3.5 w-3.5" />
                       {t.nodeConfig}: {activeNode.name}
@@ -643,7 +639,7 @@ export default function GponSplitterEstimatorPage() {
                           type="text"
                           value={activeNode.name}
                           onChange={(e) => updateNodeProperty("name", e.target.value)}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         />
                       </div>
 
@@ -658,7 +654,7 @@ export default function GponSplitterEstimatorPage() {
                           min="0.01"
                           value={activeNode.distance}
                           onChange={(e) => updateNodeProperty("distance", Math.max(0.01, Number(e.target.value)))}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         />
                       </div>
 
@@ -668,7 +664,7 @@ export default function GponSplitterEstimatorPage() {
                         <select
                           value={activeNode.tapRatio}
                           onChange={(e) => updateNodeProperty("tapRatio", e.target.value)}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all"
                         >
                           {unbalancedSplitters.map((s) => (
                             <option key={s.ratio} value={s.ratio} className="bg-neutral-900 text-xs">
@@ -684,7 +680,7 @@ export default function GponSplitterEstimatorPage() {
                         <select
                           value={activeNode.localSplitter}
                           onChange={(e) => updateNodeProperty("localSplitter", e.target.value)}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all"
                         >
                           {distributionSplitters.map((s) => (
                             <option key={s.id} value={s.id} className="bg-neutral-900 text-xs">
@@ -701,7 +697,7 @@ export default function GponSplitterEstimatorPage() {
           </div>
 
           {/* Interactive Topological schematic / Visual Flow */}
-          <div className="rounded-2xl border border-white/10 bg-card/20 p-6 backdrop-blur-sm">
+          <div className="rounded-2xl border border-border bg-card/20 p-6 backdrop-blur-sm">
             <h3 className="text-sm font-bold mb-4 flex items-center gap-1.5 text-foreground uppercase tracking-wide">
               <Network className="h-4.5 w-4.5 text-primary" />
               Optical Network Schematic Visualizer
@@ -709,7 +705,7 @@ export default function GponSplitterEstimatorPage() {
 
             {topology === "star" ? (
               /* Star Visualizer */
-              <div className="flex flex-col sm:flex-row items-center justify-between p-6 bg-white/[0.01] border border-white/5 rounded-2xl overflow-x-auto text-[10px] gap-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between p-6 bg-surface-1 border border-border/60 rounded-2xl overflow-x-auto text-2xs gap-6">
                 <div className="flex flex-col items-center gap-1 text-center min-w-[50px]">
                   <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary text-xs shadow-md">OLT</div>
                   <span className="font-bold text-foreground">TX</span>
@@ -719,7 +715,7 @@ export default function GponSplitterEstimatorPage() {
                 <div className="h-0.5 w-8 bg-gradient-to-r from-primary to-neutral-700 hidden sm:block" />
 
                 <div className="flex flex-col items-center gap-1 text-center min-w-[50px]">
-                  <div className="h-10 w-10 rounded-xl bg-neutral-800 border border-white/5 flex items-center justify-center text-muted-foreground font-semibold text-xs">
+                  <div className="h-10 w-10 rounded-xl bg-neutral-800 border border-border/60 flex items-center justify-center text-muted-foreground font-semibold text-xs">
                     {starDistance}k
                   </div>
                   <span className="font-bold text-foreground">Fiber</span>
@@ -766,8 +762,8 @@ export default function GponSplitterEstimatorPage() {
                     starResults.status === "safe"
                       ? "bg-primary/10 border-primary/20 text-primary"
                       : starResults.status === "warning"
-                        ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-400"
-                        : "bg-red-500/10 border-red-500/20 text-red-400"
+                        ? "bg-warning/10 border-warning/20 text-warning"
+                        : "bg-danger/10 border-danger/20 text-danger"
                   }`}>ONT</div>
                   <span className="font-bold text-foreground">RX</span>
                   <span className="text-muted-foreground font-semibold">{starResults.rxPower.toFixed(2)} dBm</span>
@@ -775,10 +771,10 @@ export default function GponSplitterEstimatorPage() {
               </div>
             ) : (
               /* Bus Topology Visualizer */
-              <div className="flex items-center gap-4 p-4 overflow-x-auto bg-white/[0.01] border border-white/5 rounded-2xl relative">
+              <div className="flex items-center gap-4 p-4 overflow-x-auto bg-surface-1 border border-border/60 rounded-2xl relative">
                 {/* OLT head */}
                 <div className="flex-shrink-0 flex flex-col items-center justify-center text-center p-3 bg-primary/10 border border-primary/20 rounded-xl min-w-[70px]">
-                  <span className="text-[9px] text-muted-foreground font-bold">OLT CO</span>
+                  <span className="text-3xs text-muted-foreground font-bold">OLT CO</span>
                   <span className="text-xs font-bold text-primary">{txPower.toFixed(1)} dBm</span>
                 </div>
 
@@ -791,17 +787,17 @@ export default function GponSplitterEstimatorPage() {
                   
                   const statusBorder =
                     nodeRes?.status === "safe"
-                      ? "border-emerald-500/25"
+                      ? "border-success/25"
                       : nodeRes?.status === "warning"
-                        ? "border-amber-500/25"
-                        : "border-red-500/25"
+                        ? "border-warning/25"
+                        : "border-danger/25"
 
                   return (
                     <div key={node.id} className="flex items-center flex-shrink-0 gap-3">
                       {/* Connection Fiber Cable line */}
                       <div className="flex flex-col items-center justify-center">
                         <div className="h-0.5 w-10 bg-neutral-700" />
-                        <span className="text-[8px] text-muted-foreground mt-1 font-semibold">{node.distance} km</span>
+                        <span className="text-3xs text-muted-foreground mt-1 font-semibold">{node.distance} km</span>
                       </div>
 
                       {/* Node Box */}
@@ -812,30 +808,30 @@ export default function GponSplitterEstimatorPage() {
                           "p-3 rounded-xl border flex flex-col items-start gap-1 w-[140px] text-left transition-all",
                           isSelected
                             ? "border-primary bg-primary/5"
-                            : cn("border-white/10 bg-white/[0.01] hover:border-white/20", statusBorder)
+                            : cn("border-border bg-surface-1 hover:border-border-strong", statusBorder)
                         )}
                       >
                         <div className="flex justify-between items-center w-full">
-                          <span className="text-[10px] font-bold text-foreground">{node.name}</span>
-                          <span className="text-[8px] text-muted-foreground bg-white/[0.04] px-1 rounded">
+                          <span className="text-2xs font-bold text-foreground">{node.name}</span>
+                          <span className="text-3xs text-muted-foreground bg-surface-2 px-1 rounded">
                             Tap {node.tapRatio}
                           </span>
                         </div>
-                        <div className="w-full h-px bg-white/5 my-1" />
-                        <div className="text-[9px] text-muted-foreground">
+                        <div className="w-full h-px bg-surface-2 my-1" />
+                        <div className="text-3xs text-muted-foreground">
                           In: <span className="text-foreground font-bold">{nodeRes?.inputPower.toFixed(1)} dBm</span>
                         </div>
                         
                         {/* Splitter local output */}
-                        <div className="text-[9px] text-muted-foreground">
+                        <div className="text-3xs text-muted-foreground">
                           Local ({node.localSplitter}): <span className={cn("font-bold", 
-                            nodeRes?.status === "safe" ? "text-emerald-400" : nodeRes?.status === "warning" ? "text-amber-400" : "text-red-400"
+                            nodeRes?.status === "safe" ? "text-success" : nodeRes?.status === "warning" ? "text-warning" : "text-danger"
                           )}>{clientRx} dBm</span>
                         </div>
 
                         {/* Exiting line */}
                         {!isLast && (
-                          <div className="text-[9px] text-muted-foreground">
+                          <div className="text-3xs text-muted-foreground">
                             Out: <span className="text-foreground font-bold">{nodeRes?.throughPower.toFixed(1)} dBm</span>
                           </div>
                         )}
@@ -853,15 +849,15 @@ export default function GponSplitterEstimatorPage() {
           {topology === "star" ? (
             /* Star Results Card */
             <div className="space-y-6">
-              <div className="rounded-2xl border border-white/10 bg-card/30 p-6 backdrop-blur-md text-center relative overflow-hidden">
+              <div className="rounded-2xl border border-border bg-card/30 p-6 backdrop-blur-md text-center relative overflow-hidden">
                 <div
                   className={cn(
                     "absolute inset-0 pointer-events-none opacity-5 blur-3xl transition-colors duration-300",
                     starResults.status === "safe"
                       ? "bg-primary"
                       : starResults.status === "warning"
-                        ? "bg-amber-500"
-                        : "bg-red-500"
+                        ? "bg-warning"
+                        : "bg-danger"
                   )}
                 />
                 <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">
@@ -873,8 +869,8 @@ export default function GponSplitterEstimatorPage() {
                     starResults.status === "safe"
                       ? "text-primary animate-pulse-glow"
                       : starResults.status === "warning"
-                        ? "text-amber-400"
-                        : "text-red-400"
+                        ? "text-warning"
+                        : "text-danger"
                   )}
                 >
                   {starResults.rxPower.toFixed(2)} <span className="text-lg font-normal text-muted-foreground">dBm</span>
@@ -887,8 +883,8 @@ export default function GponSplitterEstimatorPage() {
                       starResults.status === "safe"
                         ? "bg-primary/10 border-primary/20 text-primary"
                         : starResults.status === "warning"
-                          ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                          : "bg-red-500/10 border-red-500/20 text-red-400"
+                          ? "bg-warning/10 border-warning/20 text-warning"
+                          : "bg-danger/10 border-danger/20 text-danger"
                     )}
                   >
                     {starResults.status === "safe" ? (
@@ -906,8 +902,8 @@ export default function GponSplitterEstimatorPage() {
               </div>
 
               {/* Star Loss Breakdown */}
-              <div className="rounded-2xl border border-white/10 bg-card/30 p-6 backdrop-blur-md space-y-4">
-                <h3 className="text-sm font-bold border-b border-white/10 pb-2 flex items-center justify-between">
+              <div className="rounded-2xl border border-border bg-card/30 p-6 backdrop-blur-md space-y-4">
+                <h3 className="text-sm font-bold border-b border-border pb-2 flex items-center justify-between">
                   <span>{t.breakdown}</span>
                   <TrendingDown className="h-4 w-4 text-muted-foreground" />
                 </h3>
@@ -947,7 +943,7 @@ export default function GponSplitterEstimatorPage() {
                     <span className="font-semibold text-foreground">-{safetyMargin.toFixed(2)} dB</span>
                   </div>
 
-                  <div className="flex justify-between items-center pt-2.5 border-t border-white/10 font-bold text-foreground">
+                  <div className="flex justify-between items-center pt-2.5 border-t border-border font-bold text-foreground">
                     <span>{t.totalLoss}</span>
                     <span className="text-primary">-{starResults.totalLoss.toFixed(2)} dB</span>
                   </div>
@@ -956,8 +952,8 @@ export default function GponSplitterEstimatorPage() {
             </div>
           ) : (
             /* Bus Results Summary Table */
-            <div className="rounded-2xl border border-white/10 bg-card/30 p-6 backdrop-blur-md space-y-4">
-              <h3 className="text-sm font-bold border-b border-white/10 pb-2">
+            <div className="rounded-2xl border border-border bg-card/30 p-6 backdrop-blur-md space-y-4">
+              <h3 className="text-sm font-bold border-b border-border pb-2">
                 Daisy-Chain Node Power Summary
               </h3>
 
@@ -965,10 +961,10 @@ export default function GponSplitterEstimatorPage() {
                 {busResults.map((nodeRes, idx) => {
                   const statusBadge =
                     nodeRes.status === "safe"
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      ? "bg-success/10 text-success border-success/20"
                       : nodeRes.status === "warning"
-                        ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                        : "bg-red-500/10 text-red-400 border-red-500/20"
+                        ? "bg-warning/10 text-warning border-warning/20"
+                        : "bg-danger/10 text-danger border-danger/20"
 
                   return (
                     <div
@@ -977,17 +973,17 @@ export default function GponSplitterEstimatorPage() {
                         "p-4 rounded-xl border transition-all flex justify-between items-center gap-3",
                         selectedNodeId === nodeRes.id
                           ? "border-primary bg-primary/[0.04]"
-                          : "border-white/5 bg-white/[0.01]"
+                          : "border-border/60 bg-surface-1"
                       )}
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-bold text-foreground">{nodeRes.name}</span>
-                          <span className="text-[8px] text-muted-foreground bg-white/[0.04] px-1 rounded font-semibold">
+                          <span className="text-3xs text-muted-foreground bg-surface-2 px-1 rounded font-semibold">
                             Tap {nodeRes.tapRatio}
                           </span>
                         </div>
-                        <div className="text-[10px] text-muted-foreground leading-none">
+                        <div className="text-2xs text-muted-foreground leading-none">
                           In: {nodeRes.inputPower.toFixed(1)} dBm | Out:{" "}
                           {idx === busNodes.length - 1 ? "Terminated" : `${nodeRes.throughPower.toFixed(1)} dBm`}
                         </div>
@@ -997,7 +993,7 @@ export default function GponSplitterEstimatorPage() {
                         <div className={cn("text-xs font-bold px-2 py-0.5 rounded-full border inline-block", statusBadge)}>
                           {nodeRes.rxPower.toFixed(1)} dBm
                         </div>
-                        <div className="text-[8px] text-muted-foreground mt-1">
+                        <div className="text-3xs text-muted-foreground mt-1">
                           Local Splitter: {nodeRes.localSplitter}
                         </div>
                       </div>
@@ -1009,7 +1005,7 @@ export default function GponSplitterEstimatorPage() {
           )}
 
           {/* Standards Reference Card */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.01] p-5 space-y-3">
+          <div className="rounded-2xl border border-border bg-surface-1 p-5 space-y-3">
             <h4 className="text-xs font-bold flex items-center gap-1.5 text-foreground uppercase tracking-wider">
               <Info className="h-4.5 w-4.5 text-primary" />
               {t.guidelines}

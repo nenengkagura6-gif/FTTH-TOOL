@@ -96,7 +96,7 @@ export function Features({ locale = "en" }: { locale?: string }) {
   return (
     <section
       id="tools"
-      className="relative isolate scroll-mt-24 py-24 sm:py-32"
+      className="relative isolate scroll-mt-24 py-16 sm:py-20"
     >
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center mb-16">
@@ -117,10 +117,8 @@ export function Features({ locale = "en" }: { locale?: string }) {
           {localizedFeatures.map((feature, i) => (
             <motion.div
               key={feature.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.4, delay: i * 0.05 }}
+              className="reveal"
+              style={{ animationDelay: `${i * 40}ms` }}
               whileTap={{ scale: 0.97 }}
             >
               <Link

@@ -62,14 +62,14 @@ const statusConfig: Record<string, { label: string; icon: typeof CheckCircle2; c
   completed: {
     label: "Success",
     icon: CheckCircle2,
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/10 border-emerald-500/20",
+    color: "text-success",
+    bg: "bg-success/10 border-success/20",
   },
   failed: {
     label: "Failed",
     icon: XCircle,
-    color: "text-red-400",
-    bg: "bg-red-500/10 border-red-500/20",
+    color: "text-danger",
+    bg: "bg-danger/10 border-danger/20",
   },
   processing: {
     label: "Processing",
@@ -80,8 +80,8 @@ const statusConfig: Record<string, { label: string; icon: typeof CheckCircle2; c
   pending: {
     label: "Pending",
     icon: Clock,
-    color: "text-amber-400",
-    bg: "bg-amber-500/10 border-amber-500/20",
+    color: "text-warning",
+    bg: "bg-warning/10 border-warning/20",
   },
   cancelled: {
     label: "Cancelled",
@@ -251,7 +251,7 @@ export default function HistoryPage() {
         <button
           onClick={fetchHistory}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors self-start"
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors self-start"
         >
           <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           Refresh
@@ -261,7 +261,7 @@ export default function HistoryPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         {/* Status filter */}
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-card/40 backdrop-blur-sm px-3 py-2">
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-card/40 backdrop-blur-sm px-3 py-2">
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
           <select
             value={statusFilter}
@@ -278,7 +278,7 @@ export default function HistoryPage() {
         </div>
 
         {/* Tool filter */}
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-card/40 backdrop-blur-sm px-3 py-2">
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-card/40 backdrop-blur-sm px-3 py-2">
           <Search className="h-3.5 w-3.5 text-muted-foreground" />
           <select
             value={toolFilter}
@@ -303,9 +303,9 @@ export default function HistoryPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden">
+      <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden">
         {/* Header row */}
-        <div className="hidden sm:grid sm:grid-cols-[2fr_1.2fr_0.8fr_0.8fr_0.6fr_1fr] gap-4 px-5 py-3 border-b border-white/10 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <div className="hidden sm:grid sm:grid-cols-[2fr_1.2fr_0.8fr_0.8fr_0.6fr_1fr] gap-4 px-5 py-3 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wider">
           <span>File</span>
           <span>Tool</span>
           <span>Status</span>
@@ -325,7 +325,7 @@ export default function HistoryPage() {
         {/* Empty state */}
         {!loading && jobs.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.03] ring-1 ring-white/10 mb-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-1 ring-1 ring-white/10 mb-4">
               <Inbox className="h-6 w-6 text-muted-foreground/50" />
             </div>
             <p className="text-sm font-medium text-muted-foreground">
@@ -348,13 +348,11 @@ export default function HistoryPage() {
                 return (
                   <motion.li
                     key={job.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.03 }}
+transition={{ delay: i * 0.03 }}
                     className="group"
                   >
                     {/* Desktop row */}
-                    <div className="hidden sm:grid sm:grid-cols-[2fr_1.2fr_0.8fr_0.8fr_0.6fr_1fr] gap-4 items-center px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
+                    <div className="hidden sm:grid sm:grid-cols-[2fr_1.2fr_0.8fr_0.8fr_0.6fr_1fr] gap-4 items-center px-5 py-3.5 hover:bg-surface-1 transition-colors">
                       {/* File */}
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20 flex-shrink-0">
@@ -409,7 +407,7 @@ export default function HistoryPage() {
                         {job.status === "failed" && (
                           <button
                             onClick={() => handleRetry(job.id)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition-colors ring-1 ring-amber-500/20"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-warning/10 px-3 py-1.5 text-xs font-medium text-warning hover:bg-warning/20 transition-colors ring-1 ring-warning/20"
                           >
                             <RotateCcw className="h-3 w-3" />
                             Retry
@@ -417,7 +415,7 @@ export default function HistoryPage() {
                         )}
                         {job.status === "processing" && (
                           <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                            <div className="w-16 h-1.5 rounded-full bg-surface-2 overflow-hidden">
                               <div
                                 className="h-full bg-blue-400 rounded-full transition-all"
                                 style={{ width: `${job.progress_percent}%` }}
@@ -473,13 +471,13 @@ export default function HistoryPage() {
                       {job.status === "failed" && (
                         <div className="space-y-2">
                           {job.error_message && (
-                            <p className="text-xs text-red-400/70 bg-red-500/5 rounded-lg px-3 py-2 border border-red-500/10">
+                            <p className="text-xs text-danger/70 bg-danger/5 rounded-lg px-3 py-2 border border-danger/10">
                               {job.error_message}
                             </p>
                           )}
                           <button
                             onClick={() => handleRetry(job.id)}
-                            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-400 hover:bg-amber-500/20 transition-colors ring-1 ring-amber-500/20"
+                            className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs font-medium text-warning hover:bg-warning/20 transition-colors ring-1 ring-warning/20"
                           >
                             <RotateCcw className="h-3 w-3" />
                             Retry
@@ -488,7 +486,7 @@ export default function HistoryPage() {
                       )}
                       {job.status === "processing" && (
                         <div className="flex items-center gap-3">
-                          <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                          <div className="flex-1 h-1.5 rounded-full bg-surface-2 overflow-hidden">
                             <div
                               className="h-full bg-blue-400 rounded-full transition-all"
                               style={{ width: `${job.progress_percent}%` }}
@@ -517,10 +515,10 @@ export default function HistoryPage() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
               className={cn(
-                "inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-1.5 text-xs transition-colors",
+                "inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs transition-colors",
                 page <= 1
                   ? "text-muted-foreground/30 cursor-not-allowed"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5",
+                  : "text-muted-foreground hover:text-foreground hover:bg-surface-2",
               )}
             >
               <ChevronLeft className="h-3 w-3" />
@@ -549,7 +547,7 @@ export default function HistoryPage() {
                       "h-7 w-7 rounded-md text-xs font-medium transition-colors",
                       pageNum === page
                         ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-white/5",
+                        : "text-muted-foreground hover:bg-surface-2",
                     )}
                   >
                     {pageNum}
@@ -562,10 +560,10 @@ export default function HistoryPage() {
               onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
               disabled={!pagination.hasMore}
               className={cn(
-                "inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-1.5 text-xs transition-colors",
+                "inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs transition-colors",
                 !pagination.hasMore
                   ? "text-muted-foreground/30 cursor-not-allowed"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5",
+                  : "text-muted-foreground hover:text-foreground hover:bg-surface-2",
               )}
             >
               Next

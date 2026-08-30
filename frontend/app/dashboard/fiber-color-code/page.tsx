@@ -151,7 +151,7 @@ export default function FiberColorCodePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-6 items-start">
         {/* Core Finder Inputs */}
-        <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm space-y-6">
+        <div className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm space-y-6">
           <h2 className="text-lg font-medium flex items-center gap-2">
             <Palette className="h-5 w-5 text-primary" />
             {t.configTitle}
@@ -168,7 +168,7 @@ export default function FiberColorCodePage() {
                   className={`h-10 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
                     standard === "Telkom"
                       ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-white/[0.03] text-muted-foreground border-white/10 hover:border-white/20"
+                      : "bg-surface-1 text-muted-foreground border-border hover:border-border-strong"
                   }`}
                 >
                   Telkom Indonesia
@@ -179,7 +179,7 @@ export default function FiberColorCodePage() {
                   className={`h-10 rounded-xl text-sm font-medium border transition-colors cursor-pointer ${
                     standard === "TIA"
                       ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-white/[0.03] text-muted-foreground border-white/10 hover:border-white/20"
+                      : "bg-surface-1 text-muted-foreground border-border hover:border-border-strong"
                   }`}
                 >
                   TIA-598-C (International)
@@ -198,7 +198,7 @@ export default function FiberColorCodePage() {
                     setCapacity(cap)
                     if (coreNumber > cap) setCoreNumber(cap)
                   }}
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
                 >
                   {capacities.map((c) => (
                     <option key={c} value={c} className="bg-neutral-900">
@@ -214,7 +214,7 @@ export default function FiberColorCodePage() {
                 <select
                   value={coresPerTube}
                   onChange={(e) => setCoresPerTube(Number(e.target.value))}
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
                 >
                   <option value={12} className="bg-neutral-900">12 {t.coresStandard}</option>
                   <option value={6} className="bg-neutral-900">6 {t.coresLegacy}</option>
@@ -238,7 +238,7 @@ export default function FiberColorCodePage() {
                       setCoreNumber(0)
                     }
                   }}
-                  className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-white/30"
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-border-strong"
                 />
               </div>
             </div>
@@ -256,14 +256,14 @@ export default function FiberColorCodePage() {
               max={capacity}
               value={coreNumber || 1}
               onChange={(e) => setCoreNumber(Number(e.target.value))}
-              className="w-full h-1.5 rounded-lg bg-white/10 appearance-none cursor-pointer accent-primary"
+              className="w-full h-1.5 rounded-lg bg-surface-3 appearance-none cursor-pointer accent-primary"
             />
           </div>
         </div>
 
         {/* Visual Lookup Result */}
         <div className="space-y-6">
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm text-center relative overflow-hidden flex flex-col items-center">
+          <div className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm text-center relative overflow-hidden flex flex-col items-center">
             {/* Visual Cable Cross Section SVG */}
             <div className="h-32 w-32 relative mb-6">
               <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -293,7 +293,7 @@ export default function FiberColorCodePage() {
                 />
               </svg>
               {/* Labels overlay */}
-              <div className="absolute inset-0 flex flex-col justify-between p-1.5 pointer-events-none text-[8px] text-muted-foreground">
+              <div className="absolute inset-0 flex flex-col justify-between p-1.5 pointer-events-none text-3xs text-muted-foreground">
                 <div className="text-center">{t.tubeOuter}</div>
                 <div className="text-center mt-auto">{t.coreCenter}</div>
               </div>
@@ -303,11 +303,11 @@ export default function FiberColorCodePage() {
             
             <div className="mt-4 w-full grid grid-cols-2 gap-4">
               {/* Tube Result */}
-              <div className="rounded-xl border border-white/5 bg-white/[0.01] p-3 text-center">
-                <span className="text-[10px] text-muted-foreground font-medium block mb-1">{t.tubeBunch}</span>
+              <div className="rounded-xl border border-border/60 bg-surface-1 p-3 text-center">
+                <span className="text-2xs text-muted-foreground font-medium block mb-1">{t.tubeBunch}</span>
                 <div className="text-sm font-semibold mb-2">{t.tubeNum}{calculation.tubeIndex}</div>
                 <div
-                  className="h-7 rounded-lg flex items-center justify-center text-xs font-semibold px-2 transition-all duration-300 border border-white/10"
+                  className="h-7 rounded-lg flex items-center justify-center text-xs font-semibold px-2 transition-all duration-300 border border-border"
                   style={{ backgroundColor: calculation.tubeHex, color: calculation.tubeTextHex }}
                 >
                   {calculation.tubeColor}
@@ -315,11 +315,11 @@ export default function FiberColorCodePage() {
               </div>
 
               {/* Core Result */}
-              <div className="rounded-xl border border-white/5 bg-white/[0.01] p-3 text-center">
-                <span className="text-[10px] text-muted-foreground font-medium block mb-1">{t.coreFiber}</span>
+              <div className="rounded-xl border border-border/60 bg-surface-1 p-3 text-center">
+                <span className="text-2xs text-muted-foreground font-medium block mb-1">{t.coreFiber}</span>
                 <div className="text-sm font-semibold mb-2">{t.coreNum}{calculation.coreIndex}</div>
                 <div
-                  className="h-7 rounded-lg flex items-center justify-center text-xs font-semibold px-2 transition-all duration-300 border border-white/10"
+                  className="h-7 rounded-lg flex items-center justify-center text-xs font-semibold px-2 transition-all duration-300 border border-border"
                   style={{ backgroundColor: calculation.coreHex, color: calculation.coreTextHex }}
                 >
                   {calculation.coreColor}
@@ -327,11 +327,11 @@ export default function FiberColorCodePage() {
               </div>
             </div>
 
-            <div className="mt-5 text-xs text-muted-foreground leading-relaxed text-left w-full border-t border-white/10 pt-4 space-y-1">
+            <div className="mt-5 text-xs text-muted-foreground leading-relaxed text-left w-full border-t border-border pt-4 space-y-1">
               <div>• {t.totalCoresParsed}: <span className="font-semibold text-foreground">{capacity} {t.coresText}</span></div>
               <div>• {t.tubesCount}: <span className="font-semibold text-foreground">{Math.ceil(capacity / coresPerTube)} Tubes</span></div>
               {standard === "Telkom" && (
-                <div className="text-[11px] text-primary/80 mt-2 font-mono">
+                <div className="text-2xs text-primary/80 mt-2 font-mono">
                   {t.mnemonicLabel}: Biru, Jingga, Hijau, Cokelat, Abu-abu, Putih, Merah, Hitam, Kuning, Ungu, Pink, Toska.
                 </div>
               )}
@@ -341,7 +341,7 @@ export default function FiberColorCodePage() {
       </div>
 
       {/* 12-Color Sequence Quick Reference */}
-      <div className="rounded-2xl border border-white/10 bg-card/40 p-6 backdrop-blur-sm">
+      <div className="rounded-2xl border border-border bg-card/40 p-6 backdrop-blur-sm">
         <h3 className="text-sm font-medium mb-4 flex items-center gap-2">
           <Info className="h-4 w-4 text-primary" />
           {t.refTitle}
@@ -350,10 +350,10 @@ export default function FiberColorCodePage() {
           {activeColors.map((c) => (
             <div
               key={c.id}
-              className="rounded-xl border border-white/5 bg-white/[0.01] p-2.5 flex flex-col items-center gap-1.5"
+              className="rounded-xl border border-border/60 bg-surface-1 p-2.5 flex flex-col items-center gap-1.5"
             >
               <div
-                className="h-8 w-8 rounded-full border border-white/20 flex items-center justify-center text-xs font-bold"
+                className="h-8 w-8 rounded-full border border-border-strong flex items-center justify-center text-xs font-bold"
                 style={{ backgroundColor: c.hex, color: c.textHex }}
               >
                 {c.id}

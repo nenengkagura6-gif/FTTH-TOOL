@@ -14,7 +14,7 @@ import type { Database } from "@/types/supabase"
 const planBadge: Record<string, string> = {
   free: "bg-gray-500/10 text-gray-400 border-gray-500/20",
   basic: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  pro: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  pro: "bg-warning/10 text-warning border-warning/20",
   enterprise: "bg-violet-500/10 text-violet-400 border-violet-500/20",
 }
 
@@ -352,8 +352,8 @@ export default function AdminPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 ring-1 ring-red-500/20">
-            <Shield className="h-5 w-5 text-red-400" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-danger/10 ring-1 ring-danger/20">
+            <Shield className="h-5 w-5 text-danger" />
           </div>
           Admin Dashboard
         </h1>
@@ -365,16 +365,16 @@ export default function AdminPage() {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           {[
             { label: "Users", value: stats.overview.totalUsers, icon: Users, color: "text-primary" },
-            { label: "Total Jobs", value: stats.overview.totalJobs, icon: Briefcase, color: "text-emerald-400" },
+            { label: "Total Jobs", value: stats.overview.totalJobs, icon: Briefcase, color: "text-success" },
             { label: "Today", value: stats.overview.todayJobs, icon: Activity, color: "text-blue-400" },
-            { label: "Pro Subs", value: stats.overview.activeSubscriptions, icon: Crown, color: "text-amber-400" },
-            { label: "Revenue", value: `$${(stats.overview.monthlyRevenueCents / 100).toFixed(0)}`, icon: DollarSign, color: "text-emerald-400" },
+            { label: "Pro Subs", value: stats.overview.activeSubscriptions, icon: Crown, color: "text-warning" },
+            { label: "Revenue", value: `$${(stats.overview.monthlyRevenueCents / 100).toFixed(0)}`, icon: DollarSign, color: "text-success" },
           ].map((s, i) => (
-            <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-              className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm p-4">
+            <motion.div key={s.label}transition={{ delay: i * 0.05 }}
+              className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm p-4">
               <div className="flex items-center gap-2 text-muted-foreground mb-2">
                 <s.icon className={cn("h-4 w-4", s.color)} />
-                <span className="text-[11px] font-medium">{s.label}</span>
+                <span className="text-2xs font-medium">{s.label}</span>
               </div>
               <p className="text-xl font-semibold">{s.value}</p>
             </motion.div>
@@ -385,7 +385,7 @@ export default function AdminPage() {
       {/* Plan Distribution + Job Status */}
       {stats && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-5">
+          <div className="rounded-2xl border border-border bg-card/40 p-5">
             <h2 className="text-sm font-medium mb-3">Users by Plan</h2>
             <div className="space-y-2">
               {Object.entries(stats.usersByPlan as Record<string, number>).map(([plan, count]) => (
@@ -396,7 +396,7 @@ export default function AdminPage() {
               ))}
             </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-5">
+          <div className="rounded-2xl border border-border bg-card/40 p-5">
             <h2 className="text-sm font-medium mb-3">Jobs by Status</h2>
             <div className="space-y-2">
               {Object.entries(stats.jobsByStatus as Record<string, number>).map(([status, count]) => (
@@ -412,7 +412,7 @@ export default function AdminPage() {
       )}
 
       {/* Tab Navigations */}
-      <div className="flex border-b border-white/10 gap-6">
+      <div className="flex border-b border-border gap-6">
         <button
           onClick={() => setActiveTab('users')}
           className={cn("pb-3 text-sm font-medium border-b-2 -mb-[2px] transition-colors cursor-pointer",
@@ -429,7 +429,7 @@ export default function AdminPage() {
         >
           Payment Verifications
           {payments.filter(p => p.status === 'pending').length > 0 && (
-            <span className="bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <span className="bg-primary text-primary-foreground text-2xs font-bold px-2 py-0.5 rounded-full">
               {payments.filter(p => p.status === 'pending').length}
             </span>
           )}
@@ -438,10 +438,10 @@ export default function AdminPage() {
 
       {activeTab === 'users' ? (
         /* User Management Table */
-        <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden">
-          <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden">
+          <div className="p-5 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h2 className="text-base font-medium">User Management</h2>
-            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-surface-1 px-3 py-2">
               <Search className="h-3.5 w-3.5 text-muted-foreground" />
               <input
                 type="text" placeholder="Search by email or name..."
@@ -455,7 +455,7 @@ export default function AdminPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/10 text-xs text-muted-foreground uppercase tracking-wider">
+                <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
                   <th className="px-5 py-3 text-left">User</th>
                   <th className="px-3 py-3 text-left">Plan</th>
                   <th className="px-3 py-3 text-left">Quota</th>
@@ -465,7 +465,7 @@ export default function AdminPage() {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {users.map(u => (
-                  <tr key={u.id} className="hover:bg-white/[0.02]">
+                  <tr key={u.id} className="hover:bg-surface-1">
                     <td className="px-5 py-3">
                       <p className="font-medium truncate max-w-[200px]">{u.full_name || '—'}</p>
                       <p className="text-xs text-muted-foreground truncate max-w-[200px]">{u.email}</p>
@@ -477,7 +477,7 @@ export default function AdminPage() {
                           const plan = e.target.value as Database['public']['Tables']['profiles']['Row']['plan']
                           handleChangePlan(u.id, plan)
                         }}
-                        className="bg-transparent text-xs border border-white/10 rounded-md px-2 py-1 cursor-pointer"
+                        className="bg-transparent text-xs border border-border rounded-md px-2 py-1 cursor-pointer"
                       >
                         <option value="free" className="bg-card">Free</option>
                         <option value="basic" className="bg-card">Basic</option>
@@ -490,14 +490,14 @@ export default function AdminPage() {
                     </td>
                     <td className="px-3 py-3">
                       <span className={cn("text-xs px-1.5 py-0.5 rounded border",
-                        u.role === 'admin' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-white/5 text-muted-foreground border-white/10'
+                        u.role === 'admin' ? 'bg-danger/10 text-danger border-danger/20' : 'bg-surface-2 text-muted-foreground border-border'
                       )}>{u.role}</span>
                     </td>
                     <td className="px-3 py-3 text-right">
                       {u.role !== 'admin' && (
                         <button
                           onClick={() => handleUpdateUser(u.id, { role: 'admin' })}
-                          className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-white/10 hover:bg-white/5"
+                          className="text-2xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:bg-surface-2"
                         >Make Admin</button>
                       )}
                     </td>
@@ -512,25 +512,25 @@ export default function AdminPage() {
 
           {/* Pagination */}
           {usersPagination && usersPagination.totalPages > 1 && (
-            <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between text-xs text-muted-foreground">
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
               <span>Page {usersPagination.page} of {usersPagination.totalPages} ({usersPagination.total} users)</span>
               <div className="flex gap-2">
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                  className="px-2 py-1 rounded border border-white/10 hover:bg-white/5 disabled:opacity-30"><ChevronLeft className="h-3 w-3" /></button>
+                  className="px-2 py-1 rounded border border-border hover:bg-surface-2 disabled:opacity-30"><ChevronLeft className="h-3 w-3" /></button>
                 <button onClick={() => setPage(p => p + 1)} disabled={page >= usersPagination.totalPages}
-                  className="px-2 py-1 rounded border border-white/10 hover:bg-white/5 disabled:opacity-30"><ChevronRight className="h-3 w-3" /></button>
+                  className="px-2 py-1 rounded border border-border hover:bg-surface-2 disabled:opacity-30"><ChevronRight className="h-3 w-3" /></button>
               </div>
             </div>
           )}
         </div>
       ) : (
         /* Payment Verifications Table */
-        <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden">
-          <div className="p-5 border-b border-white/10 flex items-center justify-between">
+        <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden">
+          <div className="p-5 border-b border-border flex items-center justify-between">
             <h2 className="text-base font-medium">Payment Verifications</h2>
             <button
               onClick={() => setTriggerRefresh(t => t + 1)}
-              className="text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-xl border border-white/10 bg-white/[0.02] cursor-pointer"
+              className="text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-xl border border-border bg-surface-1 cursor-pointer"
             >
               Refresh
             </button>
@@ -539,7 +539,7 @@ export default function AdminPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/10 text-xs text-muted-foreground uppercase tracking-wider">
+                <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wider">
                   <th className="px-5 py-3 text-left">User</th>
                   <th className="px-3 py-3 text-left">Plan</th>
                   <th className="px-3 py-3 text-left">Sender Info</th>
@@ -551,28 +551,28 @@ export default function AdminPage() {
               </thead>
               <tbody className="divide-y divide-white/5">
                 {payments.map(p => (
-                  <tr key={p.id} className="hover:bg-white/[0.02]">
+                  <tr key={p.id} className="hover:bg-surface-1">
                     <td className="px-5 py-3">
                       <p className="font-medium truncate max-w-[200px]">{p.profiles?.full_name || '—'}</p>
                       <p className="text-xs text-muted-foreground truncate max-w-[200px]">{p.profiles?.email}</p>
                     </td>
                     <td className="px-3 py-3">
                       <span className={cn("text-xs px-2 py-0.5 rounded border capitalize", 
-                        p.plan === 'pro' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                        p.plan === 'pro' ? 'bg-warning/10 text-warning border-warning/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                       )}>{p.plan}</span>
                     </td>
                     <td className="px-3 py-3 text-xs">
                       <p className="font-medium text-foreground">{p.sender_name}</p>
-                      <p className="text-muted-foreground text-[10px] uppercase">{p.sender_bank}</p>
+                      <p className="text-muted-foreground text-2xs uppercase">{p.sender_bank}</p>
                     </td>
                     <td className="px-3 py-3 font-mono text-xs">
                       Rp {p.amount_paid.toLocaleString('id-ID')}
                     </td>
                     <td className="px-3 py-3">
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded border font-medium uppercase",
-                        p.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                        p.status === 'rejected' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                        'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                      <span className={cn("text-2xs px-2 py-0.5 rounded border font-medium uppercase",
+                        p.status === 'approved' ? 'bg-success/10 text-success border-success/20' :
+                        p.status === 'rejected' ? 'bg-danger/10 text-danger border-danger/20' :
+                        'bg-warning/10 text-warning border-warning/20'
                       )}>{p.status}</span>
                     </td>
                     <td className="px-3 py-3">
@@ -593,19 +593,19 @@ export default function AdminPage() {
                         <div className="flex gap-2 justify-end">
                           <button
                             onClick={() => handleApprovePayment(p)}
-                            className="text-xs bg-emerald-500 text-white px-2.5 py-1.5 rounded-lg font-medium hover:bg-emerald-600 cursor-pointer"
+                            className="text-xs bg-success text-white px-2.5 py-1.5 rounded-lg font-medium hover:bg-success/90 cursor-pointer"
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => handleOpenReject(p)}
-                            className="text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-1.5 rounded-lg font-medium hover:bg-red-500 hover:text-white cursor-pointer"
+                            className="text-xs bg-danger/10 text-danger border border-danger/20 px-2.5 py-1.5 rounded-lg font-medium hover:bg-danger hover:text-white cursor-pointer"
                           >
                             Reject
                           </button>
                         </div>
                       ) : p.status === 'rejected' ? (
-                        <p className="text-[10px] text-muted-foreground text-right italic max-w-[120px] truncate" title={p.admin_notes}>
+                        <p className="text-2xs text-muted-foreground text-right italic max-w-[120px] truncate" title={p.admin_notes}>
                           Note: {p.admin_notes}
                         </p>
                       ) : (
@@ -629,15 +629,15 @@ export default function AdminPage() {
       {/* Receipt Modal */}
       {selectedReceipt && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="relative max-w-lg w-full bg-card border border-white/10 rounded-2xl p-6 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative max-w-lg w-full bg-card border border-border rounded-2xl p-6 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <button
               onClick={() => setSelectedReceipt(null)}
-              className="absolute top-4 right-4 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 text-xl font-bold cursor-pointer"
+              className="absolute top-4 right-4 p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-3 text-xl font-bold cursor-pointer"
             >
               &times;
             </button>
             <h3 className="text-sm font-semibold mb-4">Receipt Proof</h3>
-            <div className="relative aspect-[3/4] sm:aspect-square w-full rounded-lg bg-black/40 overflow-hidden flex items-center justify-center border border-white/5">
+            <div className="relative aspect-[3/4] sm:aspect-square w-full rounded-lg bg-black/40 overflow-hidden flex items-center justify-center border border-border/60">
               {/* Signed URL punya query string (?token=…), jadi cek pathname-nya */}
               {new URL(selectedReceipt, window.location.origin).pathname.toLowerCase().endsWith('.pdf') ? (
                 <iframe src={selectedReceipt} className="w-full h-full" />
@@ -662,7 +662,7 @@ export default function AdminPage() {
       {/* Reject Modal */}
       {rejectingPayment && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="relative max-w-md w-full bg-card border border-white/10 rounded-2xl p-6 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative max-w-md w-full bg-card border border-border rounded-2xl p-6 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <h3 className="text-sm font-semibold mb-3">Reject Payment</h3>
             <p className="text-xs text-muted-foreground mb-4">
               Rejecting payment from {rejectingPayment.sender_name} (Rp {rejectingPayment.amount_paid.toLocaleString('id-ID')}). Please specify the reason below.
@@ -671,18 +671,18 @@ export default function AdminPage() {
               value={rejectNotes}
               onChange={(e) => setRejectNotes(e.target.value)}
               placeholder="e.g. Dana tidak masuk, atau bukti transfer palsu."
-              className="w-full h-24 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs focus:outline-none focus:border-red-500/50 transition-colors placeholder:text-muted-foreground/40"
+              className="w-full h-24 rounded-xl border border-border bg-surface-1 p-3 text-xs focus:outline-none focus:border-danger/50 transition-colors placeholder:text-muted-foreground/40"
             />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setRejectingPayment(null)}
-                className="text-xs text-muted-foreground px-4 py-2 rounded-xl border border-white/10 hover:bg-white/5 cursor-pointer"
+                className="text-xs text-muted-foreground px-4 py-2 rounded-xl border border-border hover:bg-surface-2 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleRejectPaymentSubmit}
-                className="text-xs bg-red-500 text-white px-4 py-2 rounded-xl font-semibold hover:bg-red-600 cursor-pointer"
+                className="text-xs bg-danger text-white px-4 py-2 rounded-xl font-semibold hover:bg-danger/90 cursor-pointer"
               >
                 Reject Payment
               </button>

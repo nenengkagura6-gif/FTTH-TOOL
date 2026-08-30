@@ -466,7 +466,7 @@ export default function OtdrFaultLocatorPage() {
           `${pt.name}${isSlackEnabled ? ` (Slack: ${slackLoopLength}m)` : ""}`,
           {
             direction: "top",
-            className: "leaflet-tooltip-dark bg-neutral-900 border-neutral-800 text-white font-mono text-[10px] px-2 py-0.5 rounded shadow-lg",
+            className: "leaflet-tooltip-dark bg-neutral-900 border-neutral-800 text-white font-mono text-2xs px-2 py-0.5 rounded shadow-lg",
           }
         )
     })
@@ -499,10 +499,10 @@ export default function OtdrFaultLocatorPage() {
         .bindPopup(
           `
           <div class="text-neutral-900 font-sans p-1">
-            <h4 class="font-bold text-red-600 text-sm mb-1">Titik Kerusakan (Fault)</h4>
+            <h4 class="font-bold text-danger/90 text-sm mb-1">Titik Kerusakan (Fault)</h4>
             <p class="text-xs mb-1">Jarak Serat: <b>${faultDistance} ${distanceUnit}</b></p>
-            ${estimatedFault.inSlackNode ? `<p class="text-xs text-red-500 font-semibold mb-1">⚠️ Di dalam Slack Loop: ${estimatedFault.inSlackNode}</p>` : ""}
-            <p class="text-[10px] text-muted-foreground">${estimatedFault.lat.toFixed(6)}, ${estimatedFault.lng.toFixed(6)}</p>
+            ${estimatedFault.inSlackNode ? `<p class="text-xs text-danger font-semibold mb-1">⚠️ Di dalam Slack Loop: ${estimatedFault.inSlackNode}</p>` : ""}
+            <p class="text-2xs text-muted-foreground">${estimatedFault.lat.toFixed(6)}, ${estimatedFault.lng.toFixed(6)}</p>
           </div>
           `,
           { closeButton: false }
@@ -537,9 +537,9 @@ export default function OtdrFaultLocatorPage() {
         if (layer.getPopup()) {
           layer.setPopupContent(`
             <div class="text-neutral-900 font-sans p-1">
-              <h4 class="font-bold text-red-600 text-sm mb-1">Titik Kerusakan (Fault)</h4>
+              <h4 class="font-bold text-danger/90 text-sm mb-1">Titik Kerusakan (Fault)</h4>
               <p class="text-xs mb-1">Jarak Serat: <b>${faultDistance} ${distanceUnit}</b></p>
-              <p class="text-[10px] text-muted-foreground">${estimatedFault.lat.toFixed(6)}, ${estimatedFault.lng.toFixed(6)}</p>
+              <p class="text-2xs text-muted-foreground">${estimatedFault.lat.toFixed(6)}, ${estimatedFault.lng.toFixed(6)}</p>
             </div>
           `)
         }
@@ -572,7 +572,7 @@ export default function OtdrFaultLocatorPage() {
         {/* Left column - upload & configurations */}
         <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
           {/* 1. Upload Card */}
-          <div className="rounded-2xl border border-white/10 bg-card/40 backdrop-blur-sm overflow-hidden p-5 space-y-4">
+          <div className="rounded-2xl border border-border bg-card/40 backdrop-blur-sm overflow-hidden p-5 space-y-4">
             <h2 className="text-sm font-semibold flex items-center gap-2 text-foreground uppercase tracking-wider">
               <Upload className="h-4 w-4 text-primary" />
               Unggah Rute Kabel
@@ -599,7 +599,7 @@ export default function OtdrFaultLocatorPage() {
                   "relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-8 cursor-pointer transition-all",
                   isDragging
                     ? "border-primary bg-primary/5"
-                    : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+                    : "border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2"
                 )}
               >
                 <input
@@ -609,23 +609,23 @@ export default function OtdrFaultLocatorPage() {
                   className="sr-only"
                   onChange={handleFileChange}
                 />
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-background">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background">
                   <Upload className="h-4 w-4 text-primary" />
                 </div>
                 <div className="text-center">
                   <p className="text-xs font-semibold">Tarik berkas KML/KMZ di sini</p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">atau klik untuk menelusuri berkas (Maks 10MB)</p>
+                  <p className="mt-1 text-2xs text-muted-foreground">atau klik untuk menelusuri berkas (Maks 10MB)</p>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <div className="flex items-center justify-between rounded-lg border border-border bg-surface-1 p-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-primary/20">
                     <FileText className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold truncate max-w-[150px]">{file?.name}</p>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-2xs text-muted-foreground">
                       {file ? (file.size / 1024).toFixed(1) : 0} KB
                     </p>
                   </div>
@@ -633,7 +633,7 @@ export default function OtdrFaultLocatorPage() {
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="p-1 text-muted-foreground hover:text-foreground hover:bg-white/5 rounded transition-colors"
+                  className="p-1 text-muted-foreground hover:text-foreground hover:bg-surface-2 rounded transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -647,9 +647,9 @@ export default function OtdrFaultLocatorPage() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-red-400 flex items-start gap-2"
+                  className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-xs text-danger flex items-start gap-2"
                 >
-                  <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+                  <AlertCircle className="h-4 w-4 shrink-0 text-danger mt-0.5" />
                   <span>{errorMsg}</span>
                 </motion.div>
               )}
@@ -671,7 +671,7 @@ export default function OtdrFaultLocatorPage() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 12 }}
-                className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm space-y-6"
+                className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm space-y-6"
               >
                 <h2 className="text-sm font-semibold flex items-center gap-2 text-foreground uppercase tracking-wider">
                   <Sliders className="h-4 w-4 text-primary" />
@@ -693,7 +693,7 @@ export default function OtdrFaultLocatorPage() {
                         const newLen = calculatePathLength(paths[idx].coords)
                         setFaultDistance(Math.min(faultDistance, Math.round(newLen)))
                       }}
-                      className="w-full h-9 px-3 rounded-lg border border-white/10 bg-neutral-900 text-xs focus:outline-none focus:border-white/30 text-white"
+                      className="w-full h-9 px-3 rounded-lg border border-border bg-neutral-900 text-xs focus:outline-none focus:border-border-strong text-white"
                     >
                       {paths.map((p, idx) => (
                         <option key={idx} value={idx} className="bg-neutral-950 text-white font-sans text-xs">
@@ -708,7 +708,7 @@ export default function OtdrFaultLocatorPage() {
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs text-muted-foreground font-medium">Jarak Kerusakan (OTDR)</label>
-                    <div className="flex bg-white/[0.03] border border-white/10 p-0.5 rounded-lg text-[10px]">
+                    <div className="flex bg-surface-1 border border-border p-0.5 rounded-lg text-2xs">
                       <button
                         type="button"
                         onClick={() => {
@@ -752,9 +752,9 @@ export default function OtdrFaultLocatorPage() {
                         const val = Math.max(0, Number(e.target.value))
                         setFaultDistance(val)
                       }}
-                      className="flex-1 h-9 px-3 rounded-lg border border-white/10 bg-white/[0.03] text-xs focus:outline-none focus:border-white/30 text-foreground font-mono"
+                      className="flex-1 h-9 px-3 rounded-lg border border-border bg-surface-1 text-xs focus:outline-none focus:border-border-strong text-foreground font-mono"
                     />
-                    <span className="h-9 px-3 rounded-lg border border-white/10 bg-white/[0.05] flex items-center text-xs font-semibold">
+                    <span className="h-9 px-3 rounded-lg border border-border bg-surface-2 flex items-center text-xs font-semibold">
                       {distanceUnit}
                     </span>
                   </div>
@@ -767,9 +767,9 @@ export default function OtdrFaultLocatorPage() {
                     step={distanceUnit === "km" ? "0.01" : "10"}
                     value={faultDistance}
                     onChange={(e) => setFaultDistance(Number(e.target.value))}
-                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                    className="w-full h-1 bg-surface-3 rounded-lg appearance-none cursor-pointer accent-primary"
                   />
-                  <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+                  <div className="flex justify-between text-2xs text-muted-foreground font-mono">
                     <span>0 {distanceUnit}</span>
                     <span>
                       Jalur:{" "}
@@ -795,7 +795,7 @@ export default function OtdrFaultLocatorPage() {
                     step="0.005"
                     value={slackFactor}
                     onChange={(e) => setSlackFactor(Number(e.target.value))}
-                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                    className="w-full h-1 bg-surface-3 rounded-lg appearance-none cursor-pointer accent-primary"
                   />
                   
                   {/* Presets */}
@@ -804,10 +804,10 @@ export default function OtdrFaultLocatorPage() {
                       type="button"
                       onClick={() => setSlackFactor(1.0)}
                       className={cn(
-                        "py-1 rounded text-[9px] font-medium border transition-all",
+                        "py-1 rounded text-3xs font-medium border transition-all",
                         slackFactor === 1.0
                           ? "bg-primary/10 text-primary border-primary/20"
-                          : "bg-white/[0.02] text-muted-foreground border-white/5 hover:border-white/10"
+                          : "bg-surface-1 text-muted-foreground border-border/60 hover:border-border"
                       )}
                     >
                       1.000 (No Slack)
@@ -816,10 +816,10 @@ export default function OtdrFaultLocatorPage() {
                       type="button"
                       onClick={() => setSlackFactor(0.97)}
                       className={cn(
-                        "py-1 rounded text-[9px] font-medium border transition-all",
+                        "py-1 rounded text-3xs font-medium border transition-all",
                         slackFactor === 0.97
                           ? "bg-primary/10 text-primary border-primary/20"
-                          : "bg-white/[0.02] text-muted-foreground border-white/5 hover:border-white/10"
+                          : "bg-surface-1 text-muted-foreground border-border/60 hover:border-border"
                       )}
                     >
                       0.970 (Standar)
@@ -828,22 +828,22 @@ export default function OtdrFaultLocatorPage() {
                       type="button"
                       onClick={() => setSlackFactor(0.95)}
                       className={cn(
-                        "py-1 rounded text-[9px] font-medium border transition-all",
+                        "py-1 rounded text-3xs font-medium border transition-all",
                         slackFactor === 0.95
                           ? "bg-primary/10 text-primary border-primary/20"
-                          : "bg-white/[0.02] text-muted-foreground border-white/5 hover:border-white/10"
+                          : "bg-surface-1 text-muted-foreground border-border/60 hover:border-border"
                       )}
                     >
                       0.950 (High Slack)
                     </button>
                   </div>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  <p className="text-2xs text-muted-foreground leading-relaxed">
                     *Membantu menyamakan perbedaan panjang serat optik (OTDR) dengan jarak geografis riil di peta.
                   </p>
                 </div>
 
                 {/* Slack Loop Configuration */}
-                <div className="border-t border-white/10 pt-4 space-y-4">
+                <div className="border-t border-border pt-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
                       <Sliders className="h-3.5 w-3.5 text-primary" /> Panjang Slack per Tiang/ODP
@@ -857,7 +857,7 @@ export default function OtdrFaultLocatorPage() {
                     step="5"
                     value={slackLoopLength}
                     onChange={(e) => setSlackLoopLength(Number(e.target.value))}
-                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                    className="w-full h-1 bg-surface-3 rounded-lg appearance-none cursor-pointer accent-primary"
                   />
 
                   {/* Slack points toggle checklist */}
@@ -866,14 +866,14 @@ export default function OtdrFaultLocatorPage() {
                       <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
                         <ListOrdered className="h-3.5 w-3.5" /> Titik Slack Terdeteksi ({Object.values(pathSlackMap).filter(p => p.type === "slack").length})
                       </label>
-                      <div className="max-h-36 overflow-y-auto rounded-lg border border-white/5 bg-white/[0.01] p-2 space-y-1.5">
+                      <div className="max-h-36 overflow-y-auto rounded-lg border border-border/60 bg-surface-1 p-2 space-y-1.5">
                         {Object.keys(pathSlackMap).map((key) => {
                           const idx = Number(key)
                           const pt = pathSlackMap[idx]
                           const isEnabled = !!enabledSlackNodes[idx]
 
                           return (
-                            <label key={idx} className="flex items-center justify-between p-1.5 rounded hover:bg-white/[0.02] cursor-pointer text-[10px]">
+                            <label key={idx} className="flex items-center justify-between p-1.5 rounded hover:bg-surface-1 cursor-pointer text-2xs">
                               <div className="flex items-center gap-2 min-w-0">
                                 <input
                                   type="checkbox"
@@ -884,7 +884,7 @@ export default function OtdrFaultLocatorPage() {
                                       [idx]: e.target.checked
                                     }))
                                   }}
-                                  className="rounded border-white/10 bg-white/5 text-primary focus:ring-0 cursor-pointer h-3.5 w-3.5"
+                                  className="rounded border-border bg-surface-2 text-primary focus:ring-0 cursor-pointer h-3.5 w-3.5"
                                 />
                                 <span className={cn(
                                   "font-medium truncate max-w-[140px]",
@@ -912,18 +912,18 @@ export default function OtdrFaultLocatorPage() {
             <div className="space-y-6">
               
               {/* Fault Result Card */}
-              <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm relative overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm relative overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 {/* Background glow */}
-                <div className="absolute inset-0 pointer-events-none opacity-5 bg-gradient-to-r from-red-500 to-transparent blur-3xl" />
+                <div className="absolute inset-0 pointer-events-none opacity-5 bg-gradient-to-r from-danger to-transparent blur-3xl" />
 
                 {/* Left metrics */}
                 <div className="space-y-3 relative">
                   <div>
-                    <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                    <span className="text-2xs text-muted-foreground font-semibold uppercase tracking-wider">
                       Koordinasi Titik Putus (Estimasi)
                     </span>
                     {estimatedFault ? (
-                      <div className="text-2xl font-mono font-bold tracking-tight text-red-500 mt-1 flex items-center gap-2">
+                      <div className="text-2xl font-mono font-bold tracking-tight text-danger mt-1 flex items-center gap-2">
                         {estimatedFault.lat.toFixed(6)}, {estimatedFault.lng.toFixed(6)}
                       </div>
                     ) : (
@@ -936,7 +936,7 @@ export default function OtdrFaultLocatorPage() {
                     <div className="flex flex-wrap gap-2 pt-1">
                       <button
                         onClick={copyToClipboard}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-xs font-semibold hover:border-white/20 hover:bg-white/[0.06] transition-all cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-surface-1 text-xs font-semibold hover:border-border-strong hover:bg-surface-2 transition-all cursor-pointer"
                       >
                         <Copy className="h-3.5 w-3.5" />
                         {copied ? "Tersalin!" : "Salin Koordinat"}
@@ -956,10 +956,10 @@ export default function OtdrFaultLocatorPage() {
                 </div>
 
                 {/* Right metrics (Closest pole & Path info) */}
-                <div className="space-y-3 relative border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-6 text-sm">
+                <div className="space-y-3 relative border-t md:border-t-0 md:border-l border-border pt-4 md:pt-0 md:pl-6 text-sm">
                   {closestPointResult ? (
                     <div>
-                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block">
+                      <span className="text-2xs text-muted-foreground font-semibold uppercase tracking-wider block">
                         Objek / Tiang Terdekat
                       </span>
                       <span className="font-bold text-foreground block mt-0.5">
@@ -972,7 +972,7 @@ export default function OtdrFaultLocatorPage() {
                     </div>
                   ) : (
                     <div>
-                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider block">
+                      <span className="text-2xs text-muted-foreground font-semibold uppercase tracking-wider block">
                         Objek Terdekat
                       </span>
                       <span className="text-xs text-muted-foreground block mt-1">
@@ -982,15 +982,15 @@ export default function OtdrFaultLocatorPage() {
                   )}
 
                   {estimatedFault?.inSlackNode && (
-                    <div className="rounded-lg border border-green-500/20 bg-green-500/10 p-2.5 text-xs text-green-400 flex items-start gap-2 animate-pulse">
-                      <AlertCircle className="h-4 w-4 shrink-0 text-green-400 mt-0.5" />
+                    <div className="rounded-lg border border-success/20 bg-success/10 p-2.5 text-xs text-success flex items-start gap-2 animate-pulse">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-success mt-0.5" />
                       <span>Kabel putus terdeteksi di dalam gulungan slack loop pada objek: <b>{estimatedFault.inSlackNode}</b></span>
                     </div>
                   )}
 
                   {estimatedFault?.isOut && (
-                    <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-2.5 text-xs text-yellow-300 flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 shrink-0 text-yellow-400 mt-0.5" />
+                    <div className="rounded-lg border border-warning/20 bg-warning/10 p-2.5 text-xs text-warning flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-warning mt-0.5" />
                       <span>Jarak OTDR melebihi panjang jalur KML. Menampilkan titik koordinat ujung rute.</span>
                     </div>
                   )}
@@ -998,11 +998,11 @@ export default function OtdrFaultLocatorPage() {
                   {/* Distance specs */}
                   <div className="grid grid-cols-2 gap-4 text-xs font-mono pt-1">
                     <div>
-                      <span className="text-[9px] text-muted-foreground block">Panjang Kabel (Geografis)</span>
+                      <span className="text-3xs text-muted-foreground block">Panjang Kabel (Geografis)</span>
                       <span className="font-semibold">{totalPathLengthGeo.toFixed(1)} m</span>
                     </div>
                     <div>
-                      <span className="text-[9px] text-muted-foreground block">Estimasi Serat Optik</span>
+                      <span className="text-3xs text-muted-foreground block">Estimasi Serat Optik</span>
                       <span className="font-semibold">
                         {fiberPathSegments.length > 0 
                           ? fiberPathSegments[fiberPathSegments.length - 1].fiberDistAfter.toFixed(1)
@@ -1015,7 +1015,7 @@ export default function OtdrFaultLocatorPage() {
               </div>
 
               {/* Dynamic Map Card */}
-              <div className="rounded-2xl border border-white/10 bg-card/40 p-1 backdrop-blur-sm overflow-hidden h-[450px] relative">
+              <div className="rounded-2xl border border-border bg-card/40 p-1 backdrop-blur-sm overflow-hidden h-[450px] relative">
                 {!isMapScriptLoaded && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-neutral-950/70 z-10 gap-2">
                     <div className="h-6 w-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -1026,15 +1026,15 @@ export default function OtdrFaultLocatorPage() {
               </div>
               
               {/* Detailed Path Info & Nodes */}
-              <div className="rounded-2xl border border-white/10 bg-card/40 p-5 backdrop-blur-sm space-y-4">
-                <h3 className="text-sm font-semibold flex items-center gap-2 text-foreground uppercase tracking-wider border-b border-white/10 pb-2">
+              <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm space-y-4">
+                <h3 className="text-sm font-semibold flex items-center gap-2 text-foreground uppercase tracking-wider border-b border-border pb-2">
                   <ListOrdered className="h-4 w-4 text-primary" />
                   Detail Verteks Rute Kabel
                 </h3>
                 <div className="max-h-60 overflow-y-auto pr-1 text-xs">
                   <table className="w-full text-left font-mono">
                     <thead>
-                      <tr className="text-muted-foreground border-b border-white/5 pb-1">
+                      <tr className="text-muted-foreground border-b border-border/60 pb-1">
                         <th className="py-2 px-2">No. Node</th>
                         <th className="py-2 px-2">Objek</th>
                         <th className="py-2 px-2">Koordinat (Lat, Lng)</th>
@@ -1054,9 +1054,9 @@ export default function OtdrFaultLocatorPage() {
                           <tr
                             key={seg.idx}
                             className={cn(
-                              "hover:bg-white/[0.02] transition-colors",
+                              "hover:bg-surface-1 transition-colors",
                               isAtFault 
-                                ? "bg-red-500/10 text-red-400 font-bold border-y border-red-500/20" 
+                                ? "bg-danger/10 text-danger font-bold border-y border-danger/20" 
                                 : isAfterFault 
                                   ? "text-muted-foreground/60" 
                                   : "text-foreground font-semibold"
@@ -1066,7 +1066,7 @@ export default function OtdrFaultLocatorPage() {
                               <span className={cn(
                                 "h-1.5 w-1.5 rounded-full",
                                 isAtFault 
-                                  ? "bg-red-500 animate-ping" 
+                                  ? "bg-danger animate-ping" 
                                   : isAfterFault 
                                     ? "bg-neutral-600" 
                                     : "bg-primary"
@@ -1081,7 +1081,7 @@ export default function OtdrFaultLocatorPage() {
                             </td>
                             <td className="py-2.5 px-2 text-center">
                               {seg.slack > 0 ? (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-bold bg-success/10 text-success border border-success/20">
                                   {seg.slack}m
                                 </span>
                               ) : (
@@ -1108,7 +1108,7 @@ export default function OtdrFaultLocatorPage() {
             </div>
           ) : (
             /* Placeholder state before upload */
-            <div className="h-[500px] rounded-2xl border border-white/10 bg-card/10 flex flex-col items-center justify-center text-center p-8 backdrop-blur-sm">
+            <div className="h-[500px] rounded-2xl border border-border bg-card/10 flex flex-col items-center justify-center text-center p-8 backdrop-blur-sm">
               <Compass className="h-16 w-16 text-muted-foreground/30 animate-spin-slow mb-4" />
               <h3 className="text-base font-semibold text-muted-foreground">Peta Deteksi Belum Aktif</h3>
               <p className="text-xs text-muted-foreground/75 mt-2 max-w-sm">
@@ -1116,17 +1116,17 @@ export default function OtdrFaultLocatorPage() {
               </p>
               
               {/* Decorative instructions list */}
-              <div className="mt-8 text-left space-y-3.5 text-[11px] text-muted-foreground/70 max-w-xs border-t border-white/5 pt-6">
+              <div className="mt-8 text-left space-y-3.5 text-2xs text-muted-foreground/70 max-w-xs border-t border-border/60 pt-6">
                 <div className="flex gap-2">
-                  <span className="h-4 w-4 shrink-0 rounded-full bg-white/5 flex items-center justify-center font-bold text-[9px]">1</span>
+                  <span className="h-4 w-4 shrink-0 rounded-full bg-surface-2 flex items-center justify-center font-bold text-3xs">1</span>
                   <span>Unggah file survey rute tiang atau rute kabel (`LineString`) (.kml/.kmz).</span>
                 </div>
                 <div className="flex gap-2">
-                  <span className="h-4 w-4 shrink-0 rounded-full bg-white/5 flex items-center justify-center font-bold text-[9px]">2</span>
+                  <span className="h-4 w-4 shrink-0 rounded-full bg-surface-2 flex items-center justify-center font-bold text-3xs">2</span>
                   <span>Masukkan angka pembacaan kerusakan (Event Fault) dari trace alat OTDR Anda.</span>
                 </div>
                 <div className="flex gap-2">
-                  <span className="h-4 w-4 shrink-0 rounded-full bg-white/5 flex items-center justify-center font-bold text-[9px]">3</span>
+                  <span className="h-4 w-4 shrink-0 rounded-full bg-surface-2 flex items-center justify-center font-bold text-3xs">3</span>
                   <span>Peta akan secara otomatis menandai lokasi kerusakan dan mendeteksi tiang terdekat.</span>
                 </div>
               </div>

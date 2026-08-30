@@ -147,7 +147,7 @@ export default function ContactPage({ params }: PageProps) {
             <div className="lg:col-span-5 space-y-8">
               <div className="space-y-4">
                 {/* Email Info Card */}
-                <div className="relative group overflow-hidden rounded-2xl border border-white/10 bg-card/30 p-6 backdrop-blur-sm transition-all duration-300 hover:border-white/20">
+                <div className="relative group overflow-hidden rounded-2xl border border-border bg-card/30 p-6 backdrop-blur-sm transition-all duration-300 hover:border-border-strong">
                   <div className="tech-bracket-tl opacity-30 group-hover:opacity-100 transition-opacity" />
                   <div className="tech-bracket-tr opacity-30 group-hover:opacity-100 transition-opacity" />
                   <div className="tech-bracket-bl opacity-30 group-hover:opacity-100 transition-opacity" />
@@ -185,7 +185,7 @@ export default function ContactPage({ params }: PageProps) {
 
                 {/* Organization & SLA info */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-xl border border-white/10 bg-card/30 p-5 backdrop-blur-sm">
+                  <div className="rounded-xl border border-border bg-card/30 p-5 backdrop-blur-sm">
                     <div className="flex items-center gap-3">
                       <Building className="h-4 w-4 text-muted-foreground" />
                       <span className="text-xs font-medium text-muted-foreground">{ct.org}</span>
@@ -193,7 +193,7 @@ export default function ContactPage({ params }: PageProps) {
                     <p className="mt-2 text-sm font-semibold text-foreground">{siteConfig.org}</p>
                   </div>
                   
-                  <div className="rounded-xl border border-white/10 bg-card/30 p-5 backdrop-blur-sm">
+                  <div className="rounded-xl border border-border bg-card/30 p-5 backdrop-blur-sm">
                     <div className="flex items-center gap-3">
                       <Clock className="h-4 w-4 text-muted-foreground" />
                       <span className="text-xs font-medium text-muted-foreground">{ct.responseTime}</span>
@@ -204,7 +204,7 @@ export default function ContactPage({ params }: PageProps) {
               </div>
 
               {/* Accordion FAQs */}
-              <div className="space-y-4 pt-4 border-t border-white/10">
+              <div className="space-y-4 pt-4 border-t border-border">
                 <h3 className="text-base font-medium flex items-center gap-2">
                   <HelpCircle className="h-4 w-4 text-primary" />
                   <span>{ct.faqTitle}</span>
@@ -213,7 +213,7 @@ export default function ContactPage({ params }: PageProps) {
                   {ct.faqs.map((faq, idx) => (
                     <details
                       key={idx}
-                      className="group rounded-xl border border-white/10 bg-card/20 p-4 backdrop-blur-sm transition-all duration-300 hover:bg-card/40"
+                      className="group rounded-xl border border-border bg-card/20 p-4 backdrop-blur-sm transition-all duration-300 hover:bg-card/40"
                     >
                       <summary className="flex items-center justify-between cursor-pointer text-sm font-medium">
                         {faq.q}
@@ -232,7 +232,7 @@ export default function ContactPage({ params }: PageProps) {
 
             {/* Interactive Contact Form Column */}
             <div className="lg:col-span-7">
-              <div className="relative group rounded-3xl border border-white/10 bg-card/40 p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:bg-card/50 shadow-lg">
+              <div className="relative group rounded-2xl border border-border bg-card/40 p-8 backdrop-blur-sm transition-all duration-300 hover:border-border-strong hover:bg-card/50 shadow-lg">
                 <div className="tech-bracket-tl opacity-30 group-hover:opacity-100 transition-opacity" />
                 <div className="tech-bracket-tr opacity-30 group-hover:opacity-100 transition-opacity" />
                 <div className="tech-bracket-bl opacity-30 group-hover:opacity-100 transition-opacity" />

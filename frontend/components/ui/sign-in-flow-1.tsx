@@ -621,7 +621,7 @@ export const SignInPage = ({
                         type="button"
                         onClick={handleGoogleSignIn}
                         disabled={isSubmitting}
-                        className="backdrop-blur-[2px] w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-foreground border border-white/10 rounded-full py-3 px-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="backdrop-blur-[2px] w-full flex items-center justify-center gap-2 bg-surface-2 hover:bg-surface-3 text-foreground border border-border rounded-full py-3 px-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <svg
                           className="h-5 w-5"
@@ -655,9 +655,9 @@ export const SignInPage = ({
                       </button>
 
                       <div className="flex items-center gap-4">
-                        <div className="h-px bg-white/10 flex-1" />
+                        <div className="h-px bg-surface-3 flex-1" />
                         <span className="text-muted-foreground text-sm">or</span>
-                        <div className="h-px bg-white/10 flex-1" />
+                        <div className="h-px bg-surface-3 flex-1" />
                       </div>
 
                       {isPasswordMode ? (
@@ -668,7 +668,7 @@ export const SignInPage = ({
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             disabled={isSubmitting}
-                            className="w-full backdrop-blur-[1px] text-foreground border border-white/10 rounded-full py-3 px-4 focus:outline-none focus:border-white/30 text-center bg-transparent disabled:opacity-50"
+                            className="w-full backdrop-blur-[1px] text-foreground border border-border rounded-full py-3 px-4 focus:outline-none focus:border-border-strong text-center bg-transparent disabled:opacity-50"
                             required
                           />
                           <input
@@ -677,13 +677,13 @@ export const SignInPage = ({
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             disabled={isSubmitting}
-                            className="w-full backdrop-blur-[1px] text-foreground border border-white/10 rounded-full py-3 px-4 focus:outline-none focus:border-white/30 text-center bg-transparent disabled:opacity-50"
+                            className="w-full backdrop-blur-[1px] text-foreground border border-border rounded-full py-3 px-4 focus:outline-none focus:border-border-strong text-center bg-transparent disabled:opacity-50"
                             required
                           />
                           <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-foreground py-3 text-sm font-semibold transition-all disabled:opacity-50"
+                            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-surface-3 hover:bg-surface-3 border border-border text-foreground py-3 text-sm font-semibold transition-all disabled:opacity-50"
                           >
                             {isSubmitting ? (
                               <span className="h-4 w-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
@@ -701,14 +701,14 @@ export const SignInPage = ({
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
                               disabled={isSubmitting}
-                              className="w-full backdrop-blur-[1px] text-foreground border border-white/10 rounded-full py-3 px-4 focus:outline-none focus:border-white/30 text-center bg-transparent disabled:opacity-50"
+                              className="w-full backdrop-blur-[1px] text-foreground border border-border rounded-full py-3 px-4 focus:outline-none focus:border-border-strong text-center bg-transparent disabled:opacity-50"
                               required
                             />
                             <button
                               type="submit"
                               aria-label="Continue"
                               disabled={isSubmitting}
-                              className="absolute right-1.5 top-1.5 text-foreground w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors group overflow-hidden disabled:opacity-50"
+                              className="absolute right-1.5 top-1.5 text-foreground w-9 h-9 flex items-center justify-center rounded-full bg-surface-3 hover:bg-surface-3 transition-colors group overflow-hidden disabled:opacity-50"
                             >
                               {isSubmitting ? (
                                 <span className="h-4 w-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
@@ -729,9 +729,7 @@ export const SignInPage = ({
 
                       {error && (
                         <motion.p
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="text-sm text-red-400"
+className="text-sm text-danger"
                         >
                           {error}
                         </motion.p>
@@ -817,7 +815,7 @@ export const SignInPage = ({
                       <motion.button
                         type="button"
                         onClick={handleEmailSubmit as any}
-                        className="flex-1 rounded-full font-medium py-3 border border-white/10 bg-white/5 text-foreground hover:bg-white/10 transition-colors"
+                        className="flex-1 rounded-full font-medium py-3 border border-border bg-surface-2 text-foreground hover:bg-surface-3 transition-colors"
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         transition={{ duration: 0.2 }}
@@ -829,10 +827,7 @@ export const SignInPage = ({
                 ) : (
                   <motion.div
                     key="success-step"
-                    initial={{ opacity: 0, y: 50 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, ease: "easeOut", delay: 0.3 }}
-                    className="space-y-6 text-center"
+className="space-y-6 text-center"
                   >
                     <div className="space-y-2">
                       <h1 className="text-[2.25rem] font-semibold leading-[1.1] tracking-tight text-foreground">
@@ -867,9 +862,7 @@ export const SignInPage = ({
                     </motion.div>
 
                     <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 1 }}
+transition={{ delay: 1 }}
                     >
                       <Link
                         href={onSuccessHref}

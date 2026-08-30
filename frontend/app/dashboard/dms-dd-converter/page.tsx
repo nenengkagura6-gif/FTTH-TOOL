@@ -336,7 +336,7 @@ function CompassVisualizer({ lat, lng }: { lat: number | null; lng: number | nul
       </svg>
       {hasCoord && (
         <div className="text-center space-y-0.5">
-          <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Position</div>
+          <div className="text-2xs text-muted-foreground font-semibold uppercase tracking-wider">Position</div>
           <div className="text-xs font-mono text-foreground">
             {lat!.toFixed(4)}°, {lng!.toFixed(4)}°
           </div>
@@ -522,7 +522,7 @@ export default function DmsDdConverterPage() {
         <button
           type="button"
           onClick={handleReset}
-          className="h-9 px-4 rounded-xl text-sm font-medium border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-colors cursor-pointer flex items-center gap-2 self-start md:self-auto"
+          className="h-9 px-4 rounded-xl text-sm font-medium border border-border bg-surface-1 hover:bg-surface-3 transition-colors cursor-pointer flex items-center gap-2 self-start md:self-auto"
         >
           <RefreshCw className="h-4 w-4" />
           {t.reset}
@@ -530,7 +530,7 @@ export default function DmsDdConverterPage() {
       </div>
 
       {/* ═══════ Mode Tabs ═══════ */}
-      <div className="flex border-b border-white/10">
+      <div className="flex border-b border-border">
         <button
           type="button"
           onClick={() => setActiveMode("single")}
@@ -538,7 +538,7 @@ export default function DmsDdConverterPage() {
             "flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all",
             activeMode === "single"
               ? "border-primary text-primary bg-primary/5"
-              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-white/[0.02]"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-surface-1"
           )}
         >
           <Compass className="h-4 w-4" />
@@ -551,7 +551,7 @@ export default function DmsDdConverterPage() {
             "flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all",
             activeMode === "batch"
               ? "border-primary text-primary bg-primary/5"
-              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-white/[0.02]"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-surface-1"
           )}
         >
           <ClipboardPaste className="h-4 w-4" />
@@ -562,14 +562,12 @@ export default function DmsDdConverterPage() {
       {/* ═══════ SINGLE MODE ═══════ */}
       {activeMode === "single" && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 items-start"
+className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 items-start"
         >
           {/* Left: Input & Output */}
           <div className="space-y-6">
             {/* Direction toggle */}
-            <div className="flex bg-white/[0.03] p-1 rounded-xl border border-white/10 self-start w-fit">
+            <div className="flex bg-surface-1 p-1 rounded-xl border border-border self-start w-fit">
               <button
                 type="button"
                 onClick={() => setSingleDirection("dms-to-dd")}
@@ -607,7 +605,7 @@ export default function DmsDdConverterPage() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   transition={{ duration: 0.2 }}
-                  className="rounded-2xl border border-white/10 bg-card/30 p-6 backdrop-blur-md space-y-6"
+                  className="rounded-2xl border border-border bg-card/30 p-6 backdrop-blur-md space-y-6"
                 >
                   <h2 className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-primary" />
@@ -619,29 +617,29 @@ export default function DmsDdConverterPage() {
                     <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{t.latitude}</label>
                     <div className="grid grid-cols-4 gap-3">
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">{t.degrees} (°)</span>
+                        <span className="text-2xs text-muted-foreground">{t.degrees} (°)</span>
                         <input
                           type="number"
                           min={0}
                           max={90}
                           value={latDeg}
                           onChange={(e) => setLatDeg(Math.min(90, Math.max(0, Number(e.target.value))))}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">{t.minutes} (&apos;)</span>
+                        <span className="text-2xs text-muted-foreground">{t.minutes} (&apos;)</span>
                         <input
                           type="number"
                           min={0}
                           max={59}
                           value={latMin}
                           onChange={(e) => setLatMin(Math.min(59, Math.max(0, Number(e.target.value))))}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">{t.seconds} (&quot;)</span>
+                        <span className="text-2xs text-muted-foreground">{t.seconds} (&quot;)</span>
                         <input
                           type="number"
                           step="0.0001"
@@ -649,15 +647,15 @@ export default function DmsDdConverterPage() {
                           max={59.9999}
                           value={latSec}
                           onChange={(e) => setLatSec(Math.min(59.9999, Math.max(0, Number(e.target.value))))}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">{t.direction}</span>
+                        <span className="text-2xs text-muted-foreground">{t.direction}</span>
                         <select
                           value={latDir}
                           onChange={(e) => setLatDir(e.target.value as "N" | "S")}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         >
                           <option value="N" className="bg-neutral-900">N (North / Utara)</option>
                           <option value="S" className="bg-neutral-900">S (South / Selatan)</option>
@@ -671,29 +669,29 @@ export default function DmsDdConverterPage() {
                     <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{t.longitude}</label>
                     <div className="grid grid-cols-4 gap-3">
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">{t.degrees} (°)</span>
+                        <span className="text-2xs text-muted-foreground">{t.degrees} (°)</span>
                         <input
                           type="number"
                           min={0}
                           max={180}
                           value={lngDeg}
                           onChange={(e) => setLngDeg(Math.min(180, Math.max(0, Number(e.target.value))))}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">{t.minutes} (&apos;)</span>
+                        <span className="text-2xs text-muted-foreground">{t.minutes} (&apos;)</span>
                         <input
                           type="number"
                           min={0}
                           max={59}
                           value={lngMin}
                           onChange={(e) => setLngMin(Math.min(59, Math.max(0, Number(e.target.value))))}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">{t.seconds} (&quot;)</span>
+                        <span className="text-2xs text-muted-foreground">{t.seconds} (&quot;)</span>
                         <input
                           type="number"
                           step="0.0001"
@@ -701,15 +699,15 @@ export default function DmsDdConverterPage() {
                           max={59.9999}
                           value={lngSec}
                           onChange={(e) => setLngSec(Math.min(59.9999, Math.max(0, Number(e.target.value))))}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         />
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">{t.direction}</span>
+                        <span className="text-2xs text-muted-foreground">{t.direction}</span>
                         <select
                           value={lngDir}
                           onChange={(e) => setLngDir(e.target.value as "E" | "W")}
-                          className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                          className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                         >
                           <option value="E" className="bg-neutral-900">E (East / Timur)</option>
                           <option value="W" className="bg-neutral-900">W (West / Barat)</option>
@@ -719,42 +717,42 @@ export default function DmsDdConverterPage() {
                   </div>
 
                   {/* Result */}
-                  <div className="border-t border-white/10 pt-5 space-y-3">
+                  <div className="border-t border-border pt-5 space-y-3">
                     <h3 className="text-xs text-primary font-bold uppercase tracking-wider flex items-center gap-1.5">
                       <Sparkles className="h-3.5 w-3.5" />
                       {t.result}
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-1.5">
-                        <span className="text-[10px] text-muted-foreground font-semibold uppercase">{t.latitude} (DD)</span>
+                      <div className="rounded-xl border border-border bg-surface-1 p-4 space-y-1.5">
+                        <span className="text-2xs text-muted-foreground font-semibold uppercase">{t.latitude} (DD)</span>
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-bold font-mono text-foreground">{singleDMStoDD.lat.toFixed(6)}</span>
                           <button
                             type="button"
                             onClick={() => handleCopy(singleDMStoDD.lat.toFixed(6))}
-                            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-muted-foreground hover:text-foreground transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-surface-2 text-muted-foreground hover:text-foreground transition-colors"
                             title={t.copy}
                           >
                             {copyFeedback === singleDMStoDD.lat.toFixed(6) ? (
-                              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                              <CheckCircle2 className="h-4 w-4 text-success" />
                             ) : (
                               <Copy className="h-4 w-4" />
                             )}
                           </button>
                         </div>
                       </div>
-                      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-1.5">
-                        <span className="text-[10px] text-muted-foreground font-semibold uppercase">{t.longitude} (DD)</span>
+                      <div className="rounded-xl border border-border bg-surface-1 p-4 space-y-1.5">
+                        <span className="text-2xs text-muted-foreground font-semibold uppercase">{t.longitude} (DD)</span>
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-bold font-mono text-foreground">{singleDMStoDD.lng.toFixed(6)}</span>
                           <button
                             type="button"
                             onClick={() => handleCopy(singleDMStoDD.lng.toFixed(6))}
-                            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-muted-foreground hover:text-foreground transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-surface-2 text-muted-foreground hover:text-foreground transition-colors"
                             title={t.copy}
                           >
                             {copyFeedback === singleDMStoDD.lng.toFixed(6) ? (
-                              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                              <CheckCircle2 className="h-4 w-4 text-success" />
                             ) : (
                               <Copy className="h-4 w-4" />
                             )}
@@ -767,7 +765,7 @@ export default function DmsDdConverterPage() {
                       <button
                         type="button"
                         onClick={() => handleCopy(`${singleDMStoDD.lat.toFixed(6)}, ${singleDMStoDD.lng.toFixed(6)}`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.02] text-xs font-semibold text-foreground hover:bg-white/[0.06] transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-surface-1 text-xs font-semibold text-foreground hover:bg-surface-2 transition-colors"
                       >
                         <Copy className="h-3.5 w-3.5" />
                         {t.copy} Lat, Lng
@@ -792,7 +790,7 @@ export default function DmsDdConverterPage() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   transition={{ duration: 0.2 }}
-                  className="rounded-2xl border border-white/10 bg-card/30 p-6 backdrop-blur-md space-y-6"
+                  className="rounded-2xl border border-border bg-card/30 p-6 backdrop-blur-md space-y-6"
                 >
                   <h2 className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-primary" />
@@ -809,9 +807,9 @@ export default function DmsDdConverterPage() {
                         max={90}
                         value={ddLat}
                         onChange={(e) => setDdLat(Number(e.target.value))}
-                        className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                        className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                       />
-                      <span className="text-[10px] text-muted-foreground">-90 to 90 ({locale === "id" ? "negatif = Selatan" : "negative = South"})</span>
+                      <span className="text-2xs text-muted-foreground">-90 to 90 ({locale === "id" ? "negatif = Selatan" : "negative = South"})</span>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{t.longitude} (DD)</label>
@@ -822,49 +820,49 @@ export default function DmsDdConverterPage() {
                         max={180}
                         value={ddLng}
                         onChange={(e) => setDdLng(Number(e.target.value))}
-                        className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/[0.03] text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
+                        className="w-full h-10 px-3 rounded-xl border border-border bg-surface-1 text-sm focus:outline-none focus:border-primary/30 transition-all font-semibold"
                       />
-                      <span className="text-[10px] text-muted-foreground">-180 to 180 ({locale === "id" ? "negatif = Barat" : "negative = West"})</span>
+                      <span className="text-2xs text-muted-foreground">-180 to 180 ({locale === "id" ? "negatif = Barat" : "negative = West"})</span>
                     </div>
                   </div>
 
                   {/* Result */}
-                  <div className="border-t border-white/10 pt-5 space-y-3">
+                  <div className="border-t border-border pt-5 space-y-3">
                     <h3 className="text-xs text-primary font-bold uppercase tracking-wider flex items-center gap-1.5">
                       <Sparkles className="h-3.5 w-3.5" />
                       {t.result}
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-1.5">
-                        <span className="text-[10px] text-muted-foreground font-semibold uppercase">{t.latitude} (DMS)</span>
+                      <div className="rounded-xl border border-border bg-surface-1 p-4 space-y-1.5">
+                        <span className="text-2xs text-muted-foreground font-semibold uppercase">{t.latitude} (DMS)</span>
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-bold font-mono text-foreground">{singleDDtoDMS.latStr}</span>
                           <button
                             type="button"
                             onClick={() => handleCopy(singleDDtoDMS.latStr)}
-                            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-muted-foreground hover:text-foreground transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-surface-2 text-muted-foreground hover:text-foreground transition-colors"
                             title={t.copy}
                           >
                             {copyFeedback === singleDDtoDMS.latStr ? (
-                              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                              <CheckCircle2 className="h-4 w-4 text-success" />
                             ) : (
                               <Copy className="h-4 w-4" />
                             )}
                           </button>
                         </div>
                       </div>
-                      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-1.5">
-                        <span className="text-[10px] text-muted-foreground font-semibold uppercase">{t.longitude} (DMS)</span>
+                      <div className="rounded-xl border border-border bg-surface-1 p-4 space-y-1.5">
+                        <span className="text-2xs text-muted-foreground font-semibold uppercase">{t.longitude} (DMS)</span>
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-bold font-mono text-foreground">{singleDDtoDMS.lngStr}</span>
                           <button
                             type="button"
                             onClick={() => handleCopy(singleDDtoDMS.lngStr)}
-                            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-muted-foreground hover:text-foreground transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-surface-2 text-muted-foreground hover:text-foreground transition-colors"
                             title={t.copy}
                           >
                             {copyFeedback === singleDDtoDMS.lngStr ? (
-                              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                              <CheckCircle2 className="h-4 w-4 text-success" />
                             ) : (
                               <Copy className="h-4 w-4" />
                             )}
@@ -876,7 +874,7 @@ export default function DmsDdConverterPage() {
                       <button
                         type="button"
                         onClick={() => handleCopy(`${singleDDtoDMS.latStr}, ${singleDDtoDMS.lngStr}`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.02] text-xs font-semibold text-foreground hover:bg-white/[0.06] transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-surface-1 text-xs font-semibold text-foreground hover:bg-surface-2 transition-colors"
                       >
                         <Copy className="h-3.5 w-3.5" />
                         {t.copy} DMS
@@ -899,7 +897,7 @@ export default function DmsDdConverterPage() {
 
           {/* Right: Compass + Guide */}
           <div className="space-y-6">
-            <div className="rounded-2xl border border-white/10 bg-card/20 p-6 backdrop-blur-sm flex flex-col items-center">
+            <div className="rounded-2xl border border-border bg-card/20 p-6 backdrop-blur-sm flex flex-col items-center">
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-4 flex items-center gap-1.5">
                 <Globe className="h-4 w-4 text-primary" />
                 {t.compassWidget}
@@ -908,7 +906,7 @@ export default function DmsDdConverterPage() {
             </div>
 
             {/* Format guide */}
-            <div className="rounded-2xl border border-white/10 bg-card/20 p-6 backdrop-blur-sm space-y-4">
+            <div className="rounded-2xl border border-border bg-card/20 p-6 backdrop-blur-sm space-y-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
                 <Info className="h-4 w-4 text-primary" />
                 {t.guidelines}
@@ -916,7 +914,7 @@ export default function DmsDdConverterPage() {
               <div className="space-y-3 text-xs text-muted-foreground">
                 <div className="space-y-1">
                   <span className="font-semibold text-foreground">DMS Format:</span>
-                  <div className="font-mono text-[11px] bg-white/[0.02] border border-white/5 rounded-lg p-2.5 space-y-1">
+                  <div className="font-mono text-2xs bg-surface-1 border border-border/60 rounded-lg p-2.5 space-y-1">
                     <div>6°12&apos;31.68&quot;S, 106°50&apos;44.16&quot;E</div>
                     <div>6 12 31.68 S 106 50 44.16 E</div>
                     <div>6d 12m 31.68s S, 106d 50m 44.16s E</div>
@@ -925,12 +923,12 @@ export default function DmsDdConverterPage() {
                 </div>
                 <div className="space-y-1">
                   <span className="font-semibold text-foreground">DD Format:</span>
-                  <div className="font-mono text-[11px] bg-white/[0.02] border border-white/5 rounded-lg p-2.5 space-y-1">
+                  <div className="font-mono text-2xs bg-surface-1 border border-border/60 rounded-lg p-2.5 space-y-1">
                     <div>-6.208800, 106.845600</div>
                     <div>-6.2088 106.8456</div>
                   </div>
                 </div>
-                <div className="rounded-lg border border-amber-500/10 bg-amber-500/5 p-2.5 text-amber-300/80">
+                <div className="rounded-lg border border-warning/10 bg-warning/5 p-2.5 text-warning/80">
                   <span className="font-semibold">{locale === "id" ? "Catatan:" : "Note:"} </span>
                   {locale === "id"
                     ? "Latitude (Lintang) berkisar -90° s/d 90°. Longitude (Bujur) berkisar -180° s/d 180°. Indonesia: Lat ~-11 s/d 6, Lng ~95 s/d 141."
@@ -945,13 +943,11 @@ export default function DmsDdConverterPage() {
       {/* ═══════ BATCH MODE ═══════ */}
       {activeMode === "batch" && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
+className="space-y-6"
         >
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6 items-start">
             {/* Left: Input Textarea */}
-            <div className="rounded-2xl border border-white/10 bg-card/30 p-6 backdrop-blur-md space-y-4">
+            <div className="rounded-2xl border border-border bg-card/30 p-6 backdrop-blur-md space-y-4">
               <h2 className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
                 <ClipboardPaste className="h-4 w-4 text-primary" />
                 {locale === "id" ? "Input Koordinat Massal" : "Batch Coordinate Input"}
@@ -962,7 +958,7 @@ export default function DmsDdConverterPage() {
                 onChange={(e) => setBatchInput(e.target.value)}
                 placeholder={t.batchPlaceholder}
                 rows={14}
-                className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/[0.02] text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/30 transition-all resize-y leading-relaxed"
+                className="w-full px-4 py-3 rounded-xl border border-border bg-surface-1 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/30 transition-all resize-y leading-relaxed"
               />
 
               <div className="flex flex-wrap gap-2">
@@ -974,7 +970,7 @@ export default function DmsDdConverterPage() {
                     "inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
                     batchInput.trim()
                       ? "bg-primary text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/20 cursor-pointer"
-                      : "bg-white/[0.03] text-muted-foreground border border-white/10 cursor-not-allowed"
+                      : "bg-surface-1 text-muted-foreground border border-border cursor-not-allowed"
                   )}
                 >
                   <Sparkles className="h-4 w-4" />
@@ -983,7 +979,7 @@ export default function DmsDdConverterPage() {
                 <button
                   type="button"
                   onClick={handleBatchClear}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 bg-white/[0.02] text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-surface-1 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors cursor-pointer"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {t.clear}
@@ -993,7 +989,7 @@ export default function DmsDdConverterPage() {
 
             {/* Right: Compass + Guide for batch */}
             <div className="space-y-6">
-              <div className="rounded-2xl border border-white/10 bg-card/20 p-6 backdrop-blur-sm flex flex-col items-center">
+              <div className="rounded-2xl border border-border bg-card/20 p-6 backdrop-blur-sm flex flex-col items-center">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-4 flex items-center gap-1.5">
                   <Globe className="h-4 w-4 text-primary" />
                   {t.compassWidget}
@@ -1004,21 +1000,19 @@ export default function DmsDdConverterPage() {
               {/* Batch stats */}
               {batchResults.length > 0 && (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="grid grid-cols-3 gap-3"
+className="grid grid-cols-3 gap-3"
                 >
-                  <div className="rounded-xl border border-white/10 bg-card/40 p-4 text-center">
-                    <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Total</span>
+                  <div className="rounded-xl border border-border bg-card/40 p-4 text-center">
+                    <span className="text-2xs text-muted-foreground font-semibold uppercase block">Total</span>
                     <div className="text-xl font-bold mt-1 text-foreground">{batchStats.total}</div>
                   </div>
-                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-center">
-                    <span className="text-[10px] text-emerald-400 font-semibold uppercase block">{locale === "id" ? "Berhasil" : "Success"}</span>
-                    <div className="text-xl font-bold mt-1 text-emerald-400">{batchStats.success}</div>
+                  <div className="rounded-xl border border-success/20 bg-success/5 p-4 text-center">
+                    <span className="text-2xs text-success font-semibold uppercase block">{locale === "id" ? "Berhasil" : "Success"}</span>
+                    <div className="text-xl font-bold mt-1 text-success">{batchStats.success}</div>
                   </div>
-                  <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-center">
-                    <span className="text-[10px] text-red-400 font-semibold uppercase block">{locale === "id" ? "Gagal" : "Failed"}</span>
-                    <div className="text-xl font-bold mt-1 text-red-400">{batchStats.error}</div>
+                  <div className="rounded-xl border border-danger/20 bg-danger/5 p-4 text-center">
+                    <span className="text-2xs text-danger font-semibold uppercase block">{locale === "id" ? "Gagal" : "Failed"}</span>
+                    <div className="text-xl font-bold mt-1 text-danger">{batchStats.error}</div>
                   </div>
                 </motion.div>
               )}
@@ -1026,14 +1020,12 @@ export default function DmsDdConverterPage() {
               {/* Export buttons */}
               {batchStats.success > 0 && (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex gap-3"
+className="flex gap-3"
                 >
                   <button
                     type="button"
                     onClick={handleExportCSV}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 bg-white/[0.03] text-sm font-semibold text-foreground hover:bg-white/[0.08] transition-colors cursor-pointer"
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-surface-1 text-sm font-semibold text-foreground hover:bg-surface-3 transition-colors cursor-pointer"
                   >
                     <FileText className="h-4 w-4" />
                     {t.exportCSV}
@@ -1054,14 +1046,12 @@ export default function DmsDdConverterPage() {
           {/* ── Results Table ── */}
           {batchResults.length > 0 ? (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-white/10 bg-card/30 p-6 backdrop-blur-md"
+className="rounded-2xl border border-border bg-card/30 p-6 backdrop-blur-md"
             >
               <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-4 flex items-center gap-2">
                 <FileText className="h-4 w-4 text-primary" />
                 {locale === "id" ? "Hasil Konversi Massal" : "Batch Conversion Results"}
-                <span className="text-[10px] font-normal text-muted-foreground ml-auto">
+                <span className="text-2xs font-normal text-muted-foreground ml-auto">
                   {t.successCount(batchStats.success)} · {t.errorCount(batchStats.error)}
                 </span>
               </h3>
@@ -1069,7 +1059,7 @@ export default function DmsDdConverterPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm border-collapse">
                   <thead>
-                    <tr className="border-b border-white/10 text-muted-foreground text-xs font-semibold uppercase">
+                    <tr className="border-b border-border text-muted-foreground text-xs font-semibold uppercase">
                       <th className="py-3 px-3 w-[50px]">#</th>
                       <th className="py-3 px-3">{t.originalInput}</th>
                       <th className="py-3 px-3">{t.latitude} (DD)</th>
@@ -1084,10 +1074,10 @@ export default function DmsDdConverterPage() {
                       <tr
                         key={row.id}
                         className={cn(
-                          "border-b border-white/5 transition-colors duration-150",
+                          "border-b border-border/60 transition-colors duration-150",
                           row.status === "success"
                             ? "hover:bg-primary/[0.02]"
-                            : "hover:bg-red-500/[0.02] bg-red-500/[0.01]"
+                            : "hover:bg-danger/[0.02] bg-danger/[0.01]"
                         )}
                       >
                         <td className="py-3 px-3 font-mono font-bold text-muted-foreground text-xs">
@@ -1110,12 +1100,12 @@ export default function DmsDdConverterPage() {
                         </td>
                         <td className="py-3 px-3 text-right">
                           {row.status === "success" ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-2xs font-bold text-success bg-success/10 border border-success/20 px-2 py-0.5 rounded-full">
                               <CheckCircle2 className="h-3 w-3" />
                               OK
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full" title={row.error}>
+                            <span className="inline-flex items-center gap-1 text-2xs font-bold text-danger bg-danger/10 border border-danger/20 px-2 py-0.5 rounded-full" title={row.error}>
                               <AlertTriangle className="h-3 w-3" />
                               Error
                             </span>
@@ -1128,7 +1118,7 @@ export default function DmsDdConverterPage() {
               </div>
             </motion.div>
           ) : (
-            <div className="rounded-2xl border border-white/5 bg-card/10 p-12 text-center text-muted-foreground text-sm">
+            <div className="rounded-2xl border border-border/60 bg-card/10 p-12 text-center text-muted-foreground text-sm">
               <ClipboardPaste className="h-8 w-8 mx-auto mb-3 opacity-30" />
               {t.noResults}
             </div>

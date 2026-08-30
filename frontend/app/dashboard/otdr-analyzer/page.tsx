@@ -364,7 +364,7 @@ export default function OtdrAnalyzerPage() {
           <button
             type="button"
             onClick={handleLoadDemo}
-            className="h-10 px-4 rounded-xl text-xs font-semibold border border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05] text-foreground transition-all cursor-pointer flex items-center gap-1.5"
+            className="h-10 px-4 rounded-xl text-xs font-semibold border border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 text-foreground transition-all cursor-pointer flex items-center gap-1.5"
           >
             <Sparkles className="h-4 w-4 text-primary" />
             Load Demo Trace
@@ -375,9 +375,7 @@ export default function OtdrAnalyzerPage() {
       {/* File Upload Area (Web only) */}
       {traces.length === 0 && !loading && (
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-dashed border-white/10 bg-card/20 p-12 text-center max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[300px] print:hidden"
+className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-center max-w-2xl mx-auto flex flex-col items-center justify-center min-h-[300px] print:hidden"
         >
           <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-4 ring-4 ring-primary/5">
             <Upload className="h-6 w-6" />
@@ -401,7 +399,7 @@ export default function OtdrAnalyzerPage() {
 
       {/* Loading State (Web only) */}
       {loading && (
-        <div className="rounded-2xl border border-white/10 bg-card/20 p-12 text-center max-w-md mx-auto print:hidden">
+        <div className="rounded-2xl border border-border bg-card/20 p-12 text-center max-w-md mx-auto print:hidden">
           <RefreshCw className="h-8 w-8 text-primary animate-spin mx-auto mb-4" />
           <h3 className="text-sm font-medium mb-1">Memproses File SOR...</h3>
           <p className="text-xs text-muted-foreground">Membaca struktur blok Telcordia, menyaring redaman, dan mengurutkan A-Z</p>
@@ -410,7 +408,7 @@ export default function OtdrAnalyzerPage() {
 
       {/* Notice Notification */}
       {errorMsg && traces.length > 0 && (
-        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4 text-xs text-amber-400 flex items-center gap-3 print:hidden max-w-5xl mx-auto">
+        <div className="rounded-xl bg-warning/10 border border-warning/20 p-4 text-xs text-warning flex items-center gap-3 print:hidden max-w-5xl mx-auto">
           <ShieldAlert className="h-5 w-5 flex-shrink-0" />
           <span>{errorMsg}</span>
         </div>
@@ -420,7 +418,7 @@ export default function OtdrAnalyzerPage() {
       {traces.length > 0 && activeTrace && activeCompiled && !loading && (
         <div className="space-y-6 print:hidden">
           {/* Action Row */}
-          <div className="flex justify-between items-center bg-card/30 border border-white/10 rounded-2xl p-4">
+          <div className="flex justify-between items-center bg-card/30 border border-border rounded-2xl p-4">
             <div className="flex items-center gap-3">
               <Layers className="h-5 w-5 text-primary" />
               <span className="text-sm font-semibold truncate max-w-[250px] sm:max-w-md">
@@ -439,7 +437,7 @@ export default function OtdrAnalyzerPage() {
               <button
                 type="button"
                 onClick={handleReset}
-                className="h-9 px-4 rounded-xl text-xs font-semibold border border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.05] text-foreground transition-all cursor-pointer"
+                className="h-9 px-4 rounded-xl text-xs font-semibold border border-border hover:border-border-strong bg-surface-1 hover:bg-surface-2 text-foreground transition-all cursor-pointer"
               >
                 Reset
               </button>
@@ -450,10 +448,10 @@ export default function OtdrAnalyzerPage() {
           <div className="grid grid-cols-1 md:grid-cols-[250px_1fr] gap-6 items-start">
             {/* Left Sidebar List of Files */}
             {traces.length > 1 && (
-              <div className="bg-card/25 border border-white/10 rounded-2xl p-4 space-y-2 max-h-[600px] overflow-y-auto">
-                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
+              <div className="bg-card/25 border border-border rounded-2xl p-4 space-y-2 max-h-[600px] overflow-y-auto">
+                <div className="text-2xs font-bold text-muted-foreground uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
                   <span>Daftar File ({traces.length})</span>
-                  <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-mono">A-Z</span>
+                  <span className="text-3xs bg-primary/20 text-primary px-1.5 py-0.5 rounded font-mono">A-Z</span>
                 </div>
                 <div className="space-y-1">
                   {traces.map((trace, idx) => {
@@ -466,12 +464,12 @@ export default function OtdrAnalyzerPage() {
                         className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition-all truncate flex items-center justify-between group ${
                           isActive
                             ? "bg-primary text-primary-foreground font-semibold"
-                            : "hover:bg-white/[0.04] text-muted-foreground hover:text-foreground"
+                            : "hover:bg-surface-2 text-muted-foreground hover:text-foreground"
                         }`}
                       >
                         <span className="truncate flex-1">{trace.filename}</span>
                         {trace.message && (
-                          <span className={`text-[9px] px-1 py-0.5 rounded font-mono ${isActive ? 'bg-amber-600/30 text-amber-200' : 'bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20'}`} title={trace.message}>
+                          <span className={`text-3xs px-1 py-0.5 rounded font-mono ${isActive ? 'bg-warning/30 text-warning' : 'bg-warning/10 text-warning group-hover:bg-warning/20'}`} title={trace.message}>
                             ⚠️
                           </span>
                         )}
@@ -489,7 +487,7 @@ export default function OtdrAnalyzerPage() {
                 <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
                   <div>
                     <h2 className="text-xl font-bold tracking-tight text-neutral-800">{activeTrace.metadata.cable_id}</h2>
-                    <div className="text-[10px] text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
+                    <div className="text-2xs text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
                   </div>
                   <div className="text-right">
                     <span className="text-lg font-black tracking-tighter text-blue-600">f<span className="text-neutral-800">tools</span></span>
@@ -501,7 +499,7 @@ export default function OtdrAnalyzerPage() {
                   {/* Trace Graph */}
                   <div className="space-y-4">
                     <div className="relative border border-neutral-200 rounded-xl p-3 bg-white">
-                      <div className="absolute top-2 right-4 text-[9px] font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded">
+                      <div className="absolute top-2 right-4 text-3xs font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded">
                         km
                       </div>
                       <div className="h-72 w-full">
@@ -576,19 +574,19 @@ export default function OtdrAnalyzerPage() {
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
-                      <div className="absolute bottom-12 left-4 text-[9px] font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded select-none">
+                      <div className="absolute bottom-12 left-4 text-3xs font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded select-none">
                         dB
                       </div>
                     </div>
 
-                    <div className="text-[10px] text-neutral-600 font-mono space-y-0.5 pl-2">
+                    <div className="text-2xs text-neutral-600 font-mono space-y-0.5 pl-2">
                       <div>A - SpanBegin</div>
                       <div>B - SpanEnd</div>
                     </div>
                   </div>
 
                   {/* Parameters list */}
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px] text-neutral-800 border-l border-neutral-100 pl-4">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-2xs text-neutral-800 border-l border-neutral-100 pl-4">
                     <div className="col-span-2 font-mono text-[10.5px] border-b border-neutral-200 pb-1 mb-1 grid grid-cols-2">
                       <div>{activeTrace.metadata.date}</div>
                       <div className="text-right">Wavelength: {activeTrace.metadata.wavelength}</div>
@@ -690,13 +688,13 @@ export default function OtdrAnalyzerPage() {
                           placeholder={parseFloat(activeTrace.metadata.span_distance.replace(",", ".")).toFixed(5)}
                           value={activeOverrideDistance}
                           onChange={(e) => handleOverrideChange(e.target.value)}
-                          className="flex-1 h-8 px-2.5 rounded-lg border border-neutral-200 bg-neutral-50 text-[11px] font-mono text-black focus:outline-none focus:border-primary"
+                          className="flex-1 h-8 px-2.5 rounded-lg border border-neutral-200 bg-neutral-50 text-2xs font-mono text-black focus:outline-none focus:border-primary"
                         />
                         {activeOverrideDistance && (
                           <button
                             type="button"
                             onClick={() => handleOverrideChange("")}
-                            className="h-8 px-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-[10px] font-semibold text-neutral-600 transition-colors cursor-pointer"
+                            className="h-8 px-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-2xs font-semibold text-neutral-600 transition-colors cursor-pointer"
                           >
                             Reset
                           </button>
@@ -712,7 +710,7 @@ export default function OtdrAnalyzerPage() {
                 <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
                   <div>
                     <h2 className="text-xl font-bold tracking-tight text-neutral-800">{activeTrace.metadata.cable_id}</h2>
-                    <div className="text-[10px] text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
+                    <div className="text-2xs text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
                   </div>
                   <div className="text-right">
                     <span className="text-lg font-black tracking-tighter text-blue-600">f<span className="text-neutral-800">tools</span></span>
@@ -768,7 +766,7 @@ export default function OtdrAnalyzerPage() {
                   </table>
                 </div>
                 
-                <div className="mt-12 pt-6 border-t border-neutral-200 text-[10px] text-neutral-400 font-mono text-center">
+                <div className="mt-12 pt-6 border-t border-neutral-200 text-2xs text-neutral-400 font-mono text-center">
                   Acceptance Test Report Generated Automatically via ftthtools.my.id
                 </div>
               </div>
@@ -805,7 +803,7 @@ export default function OtdrAnalyzerPage() {
                     <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
                       <div>
                         <h2 className="text-xl font-bold tracking-tight text-neutral-800">{trace.metadata.cable_id}</h2>
-                        <div className="text-[10px] text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
+                        <div className="text-2xs text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
                       </div>
                       <div className="text-right">
                         <span className="text-lg font-black tracking-tighter text-blue-600">f<span className="text-neutral-800">tools</span></span>
@@ -817,7 +815,7 @@ export default function OtdrAnalyzerPage() {
                       {/* Graph with fixed width/height for printable container */}
                       <div className="space-y-4">
                         <div className="relative border border-neutral-200 rounded-xl p-2 bg-white w-[380px]">
-                          <div className="absolute top-2 right-4 text-[9px] font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded">
+                          <div className="absolute top-2 right-4 text-3xs font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded">
                             km
                           </div>
                           <LineChart 
@@ -889,19 +887,19 @@ export default function OtdrAnalyzerPage() {
                               />
                             )}
                           </LineChart>
-                          <div className="absolute bottom-12 left-4 text-[9px] font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded select-none">
+                          <div className="absolute bottom-12 left-4 text-3xs font-bold text-neutral-500 bg-neutral-100 border border-neutral-200 px-1 py-0.5 rounded select-none">
                             dB
                           </div>
                         </div>
 
-                        <div className="text-[10px] text-neutral-600 font-mono space-y-0.5 pl-2">
+                        <div className="text-2xs text-neutral-600 font-mono space-y-0.5 pl-2">
                           <div>A - SpanBegin</div>
                           <div>B - SpanEnd</div>
                         </div>
                       </div>
 
                       {/* Params */}
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px] text-neutral-800 border-l border-neutral-100 pl-3">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-2xs text-neutral-800 border-l border-neutral-100 pl-3">
                         <div className="col-span-2 font-mono text-[10.5px] border-b border-neutral-200 pb-1 mb-1 grid grid-cols-2">
                           <div>{trace.metadata.date}</div>
                           <div className="text-right">Wavelength: {trace.metadata.wavelength}</div>
@@ -1009,7 +1007,7 @@ export default function OtdrAnalyzerPage() {
                     <div className="border-b-2 border-neutral-300 pb-4 mb-6 flex justify-between items-end">
                       <div>
                         <h2 className="text-xl font-bold tracking-tight text-neutral-800">{trace.metadata.cable_id}</h2>
-                        <div className="text-[10px] text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
+                        <div className="text-2xs text-neutral-500 font-mono mt-0.5">FTTH Tool — Modern Telecom Automation</div>
                       </div>
                       <div className="text-right">
                         <span className="text-lg font-black tracking-tighter text-blue-600">f<span className="text-neutral-800">tools</span></span>
@@ -1064,7 +1062,7 @@ export default function OtdrAnalyzerPage() {
                     </table>
                   </div>
                   
-                  <div className="mt-12 pt-6 border-t border-neutral-200 text-[10px] text-neutral-400 font-mono text-center">
+                  <div className="mt-12 pt-6 border-t border-neutral-200 text-2xs text-neutral-400 font-mono text-center">
                     Acceptance Test Report Generated Automatically via ftthtools.my.id
                   </div>
                 </div>

@@ -29,7 +29,7 @@ export function Workflow({ locale = "en" }: { locale?: string }) {
   ]
 
   return (
-    <section className="relative isolate py-24 sm:py-32">
+    <section className="relative isolate py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-medium text-primary">Workflow</p>
@@ -48,12 +48,9 @@ export function Workflow({ locale = "en" }: { locale?: string }) {
           {steps.map((step, i) => (
             <motion.div
               key={step.step}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.15 }}
               whileTap={{ scale: 0.98 }}
-              className="group relative rounded-2xl border border-border bg-card/90 p-6 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+              style={{ animationDelay: `${i * 70}ms` }}
+              className="reveal group relative rounded-2xl border border-border bg-card/90 p-6 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
             >
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-primary transition-all duration-300 group-hover:scale-105 group-hover:bg-primary group-hover:text-primary-foreground group-active:bg-primary group-active:text-primary-foreground">

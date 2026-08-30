@@ -16,10 +16,6 @@ export const translations = {
     hero: {
       badge: "New: KML Duplicate Checker now in beta",
       title: "Modern FTTH Automation Platform",
-      // Dipakai Hero: klaim konkret, bukan kata sifat.
-      // "20 tools" cocok dengan daftar tool di lib/site-config.ts.
-      titleLead: "From KML to BOQ Excel",
-      titleAccent: "in one upload",
       subtitle: "20 tools for FTTH engineers — BOQ, APD HPDB, DXF, Shapefile, OTDR, and duplicate checking. Upload a file, get the result. No manual data entry.",
       btnStart: "Start Free",
       btnExplore: "Explore Tools",
@@ -106,8 +102,6 @@ export const translations = {
     hero: {
       badge: "Baru: Pendeteksi Duplikat KML kini dalam tahap beta",
       title: "Platform Otomatisasi FTTH Modern",
-      titleLead: "Dari KML ke BOQ Excel",
-      titleAccent: "sekali unggah",
       subtitle: "20 tool untuk engineer FTTH — BOQ, APD HPDB, DXF, Shapefile, OTDR, dan cek duplikat. Unggah file, terima hasilnya. Tanpa input data manual.",
       btnStart: "Mulai Gratis",
       btnExplore: "Jelajahi Fitur",

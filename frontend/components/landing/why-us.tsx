@@ -43,7 +43,7 @@ export function WhyUs({ locale = "en" }: { locale?: string }) {
   ]
 
   return (
-    <section className="relative isolate py-24 sm:py-32">
+    <section className="relative isolate py-16 sm:py-20">
       <div className="mx-auto max-w-6xl px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
           <div>
@@ -99,12 +99,9 @@ export function WhyUs({ locale = "en" }: { locale?: string }) {
             {reasons.map((r, i) => (
               <motion.div
                 key={r.title}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.08 }}
                 whileTap={{ scale: 0.98 }}
-                className="group relative rounded-2xl border border-border bg-card/90 p-5 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+                style={{ animationDelay: `${i * 50}ms` }}
+                className="reveal group relative rounded-2xl border border-border bg-card/90 p-5 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 transition-all duration-300 group-hover:scale-105 group-hover:bg-primary group-hover:text-primary-foreground group-active:bg-primary group-active:text-primary-foreground">
                   <r.icon className="h-4 w-4" />
