@@ -145,12 +145,17 @@ export const systemMenuItems: DashboardMenuItem[] = [
     icon: BookOpen,
     description: "Video guides for all tools",
   },
-  {
-    title: "API Keys",
-    href: "/dashboard/api-keys",
-    icon: Key,
-    description: "Manage API access",
-  },
+  // API Keys disembunyikan: backend belum memvalidasi API key sama sekali
+  // (tidak ada satu pun pemakaian validate_api_key di app/). Halamannya
+  // menghasilkan kunci yang tidak bisa dipakai untuk apa pun, tanpa memberi
+  // tahu penggunanya. Kembalikan entri ini kalau autentikasi API key sudah
+  // benar-benar diimplementasikan di backend.
+  // {
+  //   title: "API Keys",
+  //   href: "/dashboard/api-keys",
+  //   icon: Key,
+  //   description: "Manage API access",
+  // },
   {
     title: "Admin Panel",
     href: "/admin",

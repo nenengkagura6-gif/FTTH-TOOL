@@ -1,50 +1,80 @@
-"use client"
-
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
-import { AnimatedBackground } from "@/components/site/animated-background"
+import { FtthRouteMap } from "@/components/landing/ftth-route-map"
 import { translations } from "@/lib/translations"
 
+/**
+ * Hero.
+ *
+ * Prinsipnya: satu elemen berani, sisanya diam. Yang berani di sini adalah
+ * peta rute FTTH di sebelah kanan — ia menjelaskan produknya tanpa satu
+ * kata pun. Kolom kiri sengaja dijaga tenang: tidak ada gradien teks, tidak
+ * ada glow di balik tombol, tidak ada animasi masuk. Halaman terasa generik
+ * justru ketika setiap bagian berebut perhatian.
+ *
+ * Angka dan nama format di bawah headline nyata dan bisa diverifikasi —
+ * 20 tool sesuai daftar di lib/site-config.ts. Klaim konkret adalah pembeda
+ * paling murah antara halaman yang ditulis orang dan yang ditulis mesin.
+ */
 export function Hero({ locale = "en" }: { locale?: string }) {
   const t = translations[locale as "en" | "id"] || translations.en
+  const isId = locale === "id"
 
   return (
-    <section className="relative isolate overflow-hidden pt-32 pb-24 sm:pt-40 sm:pb-32">
-      <AnimatedBackground variant="grid" />
+    <section className="relative isolate overflow-hidden border-b border-border">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 pt-28 pb-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-8 lg:pt-32 lg:pb-28">
+        {/* ---------- Kolom kiri: teks, tenang ---------- */}
+        <div>
+          {/* Penanda kategori, bukan badge "✨ Powered by AI" */}
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            {isId ? "Otomatisasi Perencanaan FTTH" : "FTTH Planning Automation"}
+          </p>
 
-      <div className="relative mx-auto max-w-6xl px-6 text-center">
+          <h1 className="mt-5 font-display text-4xl font-semibold leading-[1.06] tracking-tight text-balance sm:text-5xl lg:text-6xl">
+            {t.hero.titleLead}{" "}
+            <span className="text-primary">{t.hero.titleAccent}</span>
+          </h1>
 
-        {/*
-          Headline menyebut transformasi konkret + jumlah tool yang bisa
-          diverifikasi, bukan kata sifat ("Modern … Platform"). Angka 20
-          cocok dengan daftar tool di lib/site-config.ts.
-        */}
-        <h1 className="mt-6 text-4xl sm:text-6xl lg:text-7xl font-semibold tracking-tight text-balance leading-[1.05] font-display">
-          {t.hero.titleLead}{" "}
-          <span className="text-primary">{t.hero.titleAccent}</span>
-        </h1>
+          <p className="mt-6 max-w-lg text-base leading-relaxed text-muted-foreground text-pretty">
+            {t.hero.subtitle}
+          </p>
 
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground leading-relaxed text-pretty">
-          {t.hero.subtitle}
-        </p>
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Link
+              href="/signup"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              {t.hero.btnStart}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              href="#tools"
+              className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-5 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            >
+              {t.hero.btnExplore}
+            </Link>
+          </div>
 
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/signup"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            {t.hero.btnStart}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link
-            href="#tools"
-            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-          >
-            {t.hero.btnExplore}
-          </Link>
+          {/* Format nyata yang ditangani — kosakata domain, bukan logo palsu */}
+          <dl className="mt-10 flex flex-wrap gap-x-8 gap-y-3 border-t border-border pt-6">
+            {[
+              { k: isId ? "Masukan" : "Input", v: "KML · KMZ · DXF · SHP · SOR" },
+              { k: isId ? "Keluaran" : "Output", v: "XLSX · CSV · KML · DXF" },
+            ].map((item) => (
+              <div key={item.k}>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
+                  {item.k}
+                </dt>
+                <dd className="mt-1 font-mono text-xs text-foreground/80">{item.v}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
-
+        {/* ---------- Kolom kanan: elemen signature ---------- */}
+        <div className="relative">
+          <FtthRouteMap className="h-auto w-full" />
+        </div>
       </div>
     </section>
   )

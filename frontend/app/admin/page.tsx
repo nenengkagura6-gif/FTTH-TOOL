@@ -184,73 +184,46 @@ export default function AdminPage() {
     fetchPayments();
   }, [profile, page, search, triggerRefresh]);
 
+  /**
+   * Setujui pembayaran lewat SATU panggilan RPC.
+   *
+   * Versi sebelumnya melakukan empat penulisan terpisah dari browser:
+   * tandai approved, batalkan langganan lama, buat langganan baru, lalu
+   * naikkan paket. Tanpa transaksi yang mengikat keempatnya, kegagalan di
+   * langkah mana pun meninggalkan pembayaran bertanda 'approved' padahal
+   * penggunanya tidak pernah dinaikkan — dan karena statusnya tidak lagi
+   * 'pending', tombol approve hilang sehingga tidak bisa diulang.
+   *
+   * approve_payment() menjalankan semuanya di dalam satu transaksi
+   * PostgreSQL: kalau ada satu langkah gagal, seluruhnya dibatalkan.
+   */
   const handleApprovePayment = async (payment: any) => {
-    if (confirm(`Approve payment of Rp ${(payment.amount_paid).toLocaleString('id-ID')} from ${payment.sender_name}?`)) {
-      try {
-        const { getSupabaseClient } = await import("@/lib/supabase/client");
-        const supabase = getSupabaseClient();
-        
-        // 1. Update confirmation status
-        const { error: updateErr } = await supabase
-          .from('payment_confirmations')
-          .update({ status: 'approved' })
-          .eq('id', payment.id);
-          
-        if (updateErr) throw updateErr;
+    const nominal = Number(payment.amount_paid || 0).toLocaleString('id-ID');
+    if (!confirm(`Setujui pembayaran Rp ${nominal} dari ${payment.sender_name}?`)) return;
 
-        // 2. Batalkan langganan berjalan supaya tidak ada dua baris aktif
-        const { error: cancelErr } = await supabase
-          .from('subscriptions')
-          .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
-          .eq('user_id', payment.user_id)
-          .eq('status', 'active');
-        if (cancelErr) throw cancelErr;
+    try {
+      const { getSupabaseClient } = await import("@/lib/supabase/client");
+      const supabase = getSupabaseClient();
 
-        // 3. Insert subscription record
-        const startedAt = new Date();
-        const expiresAt = new Date();
-        // Durasi mengikuti siklus tagihan; sebelumnya selalu 30 hari,
-        // sehingga pembayaran tahunan hanya mendapat sebulan.
-        const days = payment.billing_cycle === 'yearly' ? 365 : 30;
-        expiresAt.setDate(expiresAt.getDate() + days);
+      const { data, error } = await supabase.rpc('approve_payment', {
+        p_payment_id: payment.id,
+      });
 
-        const { error: subErr } = await supabase
-          .from('subscriptions')
-          .insert({
-            user_id: payment.user_id,
-            plan: payment.plan,
-            status: 'active',
-            billing_cycle: payment.billing_cycle || 'monthly',
-            price_cents: payment.price_cents,
-            currency: payment.currency || 'IDR',
-            started_at: startedAt.toISOString(),
-            expires_at: expiresAt.toISOString(),
-            payment_provider: 'manual',
-            provider_subscription_id: 'manual_' + crypto.randomUUID().slice(0, 8)
-          });
+      if (error) throw error;
 
-        if (subErr) throw subErr;
-
-        // 4. Update user profiles plan & quota
-        const quotaLimit = QUOTA_BY_PLAN[payment.plan as keyof typeof QUOTA_BY_PLAN] ?? 50;
-        const { error: profileErr } = await supabase
-          .from('profiles')
-          .update({
-            plan: payment.plan,
-            quota_limit: quotaLimit,
-            quota_used: 0
-          })
-          .eq('id', payment.user_id);
-
-        if (profileErr) throw profileErr;
-
-        // 5. Refresh stats and data
-        setTriggerRefresh(t => t + 1);
-        alert("Payment approved successfully! User plan upgraded.");
-      } catch (err: any) {
-        console.error("Approve payment error:", err);
-        alert("Failed to approve payment: " + err.message);
-      }
+      const hasil = data as { plan?: string; quota_limit?: number } | null;
+      setTriggerRefresh(t => t + 1);
+      alert(
+        `Pembayaran disetujui. Paket ${String(hasil?.plan ?? payment.plan).toUpperCase()} ` +
+        `aktif 30 hari, kuota ${hasil?.quota_limit ?? '-'}.`
+      );
+    } catch (err: any) {
+      console.error("Approve payment error:", err);
+      alert(
+        "Gagal menyetujui pembayaran: " + (err?.message || "unknown error") +
+        "\n\nKalau fungsi approve_payment belum ada, jalankan dulu " +
+        "supabase/2026-08-30-approve-payment-atomic.sql"
+      );
     }
   };
 
@@ -295,6 +268,15 @@ export default function AdminPage() {
    * sehingga akun yang dijadikan 'pro' lewat panel ini tidak pernah turun
    * dan berlaku selamanya.
    */
+  /**
+   * Ubah paket user lewat satu RPC.
+   *
+   * Alasan sama seperti approve: dropdown ini dulu menulis ke dua tabel
+   * berurutan tanpa transaksi. Ditambah lagi, policy RLS pada profiles
+   * hanya mengizinkan admin memperbarui profilnya SENDIRI — UPDATE ke user
+   * lain tidak ditolak, hanya mengenai nol baris tanpa error, sehingga
+   * perubahan paket terlihat berhasil padahal tidak pernah tersimpan.
+   */
   const handleChangePlan = async (
     userId: string,
     plan: Database['public']['Tables']['profiles']['Row']['plan']
@@ -303,41 +285,18 @@ export default function AdminPage() {
       const { getSupabaseClient } = await import("@/lib/supabase/client")
       const supabase = getSupabaseClient()
 
-      // Hentikan langganan berjalan; plan baru mendapat periode baru
-      const { error: cancelErr } = await supabase
-        .from('subscriptions')
-        .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
-        .eq('user_id', userId)
-        .eq('status', 'active')
-      if (cancelErr) throw cancelErr
+      const { data, error } = await supabase.rpc('admin_set_user_plan', {
+        p_user_id: userId,
+        p_plan: plan,
+        p_days: 30,
+      })
+      if (error) throw error
 
-      if (plan !== 'free') {
-        const expiresAt = new Date()
-        expiresAt.setDate(expiresAt.getDate() + 30)
-
-        const { error: subErr } = await supabase
-          .from('subscriptions')
-          .insert({
-            user_id: userId,
-            plan,
-            status: 'active',
-            billing_cycle: 'monthly',
-            started_at: new Date().toISOString(),
-            expires_at: expiresAt.toISOString(),
-            payment_provider: 'manual',
-            provider_subscription_id: 'admin_' + crypto.randomUUID().slice(0, 8),
-          })
-        if (subErr) throw subErr
-      }
-
-      const { error: profileErr } = await supabase
-        .from('profiles')
-        .update({ plan, quota_limit: QUOTA_BY_PLAN[plan] })
-        .eq('id', userId)
-      if (profileErr) throw profileErr
-
+      const hasil = data as { quota_limit?: number } | null
       setUsers(users.map(u =>
-        u.id === userId ? { ...u, plan, quota_limit: QUOTA_BY_PLAN[plan] } : u
+        u.id === userId
+          ? { ...u, plan, quota_limit: hasil?.quota_limit ?? QUOTA_BY_PLAN[plan] }
+          : u
       ))
 
       if (plan !== 'free') {
@@ -345,7 +304,11 @@ export default function AdminPage() {
       }
     } catch (err: any) {
       console.error("Gagal mengubah paket:", err)
-      alert("Gagal mengubah paket: " + (err?.message || "unknown error"))
+      alert(
+        "Gagal mengubah paket: " + (err?.message || "unknown error") +
+        "\n\nKalau fungsi admin_set_user_plan belum ada, jalankan dulu " +
+        "supabase/2026-08-30-approve-payment-atomic.sql"
+      )
     }
   }
 
@@ -353,10 +316,30 @@ export default function AdminPage() {
     try {
       const { getSupabaseClient } = await import("@/lib/supabase/client");
       const supabase = getSupabaseClient();
-      await supabase.from('profiles').update(updates).eq('id', userId);
+
+      // .select() dipakai supaya kita tahu berapa baris yang BENAR-BENAR
+      // berubah. RLS yang menolak UPDATE tidak melempar error — ia hanya
+      // mengenai nol baris. Tanpa pemeriksaan ini, perubahan paket bisa
+      // terlihat berhasil di layar padahal tidak pernah tersimpan.
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select('id');
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error(
+          "Tidak ada baris yang diperbarui. Jalankan migrasi " +
+          "supabase/2026-08-30-admin-rls-policies.sql agar admin boleh " +
+          "memperbarui profil user lain."
+        );
+      }
+
       setUsers(users.map(u => u.id === userId ? { ...u, ...updates } : u));
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Gagal memperbarui user:", err);
+      alert("Gagal memperbarui user: " + (err?.message || "unknown error"));
     }
   }
 

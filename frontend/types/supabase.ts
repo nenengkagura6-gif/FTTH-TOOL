@@ -563,6 +563,18 @@ export interface Database {
                     full_name: string | null
                 }[]
             }
+            approve_payment: {
+                Args: { p_payment_id: string }
+                Returns: Json
+            }
+            admin_set_user_plan: {
+                Args: {
+                    p_user_id: string
+                    p_plan: string
+                    p_days?: number
+                }
+                Returns: Json
+            }
             create_audit_log: {
                 Args: {
                     p_user_id: string

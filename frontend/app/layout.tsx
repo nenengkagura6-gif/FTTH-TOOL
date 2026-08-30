@@ -1,18 +1,28 @@
 import type { Metadata } from "next"
-import { Outfit, Syne, JetBrains_Mono } from "next/font/google"
+import { Bricolage_Grotesque, Instrument_Sans, JetBrains_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import Script from "next/script"
 import { AppProviders } from "@/components/app-providers"
 import "./globals.css"
 
-const outfit = Outfit({
+// Display. Grotesque variabel dengan sumbu optical-size & width — dirancang
+// untuk editorial, jadi di ukuran besar terbaca mahal dan berkarakter tanpa
+// jadi gimmick. Masih jarang dipakai di produksi (rilis 2023).
+const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
-  variable: "--font-outfit",
+  variable: "--font-bricolage",
+  display: "swap",
+  // Hanya sumbu opsz. Menambah "wdth" membengkakkan berkas variabel
+  // sekitar 60 KB untuk perbedaan lebar yang nyaris tidak terlihat.
+  axes: ["opsz"],
 })
 
-const syne = Syne({
+// Body. Tenang dan sedikit ramping — kuat di ukuran kecil untuk tabel padat,
+// dan tidak berebut perhatian dengan display face.
+const instrumentSans = Instrument_Sans({
   subsets: ["latin"],
-  variable: "--font-syne",
+  variable: "--font-instrument",
+  display: "swap",
 })
 
 const jetbrainsMono = JetBrains_Mono({
@@ -53,7 +63,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body 
-        className={`${outfit.variable} ${syne.variable} ${jetbrainsMono.variable} font-sans antialiased min-h-screen bg-background text-foreground`}
+        className={`${instrumentSans.variable} ${bricolage.variable} ${jetbrainsMono.variable} font-sans antialiased min-h-screen bg-background text-foreground`}
         suppressHydrationWarning
       >
         <AppProviders>{children}</AppProviders>

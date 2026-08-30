@@ -457,19 +457,9 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
               </div>
               <span className="font-medium text-sm">{t.history}</span>
             </CommandItem>
-            <CommandItem
-              value="API Keys Manager"
-              onSelect={() => {
-                setOpen(false)
-                router.push("/dashboard/api-keys")
-              }}
-              className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-white/5 rounded-lg text-foreground hover:text-primary transition-all duration-150"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/5 text-muted-foreground">
-                <Key className="h-4 w-4 shrink-0" />
-              </div>
-              <span className="font-medium text-sm">{t.apiKeys}</span>
-            </CommandItem>
+            {/* API Keys dihapus dari command palette: backend belum
+                memvalidasi API key sama sekali, jadi kunci yang dibuat
+                tidak bisa dipakai. Lihat catatan di lib/site-config.ts. */}
           </CommandGroup>
           <CommandGroup heading={t.headingSystem}>
             <CommandItem

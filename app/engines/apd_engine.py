@@ -394,46 +394,73 @@ class APDEngine:
         """
         Kumpulkan koordinat setiap FDT, dipetakan sebagai 'FDT 01' -> (lat, lon).
 
-        Versi sebelumnya hanya melihat Placemark yang berada di dalam Folder
-        yang namanya mengandung "FDT". Pada file nyata, titik FDT kerap berada
-        di folder lain atau langsung di bawah Document, sehingga tidak ada satu
-        koordinat pun terkumpul dan sel N6 tidak pernah ditimpa — nilai bawaan
-        template tetap tertinggal di hasil.
+        Aturan penataan KML proyek ini:
 
-        Sekarang SELURUH Placemark di dokumen dipindai; yang dipakai adalah
-        namanya sendiri, bukan letak foldernya.
+        * Titik FDT WAJIB berada di dalam folder yang namanya mengandung
+          "FDT". Syarat ini dipertahankan supaya label lain yang kebetulan
+          menyebut FDT (mis. "SLING FDT 01" di folder kabel) tidak ikut
+          terbaca sebagai koordinat FDT.
+
+        * NAMA Placemark-nya diabaikan sepenuhnya. Di lapangan titik itu
+          dinamai bebas — "FDT 01", kode internal, nama cluster, atau apa
+          pun. Versi sebelumnya mensyaratkan namanya mengandung "FDT" dan
+          itulah yang membuat pencarian selalu gagal, sehingga sel N6 tetap
+          memakai nilai bawaan template.
+
+        * URUTAN yang menentukan nomornya. Placemark paling atas menjadi
+          FDT 01, berikutnya FDT 02, dan seterusnya — sesuai urutan
+          kemunculannya di dalam dokumen.
         """
         fdt_coords: Dict[str, Tuple[str, str]] = {}
+        folder_terlihat = []
+        sudah_diproses = set()
+        urutan = 0
+
         try:
-            for pm in self.root.iter():
-                if safe_localname(pm) != "Placemark":
+            for folder in self.root.iter():
+                if safe_localname(folder) != "Folder":
                     continue
 
-                # Nama Placemark — dicari tanpa bergantung pada namespace.
-                pm_name = ""
-                for el in pm.iter():
-                    if safe_localname(el) == "name" and el.text:
-                        pm_name = el.text.strip().upper()
+                folder_name = ""
+                for child in folder:
+                    if safe_localname(child) == "name" and child.text:
+                        folder_name = child.text.strip().upper()
                         break
 
-                if "FDT" not in pm_name:
+                if folder_name:
+                    folder_terlihat.append(folder_name)
+
+                if "FDT" not in folder_name:
                     continue
 
-                fdt_match = re.search(r'\bFDT\s*(\d+)\b', pm_name, re.IGNORECASE)
-                fdt_key = f"FDT {int(fdt_match.group(1)):02d}" if fdt_match else "FDT 01"
+                # folder.iter() ikut menjangkau sub-folder. Kalau ada folder
+                # FDT bersarang di dalam folder FDT lain, Placemark yang sama
+                # bisa terlewati dua kali — karena itu jejaknya dicatat.
+                for pm in folder.iter():
+                    if safe_localname(pm) != "Placemark":
+                        continue
+                    if id(pm) in sudah_diproses:
+                        continue
+                    sudah_diproses.add(id(pm))
 
-                # Yang pertama ditemukan yang dipakai; jangan ditimpa titik lain
-                # yang kebetulan juga menyebut FDT (mis. label kabel).
-                if fdt_key in fdt_coords:
-                    continue
+                    coords = self._placemark_coords(pm)
+                    if not coords:
+                        continue
 
-                coords = self._placemark_coords(pm)
-                if coords:
-                    fdt_coords[fdt_key] = coords
+                    urutan += 1
+                    fdt_coords[f"FDT {urutan:02d}"] = coords
         except Exception as e:
             print("Error in get_all_fdt_coords:", e)
 
-        print(f"[apd] Koordinat FDT terbaca: {fdt_coords}")
+        if fdt_coords:
+            print(f"[apd] Koordinat FDT terbaca (urut): {fdt_coords}")
+        else:
+            print(
+                "[apd] PERINGATAN: tidak ada folder ber-nama 'FDT' yang berisi "
+                "Placemark dengan koordinat. Folder yang terbaca: "
+                f"{folder_terlihat[:40]}"
+            )
+
         return fdt_coords
     
     def process(self) -> Dict[str, Any]:
@@ -766,7 +793,11 @@ class APDEngine:
                 #   ": -6.702440°, 108.455580°"
                 ws["N6"].value = f": {lat_fdt}\u00b0, {lon_fdt}\u00b0"
             else:
-                print(f"[apd] PERINGATAN: koordinat FDT tidak ditemukan untuk {fdt_name}; N6 dibiarkan apa adanya")
+                # Dikosongkan, BUKAN dibiarkan. Nilai bawaan template
+                # adalah koordinat cluster lain — kalau ditinggal, ia
+                # terbaca seolah data asli. Sel kosong lebih aman.
+                ws["N6"].value = ": "
+                print(f"[apd] PERINGATAN: koordinat FDT tidak ditemukan untuk {fdt_name}; N6 dikosongkan")
             
             # Set cluster/location name
             ws["C5"].value = lokasi_nama_clean
@@ -787,6 +818,9 @@ class APDEngine:
                 if lat_source not in (None, "") and lon_source not in (None, ""):
                     geo_result = self.reverse_geocode(lat_source, lon_source)
                 
+                # C3 pada kop lembar HPDB memuat nama kabupaten
+                ws["C3"] = geo_result["kabupaten"]
+
                 ws["M10"] = geo_result["province"]
                 ws["N10"] = geo_result["kabupaten"]
                 ws["W10"] = geo_result["kabupaten"]
@@ -836,10 +870,13 @@ class APDEngine:
             
             # Delete unused rows from template
             last_template_row = ws.max_row
-            if max_row_data < last_template_row:
-                delete_start = max_row_data + 1
-                delete_count = last_template_row - max_row_data
-                ws.delete_rows(delete_start, delete_count)
+            # Jangan pernah menghapus baris 10 ke atas. Kalau data_rows kosong,
+            # max_row_data bernilai 9 dan penghapusan dulu dimulai dari baris
+            # 10 — ikut membuang baris yang barusan diisi (Y10/Z10 dan hasil
+            # geocoding), sehingga lembar keluar tanpa kop data sama sekali.
+            delete_start = max(max_row_data + 1, 11)
+            if delete_start <= last_template_row:
+                ws.delete_rows(delete_start, last_template_row - delete_start + 1)
         
         # Save final output
         output_buffer = io.BytesIO()
