@@ -36,7 +36,11 @@ interface ToolPageProps {
   title: string
   description: string
   acceptedFormats: string[]
-  processingNotes: string[]
+  /**
+   * Daftar catatan gaya lama. Sudah digantikan `guide`; dipertahankan
+   * opsional supaya komponen lain yang belum dipindah tetap jalan.
+   */
+  processingNotes?: string[]
   /** Mime/extension hint for the primary upload, e.g. ".kml,.kmz" */
   primaryAccept?: string
   /** Whether to show the optional Excel template upload */
@@ -45,6 +49,17 @@ interface ToolPageProps {
   featureKey?: FeatureKey
   /** Explicit tool name to process */
   toolName?: string
+  /**
+   * Panduan ringkas tiga bagian. Menggantikan daftar `processingNotes`
+   * yang panjang dan campur aduk: pengguna perlu tahu apa yang disiapkan,
+   * apa yang dilakukan, dan apa yang didapat — bukan catatan teknis
+   * tentang filter internal.
+   */
+  guide?: {
+    input: string
+    steps: string[]
+    output: string
+  }
   /** Optional client-side processor function */
   clientProcessor?: (file: File) => Promise<{ blob: Blob; filename: string }>
   /**
@@ -75,11 +90,12 @@ export function ToolPage({
   title,
   description,
   acceptedFormats,
-  processingNotes,
+  processingNotes = [],
   primaryAccept = ".kml,.kmz",
   supportsExcelTemplate = true,
   featureKey,
   toolName,
+  guide,
   clientProcessor,
   youtubeId: youtubeIdProp,
   tutorialSlug,
@@ -770,18 +786,58 @@ export function ToolPage({
         </div>
 
         <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm">
-          <h2 className="text-sm font-medium">Processing notes</h2>
-          <ul className="mt-3 space-y-2">
-            {processingNotes.map((n, i) => (
-              <li
-                key={i}
-                className="flex gap-2 text-xs text-muted-foreground leading-relaxed"
-              >
-                <span className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-primary/70" />
-                <span>{n}</span>
-              </li>
-            ))}
-          </ul>
+          {guide ? (
+            <div className="space-y-5">
+              <section>
+                <h3 className="font-mono text-3xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                  {locale === "id" ? "Masukan" : "Input"}
+                </h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  {guide.input}
+                </p>
+              </section>
+
+              <section>
+                <h3 className="font-mono text-3xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                  {locale === "id" ? "Cara penggunaan" : "How to use"}
+                </h3>
+                <ol className="mt-1.5 space-y-1.5">
+                  {guide.steps.map((step, i) => (
+                    <li key={i} className="flex gap-2.5 text-xs leading-relaxed text-muted-foreground">
+                      <span className="font-mono text-3xs text-primary/80 pt-0.5">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+
+              <section>
+                <h3 className="font-mono text-3xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                  {locale === "id" ? "Keluaran" : "Output"}
+                </h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                  {guide.output}
+                </p>
+              </section>
+            </div>
+          ) : (
+            <>
+              <h2 className="text-sm font-medium">Processing notes</h2>
+              <ul className="mt-3 space-y-2">
+                {processingNotes.map((n, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-2 text-xs text-muted-foreground leading-relaxed"
+                  >
+                    <span className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-primary/70" />
+                    <span>{n}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
 
         {/* Tutorial link hint when video exists */}

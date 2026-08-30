@@ -7,12 +7,17 @@ export default function KmlCheckerPage() {
       title="KML Duplicate Checker"
       description="Detect duplicate HP and pole points across your KML files before they ship. Get a clean diff report with exact coordinates and recommended actions."
       acceptedFormats={[".kml", ".kmz"]}
-      processingNotes={[
-        "Default proximity threshold is 3m — adjustable via the optional template.",
-        "Duplicates across multiple files in a single upload are also detected.",
-        "Output includes both a deduplicated KML and a CSV mismatch report.",
-        "Supports up to 200,000 placemarks per run.",
-      ]}
+      guide={{
+        input:
+          "Satu atau beberapa file KML/KMZ yang ingin diperiksa. Bisa diunggah sekaligus untuk dibandingkan silang.",
+        steps: [
+          "Unggah file KML yang ingin dicek.",
+          "Atur jarak minimum bila perlu. Bawaannya 1 meter.",
+          "Jalankan pengecekan, lalu baca laporannya.",
+        ],
+        output:
+          "Laporan berisi daftar titik POLE dan HP yang bertumpuk atau terlalu berdekatan, lengkap dengan koordinat dan nama foldernya.",
+      }}
       primaryAccept=".kml,.kmz"
       supportsExcelTemplate={false}
       featureKey="kml_duplicate_checker"

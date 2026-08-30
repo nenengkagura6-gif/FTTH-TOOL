@@ -6,12 +6,17 @@ export default function ShpKmlPage() {
       title="Shapefile to KML"
       description="Convert your ESRI Shapefile archives back into Google Earth KML format for easy visualization."
       acceptedFormats={[".zip"]}
-      processingNotes={[
-        "Upload a ZIP archive containing at least the .shp and .dbf files of your shapefile.",
-        "Reads point, polyline, and polygon geometries and builds corresponding KML Placemarks.",
-        "Auto-detects labels or names from shapefile attribute tables.",
-        "Free utility tool available to all users.",
-      ]}
+      guide={{
+        input:
+          "Arsip ZIP berisi satu set Shapefile lengkap. Minimal ada .shp, .shx, dan .dbf di dalam satu ZIP.",
+        steps: [
+          "Kumpulkan seluruh berkas Shapefile ke dalam satu ZIP.",
+          "Unggah ZIP tersebut.",
+          "Unduh hasilnya dan buka di Google Earth.",
+        ],
+        output:
+          "File KML yang bisa langsung dibuka di Google Earth, dengan atribut Shapefile ikut terbawa.",
+      }}
       primaryAccept=".zip"
       supportsExcelTemplate={false}
       toolName="shp_to_kml"

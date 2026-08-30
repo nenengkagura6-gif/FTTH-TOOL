@@ -98,12 +98,17 @@ export default function KmlCsvPage() {
       title="KML to CSV"
       description="Extract point coordinates and names from your KML/KMZ files into a standard comma-separated values (CSV) spreadsheet."
       acceptedFormats={[".kml", ".kmz"]}
-      processingNotes={[
-        "Extracts Placemarks containing Point geometries.",
-        "Generates a CSV with latitude, longitude, and name columns.",
-        "Output CSV is formatted with commas for easy opening in Microsoft Excel.",
-        "No subscription required. This is a free utility tool.",
-      ]}
+      guide={{
+        input:
+          "File KML atau KMZ berisi titik, garis, atau polygon.",
+        steps: [
+          "Unggah file KML/KMZ.",
+          "Klik proses. Konversi berjalan langsung di peramban, tanpa menunggu antrian.",
+          "Unduh file CSV-nya.",
+        ],
+        output:
+          "File CSV berisi nama, koordinat, dan jenis geometri tiap elemen. Siap dibuka di Excel atau diimpor ke sistem lain.",
+      }}
       primaryAccept=".kml,.kmz"
       supportsExcelTemplate={false}
       toolName="kml_to_csv"

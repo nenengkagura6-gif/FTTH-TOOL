@@ -12,15 +12,17 @@ export default function KmlApdPage() {
       title="KML - APD"
       description="Upload file KML/KMZ plan FTTH Anda dan biarkan tool ini menghasilkan desain APD secara otomatis. Tool ini menyusun boundary, menempatkan FAT, menghitung kebutuhan kabel beserta toleransinya, membuat sling wire, memetakan jaringan HP, menomori tiang, serta menginjeksi style Google Earth untuk visualisasi yang rapi dan standar."
       acceptedFormats={[".kml", ".kmz"]}
-      processingNotes={[
-        "Boundary polygon, FAT, dan Homepass (HP) diproses dan dikelompokkan secara otomatis.",
-        "Kebutuhan kabel distribusi dihitung dan ditentukan secara otomatis beserta nilai toleransinya.",
-        "Kapasitas core kabel fiber optik (FO) dan spesifikasi ukurannya disesuaikan otomatis dengan desain.",
-        "Sling wire (kabel udara) dibuat otomatis untuk menghubungkan antar tiang.",
-        "Setiap tiang akan dinomori ulang dan diklasifikasikan berdasarkan standar (New/Existing).",
-        "Penataan folder struktur KML dan pewarnaan (style) Google Earth diseragamkan sesuai standar.",
-        "Output berupa file KML/KMZ yang rapi dan siap untuk dibuka di Google Earth.",
-      ]}
+      guide={{
+        input:
+          "File KML atau KMZ berisi elemen FAT, kabel, tiang, dan homepass.",
+        steps: [
+          "Unggah file KML/KMZ hasil desain.",
+          "Klik proses dan tunggu sampai selesai.",
+          "Unduh hasilnya untuk diperiksa sebelum diserahkan.",
+        ],
+        output:
+          "File KML yang sudah tertata ulang: FAT, kabel, tiang, dan HP dikelompokkan sesuai struktur APD.",
+      }}
       primaryAccept=".kml,.kmz"
       supportsExcelTemplate={false}
       toolName="kml_apd"

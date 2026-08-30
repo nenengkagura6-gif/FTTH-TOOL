@@ -10,13 +10,18 @@ export default function AutoPlacemarkPage() {
       supportsExcelTemplate={false}
       featureKey="kml_to_boq"
       toolName="auto_placemark"
-      processingNotes={[
-        "File boundary harus berisi polygon area (bukan titik atau garis). Pastikan koordinat dalam format WGS84 (lon/lat).",
-        "Data bangunan dan jalan diambil dari OpenStreetMap/Overpass API. Jika data bangunan atau jalan di area Anda belum lengkap di OSM, hasilnya mungkin tidak optimal.",
-        "Proses ini mungkin memakan waktu 30-120 detik tergantung luas area dan jumlah tile yang perlu di-query.",
-        "Filter yang diterapkan: jarak maksimum ke jalan (25m), cek rumah terhalang bangunan lain, dan pemilihan baris pertama (first-row) per frontage jalan.",
-        "Output hanya berisi titik placemark rumah yang lolos filter frontage. Nama file output mengikuti nama file input."
-      ]}
+      guide={{
+        input:
+          "File boundary berisi polygon area cluster (.kml, .kmz, .geojson). Bukan titik atau garis, dan koordinatnya WGS84.",
+        steps: [
+          "Gambar polygon batas cluster di Google Earth, lalu simpan sebagai KML atau KMZ.",
+          "Unggah file boundary tersebut di sini.",
+          "Tunggu proses selesai. Data bangunan dan jalan diambil dari OpenStreetMap, jadi lamanya tergantung luas area.",
+          "Unduh hasilnya dan buka di Google Earth untuk diperiksa.",
+        ],
+        output:
+          "File KML berisi titik placemark rumah di baris depan jalan, sudah tersaring otomatis. Nama file mengikuti file masukan.",
+      }}
     />
   )
 }

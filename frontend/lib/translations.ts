@@ -16,7 +16,7 @@ export const translations = {
     hero: {
       badge: "New: KML Duplicate Checker now in beta",
       title: "Modern FTTH Automation Platform",
-      subtitle: "20 tools for FTTH engineers — BOQ, APD HPDB, DXF, Shapefile, OTDR, and duplicate checking. Upload a file, get the result. No manual data entry.",
+      subtitle: "From FTTH drafters to field technicians. KML, BOQ, HPDB, DXF, SHP, OTDR, and dozens more — now also used for geospatial work, documents, and field administration. Upload a file, get the result. No manual data entry.",
       btnStart: "Start Free",
       btnExplore: "Explore Tools",
       trusted: "Trusted by engineering teams worldwide",
@@ -102,7 +102,7 @@ export const translations = {
     hero: {
       badge: "Baru: Pendeteksi Duplikat KML kini dalam tahap beta",
       title: "Platform Otomatisasi FTTH Modern",
-      subtitle: "20 tool untuk engineer FTTH — BOQ, APD HPDB, DXF, Shapefile, OTDR, dan cek duplikat. Unggah file, terima hasilnya. Tanpa input data manual.",
+      subtitle: "Dari drafter FTTH sampai teknisi lapangan. KML, BOQ, HPDB, DXF, SHP, OTDR, dan puluhan tool lain — sekarang dipakai juga untuk urusan geospasial, dokumen, dan administrasi lapangan. Unggah file, terima hasilnya. Tanpa input data manual.",
       btnStart: "Mulai Gratis",
       btnExplore: "Jelajahi Fitur",
       trusted: "Dipercaya oleh tim rekayasa jaringan di seluruh dunia",

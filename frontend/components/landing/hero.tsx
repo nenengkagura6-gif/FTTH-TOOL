@@ -44,7 +44,7 @@ export function Hero({ locale = "en" }: { locale?: string }) {
             )}
           </h1>
 
-          <p className="mt-6 max-w-lg text-base leading-relaxed text-muted-foreground text-pretty">
+          <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground text-pretty">
             {t.hero.subtitle}
           </p>
 
@@ -67,8 +67,17 @@ export function Hero({ locale = "en" }: { locale?: string }) {
           {/* Format nyata yang ditangani — kosakata domain, bukan logo palsu */}
           <dl className="mt-10 flex flex-wrap gap-x-8 gap-y-3 border-t border-border pt-6">
             {[
-              { k: isId ? "Masukan" : "Input", v: "KML · KMZ · DXF · SHP · SOR" },
-              { k: isId ? "Keluaran" : "Output", v: "XLSX · CSV · KML · DXF" },
+              // Hanya format yang benar-benar ditangani. GeoJSON ada di sisi
+              // MASUKAN saja (Auto Placemark) — tidak ada tool yang
+              // menghasilkannya, jadi tidak boleh diklaim sebagai keluaran.
+              {
+                k: isId ? "Masukan" : "Input",
+                v: "KML · KMZ · DXF · SHP · GEOJSON · SOR",
+              },
+              {
+                k: isId ? "Keluaran" : "Output",
+                v: "XLSX · CSV · PDF · KML · DXF · SHP",
+              },
             ].map((item) => (
               <div key={item.k}>
                 <dt className="font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground/70">

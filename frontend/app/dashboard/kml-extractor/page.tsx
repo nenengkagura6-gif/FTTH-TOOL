@@ -9,12 +9,17 @@ export default function KmlExtractorPage() {
       primaryAccept=".kml,.kmz"
       supportsExcelTemplate={false}
       featureKey="kml_extractor"
-      processingNotes={[
-        "Elemen titik (Placemark Point), area (Polygon), dan rute (LineString) dihitung secara rekursif per subfolder.",
-        "Folder dengan nama yang sama di seluruh dokumen akan secara otomatis diakumulasikan totalnya.",
-        "Folder yang mengandung kata 'CABLE' atau 'KABEL' akan memisahkan baris perhitungan rute per nama/tipe kabel individual.",
-        "Total panjang rute (LineString) dihitung menggunakan perhitungan geodesic bumi presisi tinggi dalam meter dan kilometer."
-      ]}
+      guide={{
+        input:
+          "File KML atau KMZ apa pun yang ingin dibongkar isinya.",
+        steps: [
+          "Unggah file KML/KMZ.",
+          "Klik proses.",
+          "Unduh Excel-nya untuk melihat rincian per folder.",
+        ],
+        output:
+          "File Excel berisi seluruh elemen beserta koordinatnya, plus ringkasan jumlah per folder.",
+      }}
     />
   )
 }
