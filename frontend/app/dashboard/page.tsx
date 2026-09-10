@@ -48,6 +48,7 @@ const toolLabelsEn: Record<string, string> = {
   insert_coding: "Insert Coding KML",
   kml_apd: "KML - APD",
   auto_placemark: "Auto Tagging HP",
+  basicmap: "BasicMap",
 }
 
 const toolLabelsId: Record<string, string> = {
@@ -66,6 +67,7 @@ const toolLabelsId: Record<string, string> = {
   insert_coding: "Insert Coding KML",
   kml_apd: "KML - APD",
   auto_placemark: "Auto Tagging HP",
+  basicmap: "BasicMap",
 }
 
 // Category accent colors matching sidebar

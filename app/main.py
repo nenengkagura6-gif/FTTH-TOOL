@@ -628,6 +628,23 @@ def _process_job_sync(
                 is_kmz=is_kmz,
                 progress_cb=_ap_progress
             )
+        elif tool_name == "basicmap":
+            def _bm_progress(msg: str):
+                update_job_status(job_id, "processing", {
+                    "progress_percent": 45,
+                    "progress_message": msg
+                })
+            update_job_status(job_id, "processing", {
+                "progress_percent": 35,
+                "progress_message": "Menyusun kotak rumah & mengambil jalan dari OSM..."
+            })
+            from engines.basicmap_engine import process_basicmap
+            result = process_basicmap(
+                kml_content=file_bytes,
+                filename=original_filename,
+                is_kmz=is_kmz,
+                progress_cb=_bm_progress
+            )
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
 
@@ -745,7 +762,7 @@ async def queue_job(
     supported_tools = (
         "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
         "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor",
-        "pole_sorter", "insert_coding", "kml_apd", "auto_placemark"
+        "pole_sorter", "insert_coding", "kml_apd", "auto_placemark", "basicmap"
     )
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     

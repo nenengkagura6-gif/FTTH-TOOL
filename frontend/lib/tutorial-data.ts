@@ -120,6 +120,19 @@ export const TUTORIAL_DATA: TutorialEntry[] = [
       { title: "Download KML HP", description: "Download file KML berisi placemark HP yang sudah digenerate." },
     ],
   },
+  {
+    toolSlug: "basicmap",
+    toolTitle: "BasicMap",
+    toolTitleId: "BasicMap",
+    category: "survey",
+    youtubeId: "",  // TODO: isi dengan ID video YouTube Anda
+    steps: [
+      { title: "Upload KML Survei", description: "Upload file KML/KMZ survei. Folder HP/HOMEPASS dibaca sebagai rumah, folder POLE/TIANG dibaca sebagai tiang." },
+      { title: "Proses Basic Map", description: "Sistem menyusun kotak rumah menghadap jalan, mengambil tepi jalan dari OpenStreetMap, dan mengisi kop layout VALIDASI." },
+      { title: "Baca Laporan Dulu", description: "Buka file _laporan.txt di dalam ZIP: di situ tertulis kotak mana yang masih perlu diperiksa tangan." },
+      { title: "Lengkapi Nama Jalan", description: "Jalan yang tidak ada di OSM belum bernama. Isi kolom 'nama_dipakai' di file _jalan.csv, lalu proses ulang KML yang sama." },
+    ],
+  },
 
   // ── Format Conversion ──────────────────────────────────────────
   {
