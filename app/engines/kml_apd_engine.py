@@ -21,9 +21,12 @@ import traceback
 # berisi 'billion laughs' tidak bisa lagi menghabiskan RAM instance.
 # minidom & xml.etree bawaan Python rentan terhadap serangan ini.
 import xml.etree.ElementTree as ET
+from xml.etree.ElementTree import ParseError
 from defusedxml.ElementTree import fromstring as safe_fromstring
 from collections import defaultdict
 from typing import Dict, Any, List, Tuple, Optional
+
+from utils.commons import repair_unbound_prefixes
 
 try:
     from shapely.geometry import Point, Polygon
@@ -43,6 +46,37 @@ def strip_namespace(root):
     for el in root.iter():
         if '}' in el.tag:
             el.tag = el.tag.split('}', 1)[1]
+
+
+def parse_kml_tolerant(raw_kml):
+    """Parse KML, dengan satu percobaan pemulihan untuk prefix yatim.
+
+    Ekspor Google Earth Pro memuat <gx:CascadingStyle kml:id="..."> dan
+    mendeklarasikan xmlns-nya di elemen akar. Berkas yang sudah pernah
+    disunting, dipotong, atau dihasilkan ulang oleh perkakas lain sering
+    kehilangan deklarasi itu — dan parser lalu menolak SELURUH dokumen
+    dengan 'unbound prefix', padahal sisa isinya utuh.
+
+    Pemulihan hanya dicoba untuk kesalahan itu. Kesalahan lain — XML yang
+    benar-benar rusak — tetap dilempar apa adanya, karena menyembunyikannya
+    hanya menunda kebingungan ke tahap berikutnya.
+    """
+    try:
+        return safe_fromstring(raw_kml)
+    except ParseError as e:
+        if "unbound prefix" not in str(e).lower():
+            raise
+
+        teks = (
+            raw_kml.decode("utf-8", errors="ignore")
+            if isinstance(raw_kml, (bytes, bytearray))
+            else raw_kml
+        )
+        diperbaiki = repair_unbound_prefixes(teks)
+        if diperbaiki == teks:
+            raise
+
+        return safe_fromstring(diperbaiki)
 
 
 def parse_coords(text):
@@ -1412,7 +1446,7 @@ def process_kml_apd(
         else:
             raw_kml = kml_content
 
-        tree = ET.ElementTree(safe_fromstring(raw_kml))
+        tree = ET.ElementTree(parse_kml_tolerant(raw_kml))
         tree = _process_kml_tree(tree)
 
         # Write output
