@@ -14,11 +14,18 @@ interface PageProps {
 export default async function AboutPage({ params }: PageProps) {
   const { locale } = await params
 
+  // Angka-angka di sini bisa diverifikasi dari kode:
+  //   20 tool  -> daftar rute di lib/site-config.ts
+  //   6 format -> KML, KMZ, DXF, SHP, GeoJSON, SOR
+  //   7 hari   -> masa simpan berkas hasil sebelum dihapus
+  //   50 MB    -> file_size_limit bucket uploads
+  // Versi sebelumnya memuat "2.4M+ titik HP", "120+ tim", "18 negara",
+  // dan "99.9% uptime" — semuanya tidak berdasar apa pun.
   const stats = [
-    { value: "2.4M+", label: locale === "en" ? "HP points processed" : "Titik HP diproses" },
-    { value: "120+", label: locale === "en" ? "Engineering teams" : "Tim rekayasa aktif" },
-    { value: "18", label: locale === "en" ? "Countries served" : "Negara terlayani" },
-    { value: "99.9%", label: locale === "en" ? "Platform uptime" : "Waktu aktif sistem" },
+    { value: "20", label: locale === "en" ? "Tools available" : "Tool siap pakai" },
+    { value: "6", label: locale === "en" ? "File formats supported" : "Format berkas didukung" },
+    { value: "7", label: locale === "en" ? "Days result retention" : "Hari masa simpan hasil" },
+    { value: "50 MB", label: locale === "en" ? "Max upload size" : "Batas ukuran unggahan" },
   ]
 
   const timeline = [
@@ -47,8 +54,8 @@ export default async function AboutPage({ params }: PageProps) {
       year: "2026",
       title: locale === "en" ? "Today" : "Hari Ini",
       description: locale === "en"
-        ? "Trusted by 120+ engineering teams across 18 countries. Just getting started."
-        : "Dipercaya oleh 120+ tim rekayasa di 18 negara. Kami baru saja memulai.",
+        ? "20 tools covering the workflow from design drafting to field documentation. Still growing, one real need at a time."
+        : "20 tool yang menutup alur kerja dari penggambaran desain sampai dokumentasi lapangan. Masih terus bertambah, mengikuti kebutuhan yang benar-benar muncul di lapangan.",
     },
   ]
 

@@ -286,6 +286,13 @@ export default function TutorialsPage() {
 
   const filtered = useMemo(() => {
     return TUTORIAL_DATA.filter((entry) => {
+      // Hanya tampilkan tutorial yang videonya sudah ada. Sebelumnya 19
+      // dari 20 entri muncul sebagai kartu "Video segera hadir" — halaman
+      // jadi tampak kosong dan menjanjikan sesuatu yang belum tersedia.
+      // Entri lain akan muncul sendiri begitu youtubeId-nya diisi di
+      // lib/tutorial-data.ts, tanpa perlu mengubah halaman ini.
+      if (!entry.youtubeId) return false
+
       const matchesSearch =
         search.length === 0 ||
         entry.toolTitle.toLowerCase().includes(search.toLowerCase()) ||

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Github, Twitter, Linkedin } from "lucide-react"
+import { Mail } from "lucide-react"
 import { siteConfig } from "@/lib/site-config"
 import { translations } from "@/lib/translations"
 
@@ -48,27 +48,18 @@ export function SiteFooter({ locale = "en" }: { locale?: string }) {
                 ? siteConfig.description
                 : "Platform otomatisasi teknik FTTH dan telekomunikasi modern. Otomatiskan KML, database, dan dokumen dalam hitungan detik."}
             </p>
-            <div className="flex items-center gap-3 mt-5">
+            {/* Tiga ikon media sosial sebelumnya semuanya href="#" —
+                tautan mati yang tidak menuju ke mana pun. Lebih baik satu
+                kontak yang benar-benar bisa dihubungi daripada tiga ikon
+                yang tidak berfungsi. Kalau nanti akunnya sudah ada,
+                kembalikan ikonnya dengan URL yang sebenarnya. */}
+            <div className="mt-5">
               <a
-                href="#"
-                aria-label="Twitter"
-                className="w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-border-strong transition-colors"
+                href="/id/contact"
+                className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
               >
-                <Twitter className="h-4 w-4" />
-              </a>
-              <a
-                href="#"
-                aria-label="GitHub"
-                className="w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-border-strong transition-colors"
-              >
-                <Github className="h-4 w-4" />
-              </a>
-              <a
-                href="#"
-                aria-label="LinkedIn"
-                className="w-8 h-8 flex items-center justify-center rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-border-strong transition-colors"
-              >
-                <Linkedin className="h-4 w-4" />
+                <Mail className="h-4 w-4" />
+                {locale === "en" ? "Contact us" : "Hubungi kami"}
               </a>
             </div>
           </div>
@@ -132,8 +123,8 @@ export function SiteFooter({ locale = "en" }: { locale?: string }) {
           </p>
           <p className="text-xs text-muted-foreground">
             {locale === "en"
-              ? "Built for fiber engineers who ship faster."
-              : "Dirancang khusus untuk insinyur fiber optik bekerja lebih cepat."}
+              ? "Built by fiber engineers, for fiber engineers."
+              : "Dibuat oleh orang lapangan, untuk orang lapangan."}
           </p>
         </div>
       </div>

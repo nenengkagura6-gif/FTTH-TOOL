@@ -34,11 +34,14 @@ export function WhyUs({ locale = "en" }: { locale?: string }) {
     },
     {
       icon: Code2,
-      title: locale === "en" ? "API ready" : "Dukungan API",
+      // Dulu berbunyi "Dukungan API" dengan janji API HTTP terdokumentasi.
+      // Backend tidak pernah memvalidasi API key, jadi itu janji yang tidak
+      // bisa ditepati. Diganti dengan fitur yang memang berjalan.
+      title: locale === "en" ? "Job history" : "Riwayat Pekerjaan",
       description:
         locale === "en"
-          ? "Plug our tools into your CI/CD or planning systems with a documented HTTP API."
-          : "Hubungkan alat otomatisasi kami ke sistem perencanaan Anda dengan API HTTP terdokumentasi.",
+          ? "Every job is logged with its status and result file. Re-download within 7 days, then it is deleted automatically."
+          : "Setiap pekerjaan tercatat lengkap dengan status dan berkas hasilnya. Bisa diunduh ulang dalam 7 hari, setelah itu terhapus otomatis.",
     },
   ]
 
@@ -59,39 +62,45 @@ export function WhyUs({ locale = "en" }: { locale?: string }) {
                 : "Kami menggantikan skrip sekali pakai dan kerumitan spreadsheet dengan satu platform otomatisasi terpadu."}
             </p>
 
+            {/* Angka di bawah ini bisa diverifikasi dari kode:
+                20 tool  -> daftar rute di lib/site-config.ts
+                6 format -> KML, KMZ, DXF, SHP, GeoJSON, SOR
+                50 MB    -> file_size_limit bucket uploads
+                7 hari   -> masa simpan berkas hasil
+                Empat angka sebelumnya (10x, 99.9%, 2.4M+, 120+) tidak
+                berdasar apa pun dan sudah dibuang. */}
             <dl className="mt-10 grid grid-cols-2 gap-6 max-w-md">
-              <div>
-                <dt className="text-3xl font-semibold text-foreground">
-                  10x
-                </dt>
-                <dd className="mt-1 text-xs text-muted-foreground">
-                  {locale === "en" ? "Faster than manual review" : "Lebih cepat dari pemeriksaan manual"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-3xl font-semibold text-foreground">
-                  99.9%
-                </dt>
-                <dd className="mt-1 text-xs text-muted-foreground">
-                  {locale === "en" ? "Platform uptime" : "Waktu aktif sistem"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-3xl font-semibold text-foreground">
-                  2.4M+
-                </dt>
-                <dd className="mt-1 text-xs text-muted-foreground">
-                  {locale === "en" ? "HP points processed" : "Titik HP diproses"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-3xl font-semibold text-foreground">
-                  120+
-                </dt>
-                <dd className="mt-1 text-xs text-muted-foreground">
-                  {locale === "en" ? "Engineering teams" : "Tim rekayasa aktif"}
-                </dd>
-              </div>
+              {[
+                {
+                  nilai: "20",
+                  en: "Tools available",
+                  id: "Tool siap pakai",
+                },
+                {
+                  nilai: "6",
+                  en: "Input formats supported",
+                  id: "Format berkas didukung",
+                },
+                {
+                  nilai: "50 MB",
+                  en: "Max file size per upload",
+                  id: "Batas ukuran per unggahan",
+                },
+                {
+                  nilai: "7 hari",
+                  en: "Result retention, then auto-deleted",
+                  id: "Hasil tersimpan, lalu terhapus otomatis",
+                },
+              ].map((s) => (
+                <div key={s.nilai}>
+                  <dt className="font-display text-3xl font-semibold text-foreground">
+                    {s.nilai}
+                  </dt>
+                  <dd className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {locale === "en" ? s.en : s.id}
+                  </dd>
+                </div>
+              ))}
             </dl>
           </div>
 
