@@ -15,11 +15,11 @@ from typing import Dict, List, Tuple, Optional, Any
 # minidom & xml.etree bawaan Python rentan terhadap serangan ini.
 from xml.dom import minidom
 from defusedxml.minidom import parseString as safe_parse_string
+from utils.commons import load_kml_text
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 def _name_of(elem) -> str:
     """Get the text content of the first <name> child."""
     for child in elem.childNodes:
@@ -119,14 +119,10 @@ class InsertCodingEngine:
 
         if is_kmz:
             self._kmz_bytes = content
-            with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:
-                kml_names = [f for f in kmz.namelist() if f.lower().endswith(".kml")]
-                if not kml_names:
-                    return {"status": "error", "message": "Tidak ada file KML di dalam KMZ"}
-                with kmz.open(kml_names[0]) as kml_file:
-                    raw = kml_file.read().decode("utf-8", errors="ignore")
-        else:
-            raw = content.decode("utf-8", errors="ignore")
+
+        # Pemuat bersama: membongkar KMZ (memilih doc.kml yang benar),
+        # membereskan encoding, entitas, dan prefix namespace yatim.
+        raw = load_kml_text(content, is_kmz)
 
         # Strip namespace prefixes for uniform DOM access
         cleaned = re.sub(r"<(/?)[\w\-]+:", r"<\1", raw)

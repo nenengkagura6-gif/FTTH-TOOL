@@ -68,6 +68,7 @@ from pyproj import Transformer
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import linemerge, unary_union
 from shapely.strtree import STRtree
+from utils.commons import load_kml_bytes
 
 # --------------------------------------------------------------------------
 # ANGKA DEFAULT
@@ -137,14 +138,12 @@ DEG = "°"
 # Baca KML/KMZ
 # --------------------------------------------------------------------------
 def read_kml_bytes(path: Path) -> bytes:
-    if path.suffix.lower() == ".kmz":
-        with zipfile.ZipFile(path) as z:
-            names = [n for n in z.namelist() if n.lower().endswith(".kml")]
-            if not names:
-                raise SystemExit(f"KMZ tidak berisi file .kml: {path}")
-            names.sort(key=lambda n: (Path(n).name.lower() != "doc.kml", n))
-            return z.read(names[0])
-    return path.read_bytes()
+    """Baca KML/KMZ dari disk lewat pemuat bersama.
+
+    Deteksi KMZ memakai isi berkas, bukan ekstensi, sehingga berkas KMZ
+    yang terlanjur dinamai .kml tetap terbaca.
+    """
+    return load_kml_bytes(path.read_bytes())
 
 
 class Kml:

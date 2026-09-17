@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Tuple
 from lxml import etree
 from pathlib import Path
 
-from utils.commons import haversine, safe_localname
+from utils.commons import haversine, safe_localname, load_kml_bytes
 
 
 class DuplikatEngine:
@@ -31,18 +31,11 @@ class DuplikatEngine:
         """
         Kembalikan XML KML dari dalam arsip KMZ.
 
-        KMZ adalah file ZIP; dikenali dari magic number-nya, bukan dari
-        ekstensi, supaya file bernama .kml yang sebenarnya KMZ tetap terbaca.
+        Dialihkan ke load_kml_bytes() supaya penanganannya sama dengan tool
+        lain: pemilihan doc.kml yang benar (bukan sekadar entri pertama),
+        encoding, entitas, dan prefix namespace yang tidak dideklarasikan.
         """
-        if content[:4] != b"PK\x03\x04":
-            return content
-
-        import zipfile
-        with zipfile.ZipFile(io.BytesIO(content)) as kmz:
-            names = [n for n in kmz.namelist() if n.lower().endswith(".kml")]
-            if not names:
-                raise ValueError("Arsip KMZ tidak berisi file .kml")
-            return kmz.read(names[0])
+        return load_kml_bytes(content)
 
     def parse_kml(self, content: bytes, filename: str = "input.kml") -> List[Dict]:
         """Parse KML/KMZ content and extract POLE/HP points."""

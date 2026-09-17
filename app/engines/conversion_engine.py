@@ -6,7 +6,7 @@ import csv
 import zipfile
 import shapefile
 from lxml import etree
-from utils.commons import clean_xml_prefixes
+from utils.commons import clean_xml_prefixes, load_kml_text
 
 def convert_kml_to_csv(content: bytes, is_kmz: bool = False) -> bytes:
     """
@@ -20,16 +20,9 @@ def convert_kml_to_csv(content: bytes, is_kmz: bool = False) -> bytes:
         bytes representing the CSV content
     """
     parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
-    if is_kmz:
-        with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:
-            kml_files = [f for f in kmz.namelist() if f.endswith(".kml")]
-            if not kml_files:
-                raise ValueError("No KML file found inside KMZ archive.")
-            kml_name = kml_files[0]
-            with kmz.open(kml_name) as kml_file:
-                content = kml_file.read()
-                
-    content_str = content.decode("utf-8", errors="ignore")
+    # Pembongkaran KMZ, pemilihan doc.kml yang benar, encoding, entitas,
+    # dan prefix namespace yatim ditangani pemuat bersama.
+    content_str = load_kml_text(content, is_kmz)
     cleaned_text = clean_xml_prefixes(content_str)
     tree = etree.parse(io.BytesIO(cleaned_text.encode("utf-8")), parser)
     root = tree.getroot()
@@ -88,16 +81,9 @@ def convert_kml_to_shp(content: bytes, is_kmz: bool = False) -> bytes:
         bytes representing the ZIP archive containing Shapefile layers
     """
     parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
-    if is_kmz:
-        with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:
-            kml_files = [f for f in kmz.namelist() if f.endswith(".kml")]
-            if not kml_files:
-                raise ValueError("No KML file found inside KMZ archive.")
-            kml_name = kml_files[0]
-            with kmz.open(kml_name) as kml_file:
-                content = kml_file.read()
-                
-    content_str = content.decode("utf-8", errors="ignore")
+    # Pembongkaran KMZ, pemilihan doc.kml yang benar, encoding, entitas,
+    # dan prefix namespace yatim ditangani pemuat bersama.
+    content_str = load_kml_text(content, is_kmz)
     cleaned_text = clean_xml_prefixes(content_str)
     tree = etree.parse(io.BytesIO(cleaned_text.encode("utf-8")), parser)
     root = tree.getroot()
@@ -358,16 +344,9 @@ def convert_kml_to_dxf(content: bytes, is_kmz: bool = False) -> bytes:
     import math
     import ezdxf
     parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
-    if is_kmz:
-        with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:
-            kml_files = [f for f in kmz.namelist() if f.endswith(".kml")]
-            if not kml_files:
-                raise ValueError("No KML file found inside KMZ archive.")
-            kml_name = kml_files[0]
-            with kmz.open(kml_name) as kml_file:
-                content = kml_file.read()
-                
-    content_str = content.decode("utf-8", errors="ignore")
+    # Pembongkaran KMZ, pemilihan doc.kml yang benar, encoding, entitas,
+    # dan prefix namespace yatim ditangani pemuat bersama.
+    content_str = load_kml_text(content, is_kmz)
     cleaned_text = clean_xml_prefixes(content_str)
     tree = etree.parse(io.BytesIO(cleaned_text.encode("utf-8")), parser)
     root = tree.getroot()

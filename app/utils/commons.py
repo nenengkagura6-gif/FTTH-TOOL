@@ -5,6 +5,7 @@ import math
 import re
 import zipfile
 import io
+import html.entities
 from typing import Tuple, Optional, Dict, Any, List
 # defusedxml menolak deklarasi entitas XML, sehingga file KML kecil
 # berisi 'billion laughs' tidak bisa lagi menghabiskan RAM instance.
@@ -144,41 +145,220 @@ def repair_unbound_prefixes(xml_text: str) -> str:
     return xml_text[:sisip] + deklarasi + xml_text[sisip:]
 
 
-def normalize_kml_text(raw_text: str) -> str:
-    """Bersihkan prefix pada tag, lalu deklarasikan sisa prefix yang yatim.
+# =====================================================================
+# PEMUAT KML/KMZ TAHAN BANTING
+# =====================================================================
+# Berkas KML dari lapangan datang dalam keadaan yang beragam: diekspor
+# ulang oleh bermacam perkakas, disunting tangan, dikemas ulang, atau
+# sekadar salah ekstensi. Parser XML menolak SELURUH dokumen begitu
+# menemukan satu cacat, sehingga satu karakter '&' telanjang di kolom
+# deskripsi sudah cukup membatalkan pekerjaan sehari.
+#
+# Google Earth memaafkan hampir semuanya. Pemuat ini mengejar perilaku
+# yang sama: perbaiki yang bisa diperbaiki, dan kalau benar-benar tidak
+# bisa, sampaikan alasannya dalam bahasa manusia — bukan "unbound prefix:
+# line 6, column 132".
 
-    Urutannya disengaja: clean_xml_prefixes membuang prefix dari tag, dan
-    repair_unbound_prefixes membereskan yang tidak terjangkau regex itu —
-    terutama atribut seperti kml:id, yang sendirian sudah cukup membuat
-    parser menolak seluruh berkas.
+
+class KmlLoadError(ValueError):
+    """Berkas benar-benar tidak bisa dibaca; pesannya layak ditampilkan ke user."""
+
+
+# Karakter yang dilarang XML 1.0 di luar tab/newline/carriage-return.
+_KARAKTER_TERLARANG = re.compile(
+    r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x84\x86-\x9f﷐-﷟￾￿]"
+)
+
+# Entitas yang sah menurut XML: lima bawaan + rujukan numerik.
+_ENTITAS_SAH = re.compile(r"&(?:#[0-9]+|#x[0-9a-fA-F]+|amp|lt|gt|quot|apos);")
+
+# Potongan CDATA harus dilewati saat membenahi entitas: di dalamnya '&'
+# memang harfiah, dan meng-escape-nya justru memunculkan "&amp;" di layar.
+_POTONGAN_CDATA = re.compile(r"<!\[CDATA\[.*?\]\]>", re.DOTALL)
+
+
+def _decode_kml_bytes(data: bytes) -> str:
+    """Ubah bytes jadi teks tanpa pernah gagal, semirip mungkin dengan aslinya.
+
+    Urutan percobaan: BOM -> encoding yang dideklarasikan di prolog XML ->
+    UTF-8 -> CP1252 -> Latin-1. Latin-1 tidak pernah menolak byte apa pun,
+    jadi ia jaring pengaman terakhir. Decoding lossy ('errors=ignore')
+    sengaja dihindari selama masih ada kandidat yang utuh, karena ia
+    membuang karakter diam-diam.
     """
-    return repair_unbound_prefixes(clean_xml_prefixes(raw_text))
+    for bom, enc in (
+        (b"\xef\xbb\xbf", "utf-8-sig"),
+        (b"\xff\xfe\x00\x00", "utf-32-le"),
+        (b"\x00\x00\xfe\xff", "utf-32-be"),
+        (b"\xff\xfe", "utf-16-le"),
+        (b"\xfe\xff", "utf-16-be"),
+    ):
+        if data.startswith(bom):
+            try:
+                return data.decode(enc)
+            except UnicodeDecodeError:
+                break
+
+    kandidat = []
+    m = re.match(rb"\s*<\?xml[^>]*encoding\s*=\s*[\"']([\w.\-]+)[\"']", data[:200])
+    if m:
+        kandidat.append(m.group(1).decode("ascii", errors="ignore"))
+    kandidat += ["utf-8", "cp1252", "latin-1"]
+
+    for enc in kandidat:
+        try:
+            return data.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+
+    return data.decode("utf-8", errors="replace")
+
+
+def _perbaiki_entitas(teks: str) -> str:
+    """Escape '&' telanjang dan terjemahkan entitas HTML ke bentuk numerik.
+
+    '&' telanjang adalah cacat KML paling sering dari perkakas lapangan —
+    nama seperti "PLN & Telkom" ditulis apa adanya, dan XML menolaknya.
+    Entitas HTML seperti &nbsp; juga tidak dikenal XML sehingga harus
+    diubah ke rujukan numerik.
+    """
+
+    def ganti(m: "re.Match") -> str:
+        potongan = m.group(0)
+        if _ENTITAS_SAH.fullmatch(potongan):
+            return potongan
+        nama = m.group(1)
+        if nama:
+            kode = html.entities.name2codepoint.get(nama[:-1])
+            if kode:
+                return "&#%d;" % kode
+        return "&amp;" + potongan[1:]
+
+    return re.sub(r"&([A-Za-z][A-Za-z0-9]*;|#[0-9]+;|#x[0-9A-Fa-f]+;)?", ganti, teks)
+
+
+def _perbaiki_entitas_luar_cdata(teks: str) -> str:
+    """Terapkan perbaikan entitas hanya di luar blok CDATA."""
+    hasil, ujung = [], 0
+    for m in _POTONGAN_CDATA.finditer(teks):
+        hasil.append(_perbaiki_entitas(teks[ujung:m.start()]))
+        hasil.append(m.group(0))
+        ujung = m.end()
+    hasil.append(_perbaiki_entitas(teks[ujung:]))
+    return "".join(hasil)
+
+
+def normalize_kml_text(raw_text: str) -> str:
+    """Rapikan teks KML sampai layak diberikan ke parser XML mana pun.
+
+    Urutannya disengaja:
+      1. buang sampah sebelum '<' pertama (BOM ganda, spasi, header nyasar)
+      2. buang karakter kontrol yang dilarang XML
+      3. benahi entitas, kecuali di dalam CDATA
+      4. deklarasikan prefix namespace yang yatim
+
+    clean_xml_prefixes TIDAK dipanggil di sini: ia membuang prefix dari tag,
+    yang merusak dokumen ber-namespace campuran. Mendeklarasikan prefiksnya
+    lebih aman daripada menghapusnya.
+    """
+    mulai = raw_text.find("<")
+    if mulai > 0:
+        raw_text = raw_text[mulai:]
+
+    raw_text = _KARAKTER_TERLARANG.sub("", raw_text)
+    raw_text = _perbaiki_entitas_luar_cdata(raw_text)
+    return repair_unbound_prefixes(raw_text)
+
+
+def _pilih_kml_dalam_kmz(nama_berkas: List[str]) -> Optional[str]:
+    """Pilih KML utama di dalam arsip KMZ.
+
+    Spesifikasi KMZ menyebut berkas pertama bernama doc.kml sebagai entri
+    utama, tetapi arsip dunia nyata sering memuat beberapa KML — lampiran,
+    overlay, sisa kerja. Mengambil begitu saja elemen pertama daftar
+    (perilaku lama) bisa memilih berkas yang salah, dan hasilnya kosong
+    tanpa pesan error sama sekali.
+
+    Urutan: doc.kml di akar -> nama .kml apa pun di akar -> yang paling
+    dangkal -> abjad, supaya pilihannya stabil antar-jalan.
+    """
+    kandidat = [n for n in nama_berkas if n.lower().endswith(".kml")]
+    if not kandidat:
+        return None
+
+    def kunci(n: str):
+        jalur = n.replace("\\", "/")          # arsip buatan Windows
+        dasar = jalur.rsplit("/", 1)[-1].lower()
+        return (dasar != "doc.kml", jalur.count("/"), jalur.lower())
+
+    return sorted(kandidat, key=kunci)[0]
+
+
+def load_kml_text(content: bytes, is_kmz: Optional[bool] = None) -> str:
+    """Ambil teks KML yang sudah dirapikan, dari berkas KML maupun KMZ.
+
+    `is_kmz` hanya petunjuk. Yang menentukan adalah isi berkasnya: arsip ZIP
+    selalu diawali 'PK\\x03\\x04'. Pemeriksaan ini membuat berkas KMZ yang
+    terlanjur dinamai .kml (dan sebaliknya) tetap terbaca — kekeliruan yang
+    sangat sering terjadi karena Google Earth menyimpan keduanya.
+    """
+    if not content:
+        raise KmlLoadError("Berkas kosong.")
+
+    if content[:4] in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"):
+        try:
+            with zipfile.ZipFile(io.BytesIO(content), "r") as arsip:
+                nama = _pilih_kml_dalam_kmz(arsip.namelist())
+                if nama is None:
+                    raise KmlLoadError(
+                        "Arsip KMZ tidak memuat berkas .kml di dalamnya."
+                    )
+                data = arsip.read(nama)
+        except zipfile.BadZipFile:
+            raise KmlLoadError(
+                "Berkas tampak seperti KMZ tetapi arsipnya rusak atau terpotong."
+            )
+    else:
+        data = content
+
+    teks = normalize_kml_text(_decode_kml_bytes(data))
+
+    if "<" not in teks:
+        raise KmlLoadError(
+            "Isi berkas bukan XML/KML. Pastikan yang diunggah benar-benar "
+            "berkas KML atau KMZ dari Google Earth."
+        )
+
+    return teks
+
+
+def load_kml_bytes(content: bytes, is_kmz: Optional[bool] = None) -> bytes:
+    """Sama seperti load_kml_text(), tetapi mengembalikan UTF-8 bytes.
+
+    Dipakai pemanggil yang menyerahkan bytes ke parser. Prolog XML ditulis
+    ulang ke UTF-8 supaya tidak bertentangan dengan encoding sebenarnya —
+    parser mempercayai prolog, dan prolog yang berbohong memicu galat yang
+    menyesatkan.
+    """
+    teks = load_kml_text(content, is_kmz)
+    teks = re.sub(
+        r"^\s*<\?xml[^>]*\?>",
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        teks,
+        count=1,
+    )
+    return teks.encode("utf-8")
 
 
 def parse_kml_content(content: bytes, is_kmz: bool = False) -> minidom.Document:
     """Parse KML content from bytes."""
-    if is_kmz:
-        with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:
-            kml_name = [f for f in kmz.namelist() if f.endswith(".kml")][0]
-            with kmz.open(kml_name) as kml_file:
-                raw_text = kml_file.read().decode("utf-8", errors="ignore")
-    else:
-        raw_text = content.decode("utf-8", errors="ignore")
-
-    return safe_parse_string(normalize_kml_text(raw_text))
+    return safe_parse_string(load_kml_text(content, is_kmz))
 
 
 def parse_kml_lxml(content: bytes, is_kmz: bool = False) -> etree.ElementTree:
     """Parse KML content using lxml."""
     parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
-    
-    if is_kmz:
-        with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:
-            kml_name = [f for f in kmz.namelist() if f.endswith(".kml")][0]
-            with kmz.open(kml_name) as kml_file:
-                content = kml_file.read()
-    
-    return etree.parse(io.BytesIO(content), parser)
+    return etree.parse(io.BytesIO(load_kml_bytes(content, is_kmz)), parser)
 
 
 def get_folder_name(folder) -> str:

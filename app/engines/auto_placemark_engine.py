@@ -27,6 +27,8 @@ import xml.etree.ElementTree as ET
 from defusedxml.ElementTree import fromstring as safe_fromstring
 from typing import Any, Dict, List, Tuple, Optional
 
+from utils.commons import load_kml_bytes
+
 import geopandas as gpd
 import pandas as pd
 import requests
@@ -93,14 +95,15 @@ def make_placemark_name(number: int) -> str:
 # KML/KMZ READER
 # ==========================================================
 def _read_kml_text_from_bytes(content: bytes, is_kmz: bool) -> str:
-    if is_kmz:
-        with zipfile.ZipFile(io.BytesIO(content), "r") as z:
-            kml_files = [n for n in z.namelist() if n.lower().endswith(".kml")]
-            if not kml_files:
-                raise ValueError("KMZ tidak berisi file .kml")
-            main_kml = "doc.kml" if "doc.kml" in kml_files else kml_files[0]
-            return z.read(main_kml).decode("utf-8", errors="ignore")
-    return content.decode("utf-8", errors="ignore")
+    """Ambil teks KML dari berkas KML maupun KMZ.
+
+    Dialihkan ke load_kml_bytes(): selain membongkar KMZ, ia juga membenahi
+    encoding, '&' telanjang, entitas HTML, dan prefix namespace yang tidak
+    dideklarasikan. Versi sebelumnya men-decode dengan errors="ignore" yang
+    membuang byte non-UTF-8 diam-diam, sehingga nama berhuruf aksen rusak
+    tanpa peringatan.
+    """
+    return load_kml_bytes(content, is_kmz).decode("utf-8")
 
 
 def _parse_coord_text(coord_text: str) -> List[Tuple[float, float]]:

@@ -17,7 +17,7 @@ from openpyxl.styles import PatternFill, Border, Side
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
-from utils.commons import haversine, safe_localname
+from utils.commons import haversine, safe_localname, load_kml_bytes
 from collections import defaultdict
 
 
@@ -30,19 +30,15 @@ def get_fdt_name_from_folder_path(folder_path: str) -> str:
 
 
 def parse_kml_lxml_with_kmz(content: bytes, is_kmz: bool = False) -> etree.ElementTree:
-    """Parse KML content using lxml, with KMZ support."""
+    """Parse KML content using lxml, with KMZ support.
+
+    Pembongkaran KMZ, pemilihan doc.kml, encoding, entitas, dan prefix
+    namespace yatim ditangani load_kml_bytes() agar seragam dengan tool
+    lain. Versi sebelumnya memakai .endswith(".kml") yang peka huruf besar,
+    sehingga arsip berisi DOC.KML dianggap tidak punya KML sama sekali.
+    """
     parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=True)
-    
-    if is_kmz:
-        with zipfile.ZipFile(io.BytesIO(content), "r") as kmz:
-            kml_files = [f for f in kmz.namelist() if f.endswith(".kml")]
-            if not kml_files:
-                raise ValueError("No KML file found inside KMZ archive")
-            kml_name = kml_files[0]
-            with kmz.open(kml_name) as kml_file:
-                content = kml_file.read()
-    
-    return etree.parse(io.BytesIO(content), parser)
+    return etree.parse(io.BytesIO(load_kml_bytes(content, is_kmz)), parser)
 
 
 class APDEngine:

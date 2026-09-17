@@ -26,7 +26,7 @@ from defusedxml.ElementTree import fromstring as safe_fromstring
 from collections import defaultdict
 from typing import Dict, Any, List, Tuple, Optional
 
-from utils.commons import repair_unbound_prefixes
+from utils.commons import repair_unbound_prefixes, load_kml_bytes
 
 try:
     from shapely.geometry import Point, Polygon
@@ -1431,20 +1431,21 @@ def process_kml_apd(
     try:
         kmz_extra_files = {}
 
-        if is_kmz:
-            with zipfile.ZipFile(io.BytesIO(kml_content), "r") as kmz:
-                kml_files = [f for f in kmz.namelist() if f.lower().endswith(".kml")]
-                if not kml_files:
-                    return {"status": "error", "message": "Tidak ada file KML di dalam KMZ"}
-                kml_name = kml_files[0]
-                with kmz.open(kml_name) as kml_file:
-                    raw_kml = kml_file.read()
-                # Preserve non-KML files (images, etc.)
-                for item in kmz.namelist():
-                    if not item.lower().endswith(".kml"):
-                        kmz_extra_files[item] = kmz.read(item)
-        else:
-            raw_kml = kml_content
+        # Lampiran KMZ (ikon, gambar overlay) dikumpulkan lebih dulu agar
+        # bisa dikemas ulang. Pemeriksaannya pada ISI berkas, bukan pada
+        # flag is_kmz, supaya KMZ yang terlanjur dinamai .kml tetap utuh
+        # lampirannya.
+        if kml_content[:4] in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"):
+            try:
+                with zipfile.ZipFile(io.BytesIO(kml_content), "r") as kmz:
+                    for item in kmz.namelist():
+                        if not item.lower().endswith(".kml"):
+                            kmz_extra_files[item] = kmz.read(item)
+            except zipfile.BadZipFile:
+                pass  # load_kml_bytes yang akan melaporkan kerusakannya
+
+        # Pemuat bersama menangani KMZ, encoding, entitas, dan prefix yatim.
+        raw_kml = load_kml_bytes(kml_content, is_kmz)
 
         tree = ET.ElementTree(parse_kml_tolerant(raw_kml))
         tree = _process_kml_tree(tree)
