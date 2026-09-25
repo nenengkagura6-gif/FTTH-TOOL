@@ -20,7 +20,7 @@ export default function AutoPlacemarkPage() {
           "Unduh hasilnya dan buka di Google Earth untuk diperiksa.",
         ],
         output:
-          "File KML berisi titik placemark rumah di baris depan jalan, sudah tersaring otomatis. Nama file mengikuti file masukan.",
+          "File KML berisi titik placemark rumah di baris depan jalan, sudah tersaring otomatis dan dinamai NN-01, NN-02, dst. menyusuri jalan. Nama file mengikuti file masukan.",
       }}
     />
   )

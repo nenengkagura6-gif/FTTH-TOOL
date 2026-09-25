@@ -45,10 +45,11 @@ const toolLabelsEn: Record<string, string> = {
   dxf_to_kml: "AutoCAD (DXF) to KML",
   kml_extractor: "KML Extractor",
   pole_sorter: "Pole Auto-Sorter",
-  insert_coding: "Insert Coding KML",
-  kml_apd: "KML - APD",
+  insert_coding: "Auto Coding APD",
+  kml_apd: "KML To APD",
   auto_placemark: "Auto Tagging HP",
-  basicmap: "BasicMap",
+  basicmap: "KML To BasicMap",
+  kml_to_cad: "KML to CAD",
 }
 
 const toolLabelsId: Record<string, string> = {
@@ -64,10 +65,11 @@ const toolLabelsId: Record<string, string> = {
   dxf_to_kml: "AutoCAD (DXF) ke KML",
   kml_extractor: "Ekstraktor KML",
   pole_sorter: "Pengurut Tiang Otomatis",
-  insert_coding: "Insert Coding KML",
-  kml_apd: "KML - APD",
+  insert_coding: "Auto Coding APD",
+  kml_apd: "KML ke APD",
   auto_placemark: "Auto Tagging HP",
-  basicmap: "BasicMap",
+  basicmap: "KML ke BasicMap",
+  kml_to_cad: "KML ke CAD",
 }
 
 // Category accent colors matching sidebar

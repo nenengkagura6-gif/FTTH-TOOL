@@ -216,5 +216,68 @@ from engines.kml2basicmap import Kml  # noqa: E402
 k = Kml(kml(folder("HP", pt("H1", 106.8, -6.2)), ns=False))
 check("BasicMap membaca KML tanpa xmlns", len(k.placemarks()) == 1)
 
+# =====================================================================
+print("\n=== 7. Auto Tagging HP: penamaan NN-01 ===")
+from engines.auto_placemark_engine import make_placemark_name  # noqa: E402
+
+check("nomor 1 -> NN-01", make_placemark_name(1) == "NN-01", make_placemark_name(1))
+check("nomor 123 -> NN-123", make_placemark_name(123) == "NN-123", make_placemark_name(123))
+
+# =====================================================================
+print("\n=== 8. KML-APD: ujung kabel & loopback wajib FAT ===")
+from engines.kml_apd_engine import mandatory_fat_points  # noqa: E402
+
+fdt = (106.8000, -6.2000)
+cable = [(106.8000, -6.2000), (106.8010, -6.2000), (106.8020, -6.2000)]
+branch = [(106.8010, -6.2000), (106.8010, -6.2010)]           # cabang dari tengah kabel
+loop = [(106.8030, -6.2), (106.8040, -6.2), (106.8050, -6.2), (106.8040, -6.20001), (106.80301, -6.20001)]
+pts = mandatory_fat_points([cable, branch], fdt)
+kinds = sorted((round(lo, 4), round(la, 4), k) for lo, la, k in pts)
+check("awal kabel di FDT tidak dipaksa jadi FAT", all((round(lo, 4), round(la, 4)) != (106.8, -6.2) for lo, la, _ in pts))
+check("ujung kabel utama & ujung cabang terdeteksi", (106.802, -6.2, "ujung") in kinds and (106.801, -6.201, "ujung") in kinds, str(kinds))
+check("pangkal cabang (menempel kabel) bukan ujung", (106.801, -6.2, "ujung") not in kinds)
+lp = mandatory_fat_points([loop], (106.8030, -6.2))
+check("titik balik kabel loopback terdeteksi", any(k == "loopback" and abs(lo - 106.805) < 1e-6 for lo, la, k in lp), str(lp))
+check("ujung loopback yang kembali ke kabelnya sendiri bukan ujung", not any(k == "ujung" for *_, k in lp), str(lp))
+
+# =====================================================================
+print("\n=== 9. KML to CAD ===")
+from engines.kml2cad_engine import process_kml2cad  # noqa: E402
+
+bpoly = ("<Placemark><name>A01</name><Polygon><outerBoundaryIs><LinearRing><coordinates>"
+         "108.5000,-6.7000,0 108.5010,-6.7000,0 108.5010,-6.7010,0 108.5000,-6.7010,0 108.5000,-6.7000,0"
+         "</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>")
+cad_kml = kml(
+    folder("FDT", pt("FDT 01", 108.5000, -6.7000)),
+    folder("LINE A FDT 01",
+           folder("BOUNDARY FAT", bpoly),
+           folder("FAT", pt("A01", 108.5005, -6.7005)),
+           folder("HP COVER", folder("A01", pt("1", 108.5006, -6.7006), pt("2", 108.5007, -6.7006))),
+           folder("NEW POLE 7-3", pt("MR.XXX.P001", 108.5005, -6.7005)),
+           folder("DISTRIBUTION CABLE", line("CABLE LINE A (FO 24C/2T) - 120 m", [(108.5, -6.7), (108.5005, -6.7005)])),
+           folder("SLING WIRE", line("60 m", [(108.5, -6.7), (108.5005, -6.7005)]))),
+)
+res = process_kml2cad(cad_kml, "CBN000001 - UJI CAD.kml", jenis="cluster", basicmap=False)
+check("cluster tanpa basic map sukses", res["status"] == "success", res.get("message", ""))
+if res["status"] == "success":
+    names = zipfile.ZipFile(io.BytesIO(res["content"])).namelist()
+    check("ZIP berisi DXF + laporan", any(n.endswith("_APD.dxf") for n in names) and any(n.endswith("_laporan.txt") for n in names), str(names))
+    st = res["report"]["stats"]
+    check("FAT, tiang, homepass terhitung", st.get("fat") == 1 and st.get("tiang") == 1 and st.get("homepass") == 2, str(st))
+
+feeder_kml = kml(folder("SF UJI",
+    folder("JOINT CLOSURE", pt("NEW JC 48C", 108.5, -6.7)),
+    folder("NEW POLE 7-4", pt("P1", 108.5005, -6.7), pt("P2", 108.5010, -6.7)),
+    folder("CABLE", line("CABLE SUBFEEDER (FO 96C/8T) - 150 m", [(108.5, -6.7), (108.501, -6.7)]))))
+res = process_kml2cad(feeder_kml, "SF UJI.kml", jenis="feeder", basicmap=False, homepass=180, hub="GEBANG")
+check("feeder tanpa jalan sukses", res["status"] == "success", res.get("message", ""))
+if res["status"] == "success":
+    st = res["report"]["stats"]
+    check("kabel 96C feeder tetap tergambar (tidak dilewati)", st.get("kabel") == 1 and st.get("tiang") == 2, str(st))
+res = process_kml2cad(kml(folder("CLUSTER", bpoly)), "rencana.kml", jenis="feeder", basicmap=False)
+check("file feeder tanpa elemen dikenali -> error jelas", res["status"] == "error" and "feeder" in res["message"].lower())
+res = process_kml2cad(cad_kml, "x.kml", jenis="salah", basicmap=False)
+check("jenis tidak dikenal ditolak", res["status"] == "error")
+
 print("\nHASIL:", "SEMUA LULUS" if failures == 0 else f"{failures} KEGAGALAN")
 sys.exit(1 if failures else 0)

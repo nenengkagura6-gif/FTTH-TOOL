@@ -169,6 +169,7 @@ TOOL_MIN_PLAN = {
     "kml_apd": "pro",
     "auto_placemark": "pro",
     "basicmap": "pro",
+    "kml_to_cad": "pro",
 }
 
 
@@ -460,7 +461,7 @@ class JobRequest(BaseModel):
 SUPPORTED_TOOLS = (
     "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
     "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor",
-    "pole_sorter", "insert_coding", "kml_apd", "auto_placemark", "basicmap"
+    "pole_sorter", "insert_coding", "kml_apd", "auto_placemark", "basicmap", "kml_to_cad"
 )
 
 # Batas job yang diproses bersamaan. Job berjalan di threadpool proses yang
@@ -772,6 +773,30 @@ def _run_job(
                 # Unggahan opsional BasicMap adalah CSV nama jalan hasil run
                 # sebelumnya (kolom 'nama_dipakai' diisi tangan).
                 roads_csv=template_bytes,
+            )
+        elif tool_name == "kml_to_cad":
+            def _cad_progress(msg: str):
+                update_job_status(job_id, "processing", {
+                    "progress_percent": 45,
+                    "progress_message": msg
+                })
+            from supabase_client import get_job_config
+            cad_config = get_job_config(job_id)
+            try:
+                homepass = int(cad_config.get("homepass")) if str(cad_config.get("homepass") or "").strip() else None
+            except (TypeError, ValueError):
+                homepass = None
+            from engines.kml2cad_engine import process_kml2cad
+            result = process_kml2cad(
+                kml_content=file_bytes,
+                filename=original_filename,
+                jenis=cad_config.get("jenis", "cluster"),
+                basicmap=cad_config.get("basicmap", True),
+                homepass=homepass,
+                hub=(cad_config.get("hub") or "").strip() or None,
+                # Unggahan opsional: CSV nama jalan dari proses sebelumnya.
+                roads_csv=template_bytes,
+                progress_cb=_cad_progress,
             )
         else:
             raise Exception(f"Unsupported tool: {tool_name}")

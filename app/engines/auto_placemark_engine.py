@@ -43,8 +43,10 @@ from shapely.ops import unary_union, nearest_points
 # ==========================================================
 # SETTINGS
 # ==========================================================
-PLACEMARK_PREFIX = "HP"
-DIGIT_NUMBER = 3
+# Penamaan hasil: NN-01, NN-02, ... Lebar minimal 2 digit; di atas 99 nomor
+# tetap bertambah apa adanya (NN-100, NN-101, ...).
+PLACEMARK_PREFIX = "NN"
+DIGIT_NUMBER = 2
 CENTER_METHOD = "representative"
 
 OVERPASS_TIMEOUT_SECONDS = 180

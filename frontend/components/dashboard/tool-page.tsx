@@ -54,7 +54,14 @@ interface ToolPageProps {
     label: string
     buttonLabel: string
     accept: string
+    /** Tampilkan hanya kalau sebuah opsi bernilai tertentu. */
+    showWhen?: { key: string; value: string }
   }
+  /**
+   * Pilihan pengguna sebelum memproses (mis. jenis desain). Nilainya
+   * dikirim ke backend lewat kolom `config` pada baris job.
+   */
+  options?: ToolOption[]
   /** Feature key for plan gating */
   featureKey?: FeatureKey
   /** Explicit tool name to process */
@@ -96,6 +103,19 @@ interface UploadFile {
   progress: number
 }
 
+export interface ToolOption {
+  key: string
+  label: string
+  type: "choice" | "text" | "number"
+  /** Untuk type "choice": ditampilkan sebagai tombol pilihan. */
+  choices?: { value: string; label: string; hint?: string }[]
+  defaultValue?: string
+  placeholder?: string
+  hint?: string
+  /** Tampilkan hanya kalau opsi lain bernilai tertentu. */
+  showWhen?: { key: string; value: string }
+}
+
 /** Laporan engine yang disimpan backend di processing_jobs.result_report. */
 interface JobReport {
   warnings?: string[]
@@ -122,6 +142,7 @@ export function ToolPage({
   primaryAccept = ".kml,.kmz",
   supportsExcelTemplate = true,
   secondaryUpload,
+  options,
   featureKey,
   toolName,
   guide,
@@ -146,14 +167,26 @@ export function ToolPage({
   })
   const [activeTab, setActiveTab] = useState<"tool" | "tutorial">("tool")
   const [jobReport, setJobReport] = useState<JobReport | null>(null)
+  const [optionValues, setOptionValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (options ?? []).map((o) => [o.key, o.defaultValue ?? o.choices?.[0]?.value ?? ""]),
+    ),
+  )
+  const isShown = (cond?: { key: string; value: string }) =>
+    !cond || optionValues[cond.key] === cond.value
+  const visibleOptions = (options ?? []).filter((o) => isShown(o.showWhen))
 
   // Slot unggahan opsional: CSV/berkas lain kalau secondaryUpload diisi,
   // selain itu template Excel. Hanya .xlsx — openpyxl tidak bisa membaca
   // .xls, dan dulu pilihan .xls baru gagal setelah diunggah dan diproses.
-  const optionalUpload = secondaryUpload
+  const optionalUploadConfig = secondaryUpload
     ?? (supportsExcelTemplate
       ? { label: "Optional Excel template", buttonLabel: "Add Excel template (.xlsx)", accept: ".xlsx" }
       : null)
+  const optionalUpload =
+    optionalUploadConfig && isShown((optionalUploadConfig as { showWhen?: { key: string; value: string } }).showWhen)
+      ? optionalUploadConfig
+      : null
   const formatsLabel = describeFormats(acceptedFormats) || "KML/KMZ"
 
   const primaryInputRef = useRef<HTMLInputElement>(null)
@@ -364,11 +397,14 @@ export function ToolPage({
             : `File size ${formatMb(primary.file.size)} exceeds the ${formatMb(MAX_UPLOAD_BYTES)} limit.`
         )
       }
-      if (template && template.file.size > MAX_UPLOAD_BYTES) {
+      // Unggahan opsional yang sedang tersembunyi (showWhen tidak terpenuhi)
+      // tidak ikut dikirim.
+      const activeTemplate = optionalUpload ? template : null
+      if (activeTemplate && activeTemplate.file.size > MAX_UPLOAD_BYTES) {
         throw new Error(
           locale === "id"
-            ? `Ukuran template ${formatMb(template.file.size)} melebihi batas ${formatMb(MAX_UPLOAD_BYTES)}.`
-            : `Template size ${formatMb(template.file.size)} exceeds the ${formatMb(MAX_UPLOAD_BYTES)} limit.`
+            ? `Ukuran template ${formatMb(activeTemplate.file.size)} melebihi batas ${formatMb(MAX_UPLOAD_BYTES)}.`
+            : `Template size ${formatMb(activeTemplate.file.size)} exceeds the ${formatMb(MAX_UPLOAD_BYTES)} limit.`
         )
       }
 
@@ -404,13 +440,13 @@ export function ToolPage({
       if (uploadError) throw uploadError
 
       let templatePath: string | undefined = undefined;
-      if (template) {
-        const tplExt = template.file.name.split('.').pop()
+      if (activeTemplate) {
+        const tplExt = activeTemplate.file.name.split('.').pop()
         const tplName = `${crypto.randomUUID()}.${tplExt}`
         templatePath = `${userData.user.id}/${tplName}`
         const { error: tplUploadError } = await supabase.storage
           .from('uploads')
-          .upload(templatePath, template.file, {
+          .upload(templatePath, activeTemplate.file, {
             cacheControl: '3600',
             upsert: false
           })
@@ -431,7 +467,16 @@ export function ToolPage({
         original_filename: primary.file.name,
         original_file_url: filePath,
         original_file_size_bytes: primary.file.size,
-        status: 'queued'
+        status: 'queued',
+        // Pilihan pengguna (hanya yang sedang tampil) dibaca backend
+        // lewat get_job_config().
+        ...(visibleOptions.length > 0
+          ? {
+              config: Object.fromEntries(
+                visibleOptions.map((o) => [o.key, (optionValues[o.key] ?? "").trim()]),
+              ),
+            }
+          : {}),
       })
 
       if (insertError) {
@@ -1120,6 +1165,77 @@ export function ToolPage({
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  {/* Pilihan pengguna */}
+                  {visibleOptions.length > 0 && (
+                    <div className="space-y-3">
+                      {visibleOptions.map((opt) => (
+                        <div key={opt.key}>
+                          <label
+                            htmlFor={`opt-${opt.key}`}
+                            className="text-xs font-medium text-muted-foreground"
+                          >
+                            {opt.label}
+                          </label>
+                          {opt.type === "choice" ? (
+                            <div
+                              id={`opt-${opt.key}`}
+                              role="radiogroup"
+                              aria-label={opt.label}
+                              className={cn(
+                                "mt-1.5 grid gap-2",
+                                (opt.choices?.length ?? 0) >= 3 ? "sm:grid-cols-3" : "sm:grid-cols-2",
+                              )}
+                            >
+                              {opt.choices?.map((c) => {
+                                const selected = optionValues[opt.key] === c.value
+                                return (
+                                  <button
+                                    key={c.value}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={selected}
+                                    onClick={() =>
+                                      setOptionValues((prev) => ({ ...prev, [opt.key]: c.value }))
+                                    }
+                                    className={cn(
+                                      "rounded-lg border px-3 py-2 text-left transition-colors",
+                                      selected
+                                        ? "border-primary bg-primary/10 text-foreground"
+                                        : "border-border bg-surface-1 text-muted-foreground hover:border-border-strong hover:text-foreground",
+                                    )}
+                                  >
+                                    <span className="block text-sm font-medium">{c.label}</span>
+                                    {c.hint && (
+                                      <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">
+                                        {c.hint}
+                                      </span>
+                                    )}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <input
+                              id={`opt-${opt.key}`}
+                              type={opt.type === "number" ? "number" : "text"}
+                              inputMode={opt.type === "number" ? "numeric" : undefined}
+                              min={opt.type === "number" ? 0 : undefined}
+                              placeholder={opt.placeholder}
+                              value={optionValues[opt.key] ?? ""}
+                              onChange={(e) =>
+                                setOptionValues((prev) => ({ ...prev, [opt.key]: e.target.value }))
+                              }
+                              className="mt-1.5 w-full rounded-lg border border-border bg-surface-1 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors"
+                            />
+                          )}
+                          {opt.hint && (
+                            <p className="mt-1 text-2xs text-muted-foreground">{opt.hint}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Optional Excel template / secondary upload */}
                   {optionalUpload && (

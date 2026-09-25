@@ -270,7 +270,7 @@ export default function InsertCodingPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4 p-8 text-center border border-border rounded-2xl bg-card/40 backdrop-blur-sm max-w-2xl mx-auto mt-12">
         <Layers className="h-12 w-12 text-warning animate-pulse" />
-        <h2 className="text-xl font-semibold text-foreground">KML/KMZ Insert Coding memerlukan plan Pro</h2>
+        <h2 className="text-xl font-semibold text-foreground">Auto Coding APD memerlukan plan Pro</h2>
         <p className="text-sm text-muted-foreground max-w-md">
           Silakan upgrade akun Anda ke Pro untuk menggunakan fitur penulisan ulang kode FDT, FAT, Kabel, dan New Pole ini.
         </p>
@@ -290,7 +290,7 @@ export default function InsertCodingPage() {
       <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-balance">
-            KML/KMZ Insert Coding
+            Auto Coding APD
           </h1>
           <p className="mt-3 text-sm text-muted-foreground leading-relaxed text-pretty">
             Sisipkan dan perbarui kode penomoran FDT, FAT, Kabel/Distribusi, serta New Pole secara otomatis sesuai dengan pembagian FDT di file Anda.

@@ -1,7 +1,7 @@
 import { ToolPage } from "@/components/dashboard/tool-page"
 
 export const metadata = {
-  title: "KML - APD | FTTH Tool",
+  title: "KML To APD | FTTH Tool",
   description:
     "Auto-draft KML/KMZ untuk FTTH: generate FAT, deskripsi kabel, sling wire, HP coverage, penomoran pole, dan style Google Earth secara otomatis.",
 }
@@ -9,7 +9,7 @@ export const metadata = {
 export default function KmlApdPage() {
   return (
     <ToolPage
-      title="KML - APD"
+      title="KML To APD"
       description="Upload file KML/KMZ plan FTTH Anda dan biarkan tool ini menghasilkan desain APD secara otomatis. Tool ini menyusun boundary, menempatkan FAT, menghitung kebutuhan kabel beserta toleransinya, membuat sling wire, memetakan jaringan HP, menomori tiang, serta menginjeksi style Google Earth untuk visualisasi yang rapi dan standar."
       acceptedFormats={[".kml", ".kmz"]}
       guide={{

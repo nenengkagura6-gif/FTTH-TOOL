@@ -618,6 +618,98 @@ def _is_cable_folder(name: str) -> bool:
     return ("DISTRIBUTION" in u or "CABLE" in u or "KABEL" in u) and "SLING" not in u
 
 
+# Aturan desain: setiap UJUNG kabel distribusi dan setiap titik balik kabel
+# LOOPBACK pasti FAT. Dulu FAT dipilih murni dari tiang terdekat ke titik
+# tengah boundary, sehingga ujung kabel sering berakhir di tiang biasa.
+CABLE_JOIN_TOL_M = 2.0       # ujung yang sedekat ini ke kabel lain = sambungan
+SELF_RETURN_SKIP_M = 10.0    # abaikan bagian kabel sepanjang ini dari ujungnya
+LOOPBACK_TURN_DEG = 150.0    # belokan sebesar ini = kabel berbalik arah
+FORCED_BOUNDARY_TOL_M = 15.0 # tiang ujung kabel boleh sejauh ini di luar boundary
+
+
+def _dist_to_polygon_m(lon, lat, poly) -> float:
+    """Jarak (meter) titik ke poligon lon/lat; 0 kalau di dalamnya."""
+    pt = Point(lon, lat)
+    if poly.contains(pt):
+        return 0.0
+    q = poly.exterior.interpolate(poly.exterior.project(pt))
+    return haversine(lat, lon, q.y, q.x)
+
+
+def _cumulative_m(coords):
+    acc, out = 0.0, [0.0]
+    for a, b in zip(coords, coords[1:]):
+        acc += line_length_m([a, b])
+        out.append(acc)
+    return out
+
+
+def _end_returns_to_own_line(coords, at_start: bool) -> bool:
+    """Ujung kabel yang kembali menempel ke kabelnya sendiri (kabel loopback)."""
+    cum = _cumulative_m(coords)
+    total = cum[-1]
+    if total <= SELF_RETURN_SKIP_M * 2:
+        return False
+    if at_start:
+        pt = coords[0]
+        rest = [p for p, c in zip(coords, cum) if c >= SELF_RETURN_SKIP_M]
+    else:
+        pt = coords[-1]
+        rest = [p for p, c in zip(coords, cum) if c <= total - SELF_RETURN_SKIP_M]
+    if len(rest) < 2:
+        return False
+    return point_linestring_distance_m(pt, rest) <= CABLE_JOIN_TOL_M
+
+
+def mandatory_fat_points(dist_lines, fdt_lonlat=None):
+    """Titik yang WAJIB jadi FAT: ujung kabel dan titik balik kabel loopback.
+
+    * Ujung kabel = ujung LineString yang tidak menyambung ke kabel lain dan
+      tidak kembali ke kabelnya sendiri. Ujung yang paling dekat FDT adalah
+      awal kabel, bukan ujung, jadi dikecualikan. Tanpa titik FDT awal kabel
+      tidak bisa dibedakan dari ujungnya, jadi ujung kabel tidak dipaksakan.
+    * Titik balik loopback = vertex tempat kabel berbalik arah (belokan
+      >= LOOPBACK_TURN_DEG), yaitu ujung sebenarnya dari kabel yang
+      pergi lalu kembali lewat jalur yang sama.
+
+    Mengembalikan list (lon, lat, jenis) dengan jenis 'ujung' atau 'loopback'.
+    """
+    out = []
+    ends = []
+    for i, line in enumerate(dist_lines):
+        if len(line) < 2:
+            continue
+        for at_start, pt in ((True, line[0]), (False, line[-1])):
+            joined = any(
+                point_linestring_distance_m(pt, other) <= CABLE_JOIN_TOL_M
+                for j, other in enumerate(dist_lines) if j != i and len(other) >= 2
+            )
+            if joined or _end_returns_to_own_line(line, at_start):
+                continue
+            ends.append(pt)
+
+    if fdt_lonlat is not None and ends:
+        start = min(ends, key=lambda p: haversine(p[1], p[0], fdt_lonlat[1], fdt_lonlat[0]))
+        ends.remove(start)
+        out.extend((lon, lat, "ujung") for lon, lat in ends)
+
+    for line in dist_lines:
+        if len(line) < 3:
+            continue
+        lat0 = sum(lat for _, lat in line) / len(line)
+        xy = [lonlat_to_xy(lon, lat, lat0) for lon, lat in line]
+        for k in range(1, len(line) - 1):
+            ax, ay = xy[k][0] - xy[k - 1][0], xy[k][1] - xy[k - 1][1]
+            bx, by = xy[k + 1][0] - xy[k][0], xy[k + 1][1] - xy[k][1]
+            la, lb = math.hypot(ax, ay), math.hypot(bx, by)
+            if la == 0 or lb == 0:
+                continue
+            cos_t = max(-1.0, min(1.0, (ax * bx + ay * by) / (la * lb)))
+            if math.degrees(math.acos(cos_t)) >= LOOPBACK_TURN_DEG:
+                out.append((line[k][0], line[k][1], "loopback"))
+    return out
+
+
 def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_count,
                                      doc, line_folders, fdt_lat, fdt_lon,
                                      tol_m_pole_line=5.0, report=None):
@@ -654,12 +746,52 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
                 poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": poly_name, "is_exist": is_exist})
                 break
 
+    # Tiang yang WAJIB jadi FAT: tiang di ujung kabel / titik balik loopback.
+    fdt_lonlat = (fdt_lon, fdt_lat) if fdt_lat is not None else None
+    forced = {}              # id(pole dict) -> jenis
+    forced_no_pole = []
+    forced_outside = []
+    by_pm = {id(p["pm"]): p for p in poles}
+    for lon, lat, kind in mandatory_fat_points(dist_lines, fdt_lonlat):
+        nearest, nd = None, float("inf")
+        for gp in global_poles:
+            d = haversine(lat, lon, gp[3], gp[2])
+            if d < nd:
+                nearest, nd = gp, d
+        if nearest is None or nd > tol_m_pole_line:
+            forced_no_pole.append(f"{kind} {lat:.6f},{lon:.6f}")
+            continue
+        pole = by_pm.get(id(nearest[0]))
+        if pole is None:
+            # Tiang ujung kabel biasanya berdiri di jalan, sedikit di luar
+            # boundary yang digambar mengelilingi rumah. Tempelkan ke
+            # boundary terdekat di line ini kalau jaraknya masih wajar.
+            plon, plat = nearest[2], nearest[3]
+            near_poly, near_d = None, float("inf")
+            for poly_name, poly, _, _ in polygons:
+                d = _dist_to_polygon_m(plon, plat, poly)
+                if d < near_d:
+                    near_poly, near_d = poly_name, d
+            if near_poly is None or near_d > FORCED_BOUNDARY_TOL_M:
+                forced_outside.append(f"{kind} {lat:.6f},{lon:.6f}")
+                continue
+            pole = {"pm": nearest[0], "lon": plon, "lat": plat,
+                    "poly": near_poly, "is_exist": nearest[4]}
+            poles.append(pole)
+            by_pm[id(nearest[0])] = pole
+        forced[id(pole)] = kind
+    if report is not None and fdt_lonlat is None and dist_lines:
+        report.warn(f"{line_name}: titik FDT tidak diketahui — ujung kabel tidak bisa "
+                    "dibedakan dari awal kabel, jadi FAT di ujung kabel tidak dipaksakan")
+
     fat_folder = find_or_create_folder(line_folder, "FAT")
     for pm in list(fat_folder.findall("Placemark")):
         fat_folder.remove(pm)
     fat_count = 0
     fat_points = []
     no_fat = []
+    forced_used = 0
+    double_forced = []
     for poly_name, poly, poly_pm, letter in polygons:
         candidates = []
         for p in poles:
@@ -669,6 +801,14 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
                 if point_linestring_distance_m((p["lon"], p["lat"]), dline) <= tol_m_pole_line:
                     candidates.append(p)
                     break
+        in_poly_forced = [p for p in poles if p["poly"] == poly_name and id(p) in forced]
+        if in_poly_forced:
+            # Tiang ujung kabel / loopback di boundary ini mengalahkan
+            # tiang yang sekadar paling dekat ke titik tengahnya.
+            candidates = in_poly_forced
+            forced_used += 1
+            if len(in_poly_forced) > 1:
+                double_forced.append(poly_name)
         if not candidates:
             no_fat.append(poly_name)
             continue
@@ -694,9 +834,21 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
             fat_count += 1
             fat_points.append((best["lon"], best["lat"]))
 
-    if report is not None and no_fat:
-        report.warn(f"{line_name}: boundary tanpa FAT karena tidak ada tiang dalam "
-                    f"{tol_m_pole_line:.0f} m dari kabel distribusi", no_fat)
+    if report is not None:
+        if no_fat:
+            report.warn(f"{line_name}: boundary tanpa FAT karena tidak ada tiang dalam "
+                        f"{tol_m_pole_line:.0f} m dari kabel distribusi", no_fat)
+        if double_forced:
+            report.warn(f"{line_name}: boundary dengan lebih dari satu ujung kabel/loopback — "
+                        "hanya satu yang jadi FAT, periksa pembagian boundary", double_forced)
+        if forced_outside:
+            report.warn(f"{line_name}: tiang ujung kabel/loopback lebih dari "
+                        f"{FORCED_BOUNDARY_TOL_M:.0f} m dari boundary mana pun di line ini, "
+                        "FAT-nya tidak bisa dibuat", forced_outside)
+        if forced_no_pole:
+            report.warn(f"{line_name}: ujung kabel/loopback tanpa tiang dalam "
+                        f"{tol_m_pole_line:.0f} m", forced_no_pole)
+        report.stats["fat_di_ujung_kabel"] = report.stats.get("fat_di_ujung_kabel", 0) + forced_used
 
     # CABLE processing
     n_poly = len(polygons)

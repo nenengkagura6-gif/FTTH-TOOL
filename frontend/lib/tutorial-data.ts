@@ -85,8 +85,8 @@ export const TUTORIAL_DATA: TutorialEntry[] = [
   },
   {
     toolSlug: "insert-coding",
-    toolTitle: "Insert Coding KML",
-    toolTitleId: "Insert Coding KML",
+    toolTitle: "Auto Coding APD",
+    toolTitleId: "Auto Coding APD",
     category: "survey",
     youtubeId: "",  // TODO: isi dengan ID video YouTube Anda
     steps: [
@@ -97,8 +97,8 @@ export const TUTORIAL_DATA: TutorialEntry[] = [
   },
   {
     toolSlug: "kml-apd",
-    toolTitle: "KML - APD",
-    toolTitleId: "KML - APD",
+    toolTitle: "KML To APD",
+    toolTitleId: "KML ke APD",
     category: "survey",
     youtubeId: "41SwZBErwcQ",
     steps: [
@@ -122,8 +122,8 @@ export const TUTORIAL_DATA: TutorialEntry[] = [
   },
   {
     toolSlug: "basicmap",
-    toolTitle: "BasicMap",
-    toolTitleId: "BasicMap",
+    toolTitle: "KML To BasicMap",
+    toolTitleId: "KML ke BasicMap",
     category: "survey",
     youtubeId: "",  // TODO: isi dengan ID video YouTube Anda
     steps: [

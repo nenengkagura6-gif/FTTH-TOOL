@@ -27,6 +27,7 @@ import {
   GitFork,
   Navigation,
   BookOpen,
+  PencilRuler,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/features"
@@ -169,11 +170,29 @@ export const systemMenuItems: DashboardMenuItem[] = [
 // Tool items (grouped by category)
 export const toolMenuItems: DashboardMenuItem[] = [
   // ── Survey & Design (Drafter) ──
+  // Urutan mengikuti alur kerja drafter: tagging rumah -> basic map ->
+  // desain APD -> database HP & BOQ -> gambar CAD -> coding -> rapikan tiang.
   {
-    title: "KML to BOQ",
-    href: "/dashboard/kml-boq",
+    title: "Auto Tagging HP",
+    href: "/dashboard/auto-placemark",
+    icon: MapPin,
+    description: "Generate house placemarks from boundary using OSM building & road data",
+    featureKey: "kml_to_boq",
+    category: "survey",
+  },
+  {
+    title: "KML To BasicMap",
+    href: "/dashboard/basicmap",
+    icon: Home,
+    description: "Turn survey KML into an AutoCAD basic map: house blocks, road edges, numbering & title block",
+    featureKey: "kml_to_boq",
+    category: "survey",
+  },
+  {
+    title: "KML To APD",
+    href: "/dashboard/kml-apd",
     icon: Map,
-    description: "Convert KML files to Bill of Quantities",
+    description: "Auto-draft KML: generate FAT, cable, sling wire, HP coverage, pole numbering & styles",
     featureKey: "kml_to_boq",
     category: "survey",
   },
@@ -186,11 +205,27 @@ export const toolMenuItems: DashboardMenuItem[] = [
     category: "survey",
   },
   {
-    title: "KML Extractor",
-    href: "/dashboard/kml-extractor",
-    icon: FolderSearch,
-    description: "Extract elements and summarize counts by folder to Excel",
-    featureKey: "kml_extractor",
+    title: "KML to BOQ",
+    href: "/dashboard/kml-boq",
+    icon: Map,
+    description: "Convert KML files to Bill of Quantities",
+    featureKey: "kml_to_boq",
+    category: "survey",
+  },
+  {
+    title: "KML to CAD",
+    href: "/dashboard/kml-cad",
+    icon: PencilRuler,
+    description: "Gambar desain APD cluster atau feeder (SF/HF/MF) ke DXF AutoCAD dengan kop & DESIGN SUMMARY, opsional plus basic map",
+    featureKey: "kml_to_boq",
+    category: "survey",
+  },
+  {
+    title: "Auto Coding APD",
+    href: "/dashboard/insert-coding",
+    icon: Layers,
+    description: "Rename FDT, FAT, Kabel, dan New Pole dalam KML/KMZ secara otomatis",
+    featureKey: "kml_to_boq",
     category: "survey",
   },
   {
@@ -202,35 +237,11 @@ export const toolMenuItems: DashboardMenuItem[] = [
     category: "survey",
   },
   {
-    title: "Insert Coding KML",
-    href: "/dashboard/insert-coding",
-    icon: Layers,
-    description: "Rename FDT, FAT, Kabel, dan New Pole dalam KML/KMZ secara otomatis",
-    featureKey: "kml_to_boq",
-    category: "survey",
-  },
-  {
-    title: "KML - APD",
-    href: "/dashboard/kml-apd",
-    icon: Map,
-    description: "Auto-draft KML: generate FAT, cable, sling wire, HP coverage, pole numbering & styles",
-    featureKey: "kml_to_boq",
-    category: "survey",
-  },
-  {
-    title: "Auto Tagging HP",
-    href: "/dashboard/auto-placemark",
-    icon: MapPin,
-    description: "Generate house placemarks from boundary using OSM building & road data",
-    featureKey: "kml_to_boq",
-    category: "survey",
-  },
-  {
-    title: "BasicMap",
-    href: "/dashboard/basicmap",
-    icon: Home,
-    description: "Turn survey KML into an AutoCAD basic map: house blocks, road edges, numbering & title block",
-    featureKey: "kml_to_boq",
+    title: "KML Extractor",
+    href: "/dashboard/kml-extractor",
+    icon: FolderSearch,
+    description: "Extract elements and summarize counts by folder to Excel",
+    featureKey: "kml_extractor",
     category: "survey",
   },
 

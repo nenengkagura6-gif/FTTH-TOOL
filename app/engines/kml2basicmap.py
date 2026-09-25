@@ -1461,17 +1461,16 @@ def road_edges(roads, log):
     return edges, merged
 
 
-def draw(doc, rows, roads, poles, opts, log):
-    msp = doc.modelspace()
-    for lay in (LAYER_HOUSE, LAYER_NUMBER, LAYER_ROADNAME):
-        if lay not in doc.layers:
-            doc.layers.add(lay)
+def draw_roads(msp, roads, layer, text_layer, text_height, log):
+    """Gambar tepi jalan dan nama jalannya. Kembalikan (jumlah garis, jumlah nama).
 
-    # --- jalan ------------------------------------------------------------
+    Dipisah karena dipakai bersama: basic map memakainya untuk alas gambar,
+    dan kml2sf.py (gambar sub feeder, tool KML to CAD) memakainya untuk jalan
+    yang dilalui kabel. Aturan tepi jalan dan penamaannya jadi cuma ada di
+    satu tempat."""
     edges, _ = road_edges(roads, log)
     for coords in edges:
-        msp.add_lwpolyline(coords, close=True,
-                           dxfattribs={"layer": LAYER_HOUSE})
+        msp.add_lwpolyline(coords, close=True, dxfattribs={"layer": layer})
 
     placed, n_name = [], 0
     for r in sorted(roads, key=lambda r: -r["line"].length):
@@ -1484,12 +1483,24 @@ def draw(doc, rows, roads, poles, opts, log):
             continue
         tx, ty = tangent_at(line, line.length / 2)
         msp.add_mtext(r["name"], dxfattribs={
-            "layer": LAYER_ROADNAME, "style": TEXT_STYLE,
-            "char_height": opts["road_text"], "attachment_point": 5,
+            "layer": text_layer, "style": TEXT_STYLE,
+            "char_height": text_height, "attachment_point": 5,
             "rotation": readable(math.degrees(math.atan2(ty, tx))),
             "insert": (mid.x, mid.y)})
         placed.append((r["name"], (mid.x, mid.y)))
         n_name += 1
+    return len(edges), n_name
+
+
+def draw(doc, rows, roads, poles, opts, log):
+    msp = doc.modelspace()
+    for lay in (LAYER_HOUSE, LAYER_NUMBER, LAYER_ROADNAME):
+        if lay not in doc.layers:
+            doc.layers.add(lay)
+
+    # --- jalan ------------------------------------------------------------
+    n_edges, n_name = draw_roads(msp, roads, LAYER_HOUSE, LAYER_ROADNAME,
+                                 opts["road_text"], log)
 
     # --- kotak rumah + nomor di tengahnya --------------------------------
     n_rect = shrunk = 0
@@ -1527,11 +1538,11 @@ def draw(doc, rows, roads, poles, opts, log):
                                  dxfattribs={"layer": LAYER_POLE})
                 n_pole += 1
 
-    log(f"  digambar   : {n_rect} kotak rumah, {len(edges)} garis tepi jalan, "
+    log(f"  digambar   : {n_rect} kotak rumah, {n_edges} garis tepi jalan, "
         f"{n_name} nama jalan, {n_pole} tiang")
     if shrunk:
         log(f"  {shrunk} nomor rumah dikecilkan/diputar supaya muat di kotaknya")
-    return n_rect, len(edges), n_name, n_pole
+    return n_rect, n_edges, n_name, n_pole
 
 
 # --------------------------------------------------------------------------

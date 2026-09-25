@@ -375,74 +375,86 @@ export function DashboardSidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             </div>
           </nav>
 
-          {/* Footer */}
-          <div className="border-t border-border p-3">
-            <ul className="flex flex-col gap-1">
+          {/* Footer — sengaja ringkas (±95 px, dulu ±260 px) supaya
+              daftar tool di atasnya mendapat ruang sebanyak mungkin. */}
+          <div className="border-t border-border p-2">
+            <ul className={cn("gap-1", collapsed ? "flex flex-col" : "grid grid-cols-3")}>
               <li>
                 <Link
                   href={`/${locale}/docs`}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors"
+                  title={locale === "id" ? "Dokumentasi" : "Docs"}
+                  className="flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-2xs text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors"
                 >
                   <HelpCircle className="h-4 w-4 flex-shrink-0" />
-                  {!collapsed && <span>{locale === "id" ? "Dokumentasi" : "Docs"}</span>}
+                  {!collapsed && <span className="truncate max-w-full">{locale === "id" ? "Panduan" : "Docs"}</span>}
                 </Link>
               </li>
               <li>
                 <Link
                   href="/dashboard/settings"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors"
+                  title={locale === "id" ? "Pengaturan" : "Settings"}
+                  className="flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-2xs text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors"
                 >
                   <Settings className="h-4 w-4 flex-shrink-0" />
-                  {!collapsed && <span>{locale === "id" ? "Pengaturan" : "Settings"}</span>}
+                  {!collapsed && <span className="truncate max-w-full">{locale === "id" ? "Pengaturan" : "Settings"}</span>}
                 </Link>
               </li>
               <li>
                 <button
                   type="button"
                   onClick={signOut}
-                  className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-surface-2 hover:text-danger transition-colors"
+                  title={locale === "id" ? "Keluar" : "Sign out"}
+                  className="w-full flex flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 text-2xs text-muted-foreground hover:bg-surface-2 hover:text-danger transition-colors"
                 >
                   <LogOut className="h-4 w-4 flex-shrink-0" />
-                  {!collapsed && <span>{locale === "id" ? "Keluar" : "Sign out"}</span>}
+                  {!collapsed && <span className="truncate max-w-full">{locale === "id" ? "Keluar" : "Sign out"}</span>}
                 </button>
               </li>
             </ul>
 
-            {/* User info + plan badge */}
-            {!collapsed && user && (
-              <div className="mt-3 px-3 py-2 rounded-lg bg-surface-1 border border-border/60">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium truncate">{displayName}</p>
-                  <span className={cn(
-                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium border",
-                    planInfo.badge,
-                  )}>
-                    {plan !== 'free' && <Crown className="h-2.5 w-2.5" />}
-                    {planInfo.label}
-                  </span>
-                </div>
-                <p className="text-2xs text-muted-foreground truncate">{user.email}</p>
-                {profile && (
-                  <p className="text-3xs text-muted-foreground mt-1 font-mono">
-                    {profile.quota_used}/{profile.quota_limit} {locale === "id" ? "terpakai" : "used"}
+            {/* User info + plan badge + tombol ciutkan dalam satu baris */}
+            {!collapsed && user ? (
+              <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-surface-1 border border-border/60 px-2.5 py-1.5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-medium truncate">{displayName}</p>
+                    <span className={cn(
+                      "inline-flex flex-shrink-0 items-center gap-1 px-1.5 py-px rounded text-3xs font-medium border",
+                      planInfo.badge,
+                    )}>
+                      {plan !== 'free' && <Crown className="h-2.5 w-2.5" />}
+                      {planInfo.label}
+                    </span>
+                  </div>
+                  <p className="text-3xs text-muted-foreground truncate font-mono" title={user.email ?? undefined}>
+                    {profile ? `${profile.quota_used}/${profile.quota_limit} ${locale === "id" ? "terpakai" : "used"} · ` : ""}
+                    {user.email}
                   </p>
-                )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCollapsed(true)}
+                  className="hidden lg:flex flex-shrink-0 items-center justify-center h-6 w-6 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                  aria-label="Collapse sidebar"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
               </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCollapsed(!collapsed)}
+                className="hidden lg:flex mt-1.5 items-center justify-center w-full h-7 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                <ChevronLeft
+                  className={cn(
+                    "h-3.5 w-3.5 transition-transform",
+                    collapsed && "rotate-180",
+                  )}
+                />
+              </button>
             )}
-
-            <button
-              type="button"
-              onClick={() => setCollapsed(!collapsed)}
-              className="hidden lg:flex mt-3 items-center justify-center w-full h-8 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              <ChevronLeft
-                className={cn(
-                  "h-4 w-4 transition-transform",
-                  collapsed && "rotate-180",
-                )}
-              />
-            </button>
           </div>
         </div>
       </aside>

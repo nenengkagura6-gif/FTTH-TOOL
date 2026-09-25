@@ -1,7 +1,7 @@
 import { ToolPage } from "@/components/dashboard/tool-page"
 
 export const metadata = {
-  title: "BasicMap | FTTH Tool",
+  title: "KML To BasicMap | FTTH Tool",
   description:
     "Ubah KML/KMZ survei FTTH jadi basic map DXF AutoCAD: kotak rumah sejajar jalan, nomor rumah, tepi jalan dari OpenStreetMap, tiang, dan kop VALIDASI yang terisi otomatis.",
 }
@@ -9,7 +9,7 @@ export const metadata = {
 export default function BasicMapPage() {
   return (
     <ToolPage
-      title="BasicMap"
+      title="KML To BasicMap"
       description="Unggah KML/KMZ survei FTTH untuk menghasilkan basic map DXF AutoCAD. Setiap titik HP jadi kotak rumah yang menghadap jalan, sejajar dengan tetangganya, dan tidak saling tumpang tindih. Tepi jalan dan nama jalan diambil dari OpenStreetMap, tiang digambar dengan blok NP7, dan kop layout VALIDASI diisi otomatis."
       acceptedFormats={[".kml", ".kmz"]}
       primaryAccept=".kml,.kmz"
