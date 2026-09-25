@@ -232,6 +232,90 @@ def mark_jobs_expired(job_ids: list[str]) -> bool:
         print(f"Error marking jobs expired: {e}")
         return False
 
+def get_user_access(user_id: str) -> Dict[str, str]:
+    """Paket & peran user dari tabel profiles: {'plan': ..., 'role': ...}.
+
+    Dipakai backend untuk menegakkan batas paket. Dulu batas paket hanya
+    diperiksa di frontend, sehingga user gratis bisa memanggil API
+    langsung dengan tool_name tool berbayar.
+    """
+    supabase = get_supabase()
+    if not supabase:
+        return {"plan": "free", "role": "user"}
+    try:
+        res = supabase.table("profiles").select("plan, role").eq("id", user_id).limit(1).execute()
+        row = (res.data or [{}])[0]
+        return {"plan": row.get("plan") or "free", "role": row.get("role") or "user"}
+    except Exception as e:
+        # Kolom 'role' mungkin belum ada di skema lama — coba plan saja.
+        print(f"get_user_access fallback: {e}")
+        try:
+            res = supabase.table("profiles").select("plan").eq("id", user_id).limit(1).execute()
+            row = (res.data or [{}])[0]
+            return {"plan": row.get("plan") or "free", "role": "user"}
+        except Exception as e2:
+            print(f"Error fetching user plan: {e2}")
+            return {"plan": "free", "role": "user"}
+
+
+def save_job_report(job_id: str, report: Dict[str, Any]) -> bool:
+    """Simpan laporan hasil (peringatan + statistik) ke kolom result_report.
+
+    Ditulis dalam update TERPISAH dari penandaan 'completed': kalau migrasi
+    kolom result_report belum dijalankan, update ini gagal sendirian tanpa
+    ikut menggagalkan status job.
+    """
+    supabase = get_supabase()
+    if not supabase or not report:
+        return False
+    try:
+        supabase.table("processing_jobs").update({"result_report": report}).eq("id", job_id).execute()
+        return True
+    except Exception as e:
+        print(f"[job {job_id}] result_report tidak tersimpan (migrasi sudah dijalankan?): {e}")
+        return False
+
+
+def merge_job_config(job_id: str, extra: Dict[str, Any]) -> bool:
+    """Gabungkan kunci tambahan ke kolom config job (dipakai untuk pemulihan)."""
+    supabase = get_supabase()
+    if not supabase:
+        return False
+    try:
+        config = dict(get_job_config(job_id))
+        config.update(extra)
+        supabase.table("processing_jobs").update({"config": config}).eq("id", job_id).execute()
+        return True
+    except Exception as e:
+        print(f"Error merging job config: {e}")
+        return False
+
+
+def get_interrupted_jobs(max_age_minutes: int = 30) -> list:
+    """Job 'queued'/'processing' yang tertinggal saat proses server berhenti.
+
+    Antrian berjalan di dalam proses (BackgroundTasks), jadi restart atau
+    tidurnya Space membuang job yang sedang jalan. Job semacam ini dicari
+    ulang saat startup supaya tidak menggantung sampai reaper database.
+    """
+    supabase = get_supabase()
+    if not supabase:
+        return []
+    try:
+        from datetime import datetime, timedelta, timezone
+        since = (datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)).isoformat()
+        res = supabase.table("processing_jobs") \
+            .select("id, user_id, tool_name, original_filename, original_file_url, "
+                    "config, retry_count, max_retries") \
+            .in_("status", ["queued", "processing"]) \
+            .gt("created_at", since) \
+            .execute()
+        return [r for r in (res.data or []) if r.get("original_file_url")]
+    except Exception as e:
+        print(f"Error fetching interrupted jobs: {e}")
+        return []
+
+
 def get_job_config(job_id: str) -> dict:
     """Fetch the configuration JSON for a job from processing_jobs table."""
     supabase = get_supabase()

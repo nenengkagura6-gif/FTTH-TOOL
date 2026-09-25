@@ -2,20 +2,35 @@
 KML/KMZ Insert Coding Engine
 =============================
 Automatically renames FDT, FAT, CABLE, and NEW POLE elements and updates Boundary HP Cover counts.
-Supports up to 3 FDT configuration prefixes.
+Mendukung prefix untuk FDT berapa pun (FDT 01, 02, ..., n).
+
+Setiap Placemark diproses TEPAT SEKALI, oleh folder berperan terdekat di
+atasnya (FAT, CABLE, NEW POLE, FDT). Versi sebelumnya memakai
+getElementsByTagName yang menjangkau seluruh keturunan, sehingga kabel di
+dalam folder "FDT 01" diganti namanya dua kali ("PFX - PFX LINE A ...").
 """
 
 import io
 import re
 import zipfile
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from typing import Dict, List, Tuple, Optional, Any
+from xml.dom import minidom
 # defusedxml menolak deklarasi entitas XML, sehingga file KML kecil
 # berisi 'billion laughs' tidak bisa lagi menghabiskan RAM instance.
-# minidom & xml.etree bawaan Python rentan terhadap serangan ini.
-from xml.dom import minidom
 from defusedxml.minidom import parseString as safe_parse_string
-from utils.commons import load_kml_text
+from utils.commons import load_kml_text, read_kmz_attachments, fdt_number
+from utils.report import ProcessReport
+
+ROLE_SKIP = "skip"
+ROLE_FAT = "fat"
+ROLE_CABLE = "cable"
+ROLE_NEW_POLE = "new_pole"
+ROLE_FDT = "fdt"
+ROLE_NONE = "none"
+
+_HP_DESC_RE = re.compile(r"^\s*\d+\s*HP\b", re.IGNORECASE)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,73 +49,121 @@ def _name_of(elem) -> str:
             return "".join(text).strip()
     return ""
 
+
+def _set_child_text(elem, tag: str, text: str, doc: minidom.Document, first: bool) -> None:
+    nodes = [c for c in elem.childNodes if getattr(c, "tagName", None) == tag]
+    if nodes:
+        node = nodes[0]
+        while node.firstChild:
+            node.removeChild(node.firstChild)
+        node.appendChild(doc.createTextNode(text))
+        return
+    el = doc.createElement(tag)
+    el.appendChild(doc.createTextNode(text))
+    if first:
+        elem.insertBefore(el, elem.firstChild)
+    else:
+        elem.appendChild(el)
+
+
 def _set_placemark_name(pm, new_name: str, doc: minidom.Document):
     """Set (or create) the <name> element of a Placemark."""
-    name_nodes = [c for c in pm.childNodes if getattr(c, "tagName", None) == "name"]
-    if name_nodes:
-        node = name_nodes[0]
-        if node.firstChild:
-            if node.firstChild.nodeType == node.TEXT_NODE:
-                node.firstChild.nodeValue = new_name
-            else:
-                while node.firstChild:
-                    node.removeChild(node.firstChild)
-                node.appendChild(doc.createTextNode(new_name))
-        else:
-            node.appendChild(doc.createTextNode(new_name))
-    else:
-        name_el = doc.createElement("name")
-        name_el.appendChild(doc.createTextNode(new_name))
-        pm.insertBefore(name_el, pm.firstChild)
+    _set_child_text(pm, "name", new_name, doc, first=True)
 
-def _set_element_description(elem, desc_text: str, doc: minidom.Document):
-    """Set (or create) the <description> element of a Folder/Placemark."""
-    desc_nodes = [c for c in elem.childNodes if getattr(c, "tagName", None) == "description"]
-    if desc_nodes:
-        node = desc_nodes[0]
-        if node.firstChild:
-            if node.firstChild.nodeType == node.TEXT_NODE:
-                node.firstChild.nodeValue = desc_text
-            else:
-                while node.firstChild:
-                    node.removeChild(node.firstChild)
-                node.appendChild(doc.createTextNode(desc_text))
-        else:
-            node.appendChild(doc.createTextNode(desc_text))
+
+def _description_of(elem) -> str:
+    for c in elem.childNodes:
+        if getattr(c, "tagName", None) == "description":
+            return "".join(n.nodeValue for n in c.childNodes
+                           if n.nodeType in (n.TEXT_NODE, n.CDATA_SECTION_NODE))
+    return ""
+
+
+def _set_hp_count_description(elem, count: int, doc: minidom.Document):
+    """Tulis 'N HP' ke description tanpa membuang catatan lain di dalamnya."""
+    current = _description_of(elem)
+    line = f"{count} HP"
+    if not current.strip():
+        new = line
+    elif _HP_DESC_RE.match(current):
+        new = _HP_DESC_RE.sub(line, current, count=1)
     else:
-        desc_el = doc.createElement("description")
-        desc_el.appendChild(doc.createTextNode(desc_text))
-        elem.appendChild(desc_el)
+        new = f"{line}\n{current}"
+    _set_child_text(elem, "description", new, doc, first=False)
+
+
+def _folder_role(name: str) -> str:
+    u = (name or "").upper()
+    if "BOUNDARY CLUSTER" in u:
+        return ROLE_SKIP
+    if re.match(r"^\s*LINE\b", u) or "HP COVER" in u or "HP UNCOVER" in u:
+        return ROLE_NONE
+    if "BOUNDARY" in u:
+        # 'BOUNDARY FAT' tetap dikodekan seperti versi lama (poligonnya
+        # bernama kode FAT), tetapi dinomori terpisah dari titik FAT.
+        return ROLE_FAT if re.search(r"\bFAT\b", u) else ROLE_NONE
+    if re.search(r"\bFAT\b", u):
+        return ROLE_FAT
+    if "CABLE" in u or "DISTRIBUTION" in u or "KABEL" in u:
+        return ROLE_CABLE
+    if re.search(r"\bNEW\s*POLE\b", u):
+        return ROLE_NEW_POLE
+    if re.search(r"\bFDT\b", u):
+        return ROLE_FDT
+    return ""
+
+
+def _owner_folder(pm) -> Tuple[Optional[Any], str]:
+    """Folder berperan terdekat di atas placemark, beserta perannya."""
+    cur = pm.parentNode
+    while cur is not None and cur.nodeName != "Document":
+        if cur.nodeName == "Folder":
+            role = _folder_role(_name_of(cur))
+            if role:
+                return cur, role
+        cur = cur.parentNode
+    return None, ""
+
 
 def _get_fdt_number(node) -> int:
-    """Walk up parent nodes to find FDT number (e.g. FDT 01 -> 1, FDT 2 -> 2). Default is 1."""
+    """Walk up parent nodes to find FDT number (e.g. FDT 01 -> 1). Default is 1."""
     curr = node
-    while curr and curr.nodeName != "Document":
+    while curr is not None and curr.nodeName != "Document":
         if curr.nodeName == "Folder":
-            name = _name_of(curr).upper()
-            m = re.search(r"FDT\s*0*(\d+)", name)
-            if m:
-                return int(m.group(1))
+            num = fdt_number(_name_of(curr))
+            if num is not None:
+                return num
         curr = curr.parentNode
     return 1
 
-def _sort_placemarks(folder, pattern: str, prefix: str, root_letter: Optional[str], doc: minidom.Document):
-    """Sort and rename FAT placemarks inside a folder sequentially."""
-    placemarks = folder.getElementsByTagName("Placemark")
-    numbered = []
-    for pm in placemarks:
-        name = _name_of(pm)
-        match = re.search(pattern, name)
-        num = int(match.group(1)) if match else None
-        if num is not None:
-            numbered.append((num, pm))
-            
-    numbered.sort(key=lambda x: x[0])
-    
-    for idx, (_, pm) in enumerate(numbered, 1):
-        letter = root_letter if root_letter else "A"
-        new_name = f"{prefix}.{letter}{str(idx).zfill(2)}"
-        _set_placemark_name(pm, new_name, doc)
+
+def _line_letter(node) -> Optional[str]:
+    curr = node.parentNode if node is not None else None
+    while curr is not None and curr.nodeName != "Document":
+        if curr.nodeName == "Folder":
+            m = re.search(r"LINE\s*([A-Z])\b", _name_of(curr).upper())
+            if m:
+                return m.group(1)
+        curr = curr.parentNode
+    return None
+
+
+def _fat_number(name: str, prefix: str) -> Optional[int]:
+    """Nomor FAT dari nama lama maupun nama yang sudah pernah dikodekan.
+
+    'FAT A03' -> 3, 'a3' -> 3, 'JKT01.XYZ.A03' -> 3. Dulu pola '[A-Z](\\d+)'
+    peka huruf besar dan mengambil kecocokan pertama, sehingga nama hasil
+    coding (prefix berangka) terbaca dengan nomor yang salah saat diproses
+    ulang.
+    """
+    text = name.strip()
+    if prefix and text.upper().startswith(prefix.upper() + "."):
+        text = text[len(prefix) + 1:]
+    m = re.search(r"([A-Za-z])\s*0*(\d+)\s*$", text) or re.search(r"(\d+)\s*$", text)
+    if not m:
+        return None
+    return int(m.group(m.lastindex))
+
 
 # ---------------------------------------------------------------------------
 # Engine Class
@@ -112,228 +175,166 @@ class InsertCodingEngine:
         self.input_filename = ""
         self._is_kmz = False
         self._kmz_bytes: Optional[bytes] = None
+        self.report = ProcessReport()
+        self._missing_prefix = set()
 
     def load_kml(self, content: bytes, filename: str, is_kmz: bool = False) -> Dict[str, Any]:
         self.input_filename = filename
         self._is_kmz = is_kmz
+        self._kmz_bytes = content
 
-        if is_kmz:
-            self._kmz_bytes = content
-
-        # Pemuat bersama: membongkar KMZ (memilih doc.kml yang benar),
-        # membereskan encoding, entitas, dan prefix namespace yatim.
         raw = load_kml_text(content, is_kmz)
-
-        # Strip namespace prefixes for uniform DOM access
-        cleaned = re.sub(r"<(/?)[\w\-]+:", r"<\1", raw)
+        # Hanya prefix 'kml:' yang dibuang; gx:* dibiarkan utuh.
+        cleaned = re.sub(r"<(/?)kml:", r"<\1", raw)
         self.doc = safe_parse_string(cleaned.encode("utf-8"))
         return {"status": "success"}
+
+    def _prefix(self, prefixes: Dict[int, str], fdt_num: int) -> str:
+        if fdt_num in prefixes:
+            return prefixes[fdt_num]
+        self._missing_prefix.add(fdt_num)
+        return prefixes.get(1) or next(iter(prefixes.values()), "DEFAULT")
 
     def process(self, prefixes: Dict[int, str]) -> Dict[str, Any]:
         if not self.doc:
             return {"status": "error", "message": "KML belum di-load"}
 
+        prefixes = {int(k): v.strip() for k, v in (prefixes or {}).items() if v and v.strip()}
+        if not prefixes:
+            prefixes = {1: "DEFAULT"}
+
         doc = self.doc
         folders = doc.getElementsByTagName("Folder")
-        new_pole_folders = defaultdict(lambda: defaultdict(list))
-        line_folders = []
 
-        # Step 1: Collect LINE [A-Z] folders
-        for folder in folders:
-            try:
-                folder_name = _name_of(folder).upper()
-                if re.match(r"LINE\s+[A-Z]", folder_name):
-                    line_folders.append(folder)
-            except Exception:
+        # Step 1-2: BOUNDARY HP cover matching per LINE
+        boundaries_updated = 0
+        for line_folder in folders:
+            if not re.match(r"LINE\s*[A-Z]\b", _name_of(line_folder).upper()):
                 continue
-
-        # Step 2: Process BOUNDARY HP cover matching
-        for line_folder in line_folders:
-            try:
-                line_name = _name_of(line_folder).upper()
-            except Exception:
-                line_name = ""
-
-            match = re.search(r"LINE\s+([A-Z])", line_name)
-            line_letter = match.group(1) if match else None
-            if not line_letter:
-                continue
-
-            hp_cover_folder = None
-            boundary_folder = None
-            subfolders = line_folder.getElementsByTagName("Folder")
-            for sub in subfolders:
-                try:
-                    sub_name = _name_of(sub).upper()
-                except Exception:
-                    sub_name = ""
-                if "HP COVER" in sub_name:
+            hp_cover_folder = boundary_folder = None
+            for sub in line_folder.getElementsByTagName("Folder"):
+                sub_name = _name_of(sub).upper()
+                if "HP COVER" in sub_name and hp_cover_folder is None:
                     hp_cover_folder = sub
-                elif "BOUNDARY" in sub_name:
+                elif "BOUNDARY" in sub_name and "CLUSTER" not in sub_name and boundary_folder is None:
                     boundary_folder = sub
-
-            if boundary_folder and hp_cover_folder:
-                hp_subs = hp_cover_folder.getElementsByTagName("Folder")
-                boundary_subs = boundary_folder.getElementsByTagName("Folder")
-
-                for b_sub in boundary_subs:
-                    try:
-                        b_sub_name = _name_of(b_sub).upper()
-                    except Exception:
-                        b_sub_name = ""
-
-                    if "CLUSTER" in b_sub_name:
-                        continue
-
-                    matching_hp = None
-                    for h_sub in hp_subs:
-                        try:
-                            h_name = _name_of(h_sub).upper()
-                        except Exception:
-                            h_name = ""
-                        if b_sub_name == h_name:
-                            matching_hp = h_sub
-                            break
-
-                    total_hp = 0
-                    if matching_hp:
-                        total_hp = len(matching_hp.getElementsByTagName("Placemark"))
-
-                    if total_hp > 0:
-                        desc_text = f"{total_hp} HP"
-                    else:
-                        continue
-
-                    _set_element_description(b_sub, desc_text, doc)
-
-        # Step 3: Process FDT, FAT, CABLE, and NEW POLE
-        for folder in folders:
-            try:
-                folder_name = _name_of(folder)
-            except Exception:
-                folder_name = ""
-            
-            placemarks = folder.getElementsByTagName("Placemark")
-
-            if "BOUNDARY CLUSTER" in folder_name.upper():
+            if not (boundary_folder and hp_cover_folder):
                 continue
-
-            if "FDT" in folder_name.upper():
-                for pm in placemarks:
-                    try:
-                        orig_name = _name_of(pm)
-                        # Detect FDT number from placemark name itself
-                        m = re.search(r"FDT\s*0*(\d+)", orig_name, re.IGNORECASE)
-                        if m:
-                            fdt_num = int(m.group(1))
-                        else:
-                            fdt_num = _get_fdt_number(pm)
-                            
-                        prefix = prefixes.get(fdt_num) or prefixes.get(1) or "DEFAULT"
-                        
-                        # Replace FDT followed by a number, or just FDT, with uppercase prefix
-                        new_name = re.sub(r'FDT\s*0*' + str(fdt_num), prefix.upper(), orig_name, flags=re.IGNORECASE)
-                        new_name = re.sub(r'\bFDT\b|FDT', prefix.upper(), new_name, flags=re.IGNORECASE)
-                        _set_placemark_name(pm, new_name, doc)
-                    except Exception:
-                        continue
-
-            elif "FAT" in folder_name.upper():
-                parent = folder.parentNode
-                root_letter = None
-                while parent and parent.nodeName != "Document":
-                    if parent.nodeName == "Folder":
-                        try:
-                            parent_name = _name_of(parent).upper()
-                        except Exception:
-                            parent_name = ""
-                        match = re.search(r"LINE\s+([A-Z])", parent_name)
-                        if match:
-                            root_letter = match.group(1)
-                            break
-                    parent = parent.parentNode
-                
-                fdt_num = _get_fdt_number(folder)
-                prefix = prefixes.get(fdt_num) or prefixes.get(1) or "DEFAULT"
-                _sort_placemarks(folder, r"[A-Z](\d+)", prefix=prefix, root_letter=root_letter, doc=doc)
-
-            elif "CABLE" in folder_name.upper() or "DISTRIBUTION" in folder_name.upper():
-                for pm in placemarks:
-                    try:
-                        fdt_num = _get_fdt_number(pm)
-                        prefix = prefixes.get(fdt_num) or prefixes.get(1) or "DEFAULT"
-                        orig_name = _name_of(pm)
-                        if not orig_name.startswith(f"{prefix} - "):
-                            new_name = f"{prefix} - {orig_name}"
-                            _set_placemark_name(pm, new_name, doc)
-                    except Exception:
-                        continue
-
-            elif "NEW POLE" in folder_name.upper():
-                fdt_num = _get_fdt_number(folder)
-                new_pole_folders[fdt_num][folder_name].append(folder)
-
-        # Step 4: Renumber NEW POLE globally per FDT Group
-        for fdt_num, folders_by_name in new_pole_folders.items():
-            prefix = prefixes.get(fdt_num) or prefixes.get(1) or "DEFAULT"
-            prefix_short = prefix.rsplit(".", 1)[0]
-            
-            all_poles = []
-            for folder_group in folders_by_name.values():
-                for folder in folder_group:
-                    for pm in folder.getElementsByTagName("Placemark"):
-                        name = _name_of(pm)
-                        
-                        # Extract existing number
-                        m = re.search(r"\.P(\d+)$", name)
-                        num = int(m.group(1)) if m else None
-                        
-                        if num is None:
-                            # Fallbacks
-                            m2 = re.search(r"(\d+)$", name)
-                            if m2:
-                                num = int(m2.group(1))
-                            else:
-                                digits = re.findall(r"\d+", name)
-                                if digits:
-                                    num = int(digits[-1])
-                                    
-                        all_poles.append((num, pm, name))
-            
-            # Sort poles: numbered first, then stable sort by original name
-            all_poles.sort(key=lambda x: (x[0] if x[0] is not None else 999999, x[2]))
-            
-            for idx, (_, pm, _) in enumerate(all_poles, 1):
-                try:
-                    new_name = f"MR.{prefix_short}.P{str(idx).zfill(3)}"
-                    _set_placemark_name(pm, new_name, doc)
-                except Exception:
+            hp_by_name = {}
+            for h_sub in hp_cover_folder.getElementsByTagName("Folder"):
+                hp_by_name.setdefault(_name_of(h_sub).upper(), h_sub)
+            for b_sub in boundary_folder.getElementsByTagName("Folder"):
+                b_name = _name_of(b_sub).upper()
+                if "CLUSTER" in b_name or b_name not in hp_by_name:
                     continue
+                total_hp = len(hp_by_name[b_name].getElementsByTagName("Placemark"))
+                if total_hp > 0:
+                    _set_hp_count_description(b_sub, total_hp, doc)
+                    boundaries_updated += 1
 
-        # Build KMZ/KML bytes
+        # Step 3: kelompokkan setiap placemark menurut folder berperan terdekat
+        fat_groups: "OrderedDict[Tuple[int, str, bool], List]" = OrderedDict()
+        pole_groups: Dict[int, List] = defaultdict(list)
+        renamed = defaultdict(int)
+
+        for pm in doc.getElementsByTagName("Placemark"):
+            owner, role = _owner_folder(pm)
+            if owner is None or role in (ROLE_SKIP, ROLE_NONE):
+                continue
+            fdt_num = _get_fdt_number(owner)
+            orig_name = _name_of(pm)
+            if role == ROLE_FDT:
+                # Titik FDT: nomor di namanya sendiri ('FDT 2') lebih
+                # menentukan daripada nomor folder induknya.
+                fdt_num = fdt_number(orig_name) or fdt_num
+            prefix = self._prefix(prefixes, fdt_num)
+
+            if role == ROLE_FDT:
+                num = fdt_num
+                new_name = re.sub(r"FDT[\s._\-]*0*" + str(num) + r"\b", prefix.upper(),
+                                  orig_name, flags=re.IGNORECASE)
+                new_name = re.sub(r"\bFDT\b", prefix.upper(), new_name, flags=re.IGNORECASE)
+                if new_name != orig_name:
+                    _set_placemark_name(pm, new_name, doc)
+                    renamed["fdt"] += 1
+            elif role == ROLE_FAT:
+                letter = _line_letter(owner) or "A"
+                is_boundary = "BOUNDARY" in _name_of(owner).upper()
+                fat_groups.setdefault((fdt_num, letter, is_boundary), []).append(pm)
+            elif role == ROLE_CABLE:
+                if not orig_name.startswith(f"{prefix} - "):
+                    _set_placemark_name(pm, f"{prefix} - {orig_name}", doc)
+                    renamed["kabel"] += 1
+            elif role == ROLE_NEW_POLE:
+                pole_groups[fdt_num].append(pm)
+
+        # Step 4: FAT — dinomori per (FDT, LINE), lintas folder FAT, supaya
+        # dua folder FAT di satu line tidak sama-sama mulai dari A01.
+        fat_without_number = []
+        for (fdt_num, letter, _is_boundary), pms in fat_groups.items():
+            prefix = self._prefix(prefixes, fdt_num)
+            keyed = []
+            for order, pm in enumerate(pms):
+                name = _name_of(pm)
+                num = _fat_number(name, prefix)
+                if num is None:
+                    fat_without_number.append(name or "(tanpa nama)")
+                keyed.append((num if num is not None else 10 ** 6, order, pm))
+            keyed.sort(key=lambda x: (x[0], x[1]))
+            for idx, (_, _, pm) in enumerate(keyed, 1):
+                _set_placemark_name(pm, f"{prefix}.{letter}{idx:02d}", doc)
+                renamed["fat"] += 1
+
+        # Step 5: NEW POLE — dinomori ulang per FDT
+        for fdt_num, pms in pole_groups.items():
+            prefix = self._prefix(prefixes, fdt_num)
+            prefix_short = prefix.rsplit(".", 1)[0]
+            all_poles = []
+            for order, pm in enumerate(pms):
+                name = _name_of(pm)
+                m = re.search(r"\.P(\d+)$", name) or re.search(r"(\d+)$", name)
+                if m:
+                    num = int(m.group(1))
+                else:
+                    digits = re.findall(r"\d+", name)
+                    num = int(digits[-1]) if digits else None
+                all_poles.append((num if num is not None else 10 ** 6, order, pm))
+            all_poles.sort(key=lambda x: (x[0], x[1]))
+            for idx, (_, _, pm) in enumerate(all_poles, 1):
+                _set_placemark_name(pm, f"MR.{prefix_short}.P{idx:03d}", doc)
+                renamed["new_pole"] += 1
+
+        rep = self.report
+        for key in ("fdt", "fat", "kabel", "new_pole"):
+            rep.stat(key, renamed[key])
+        rep.stat("boundary_hp", boundaries_updated)
+        if self._missing_prefix:
+            rep.warn("Tidak ada prefix untuk FDT berikut; memakai prefix FDT 01",
+                     [f"FDT {n:02d}" for n in sorted(self._missing_prefix)])
+        if fat_without_number:
+            rep.warn("FAT tanpa nomor di namanya diletakkan di akhir urutan",
+                     fat_without_number)
+
         output_bytes = self._build_kmz()
         base = self.input_filename.rsplit(".", 1)[0]
-        output_filename = f"{base}_renamed.kmz"
 
         return {
             "status": "success",
-            "filename": output_filename,
+            "filename": f"{base}_renamed.kmz",
             "content": output_bytes,
             "content_type": "application/vnd.google-earth.kmz",
+            "report": rep.to_dict(),
         }
 
     def _build_kmz(self) -> bytes:
         kml_str = self.doc.toxml(encoding="utf-8")
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as kmz_out:
-            if self._is_kmz and self._kmz_bytes:
-                with zipfile.ZipFile(io.BytesIO(self._kmz_bytes), "r") as kmz_in:
-                    for item in kmz_in.namelist():
-                        if not item.lower().endswith(".kml"):
-                            kmz_out.writestr(item, kmz_in.read(item))
             kmz_out.writestr("doc.kml", kml_str)
-        buf.seek(0)
-        return buf.read()
+            for item, data in read_kmz_attachments(self._kmz_bytes or b"").items():
+                if item.lower() != "doc.kml":
+                    kmz_out.writestr(item, data)
+        return buf.getvalue()
 
 
 def process_insert_coding(

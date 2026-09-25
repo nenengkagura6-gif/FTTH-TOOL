@@ -10,7 +10,7 @@ export default function PoleSorterPage() {
   return (
     <ToolPage
       title="Pole Auto-Sorter"
-      description="Upload file KMZ plan FTTH kamu dan biarkan tool ini mengurutkan dan memadatkan penomoran tiang (New Pole & Existing Pole) secara otomatis. Jika ada tiang yang terhapus dan membuat urutan nomor menjadi bolong, tool ini akan menutup bolong tersebut dengan melakukan re-numbering secara berurutan mulai dari 1."
+      description="Upload file KMZ plan FTTH kamu dan biarkan tool ini menomori ulang tiang (New Pole & Existing Pole) secara otomatis. Tiang diurutkan menyusuri kabel distribusi mulai dari FDT; tiang yang tidak berada di jalur kabel (atau grup tanpa kabel) diurutkan menurut nomor lamanya. Nomor yang bolong ikut dirapatkan, mulai dari 1."
       acceptedFormats={[".kml", ".kmz"]}
       guide={{
         input:
@@ -21,10 +21,11 @@ export default function PoleSorterPage() {
           "Unduh hasilnya. Urutan tiang sudah mengikuti arah kabel.",
         ],
         output:
-          "File KML dengan tiang yang sudah diurutkan sepanjang jalur kabel, siap dipakai untuk penomoran lapangan.",
+          "File KMZ dengan tiang yang sudah diurutkan sepanjang jalur kabel, siap dipakai untuk penomoran lapangan.",
       }}
       primaryAccept=".kml,.kmz"
       supportsExcelTemplate={false}
+      featureKey="kml_to_boq"
       toolName="pole_sorter"
     />
   )

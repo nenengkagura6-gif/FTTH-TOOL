@@ -4,7 +4,7 @@ Engine for processing KML/KMZ files and generating BOQ Excel
 import io
 import os
 import re
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Any, Optional
 from geopy.distance import geodesic
 from pathlib import Path
 from openpyxl import load_workbook
@@ -14,280 +14,288 @@ from collections import defaultdict
 
 from utils.commons import (
     parse_kml_content, find_all_folders, get_folder_name,
-    parse_coords, clean_project_name
+    parse_coords, clean_project_name, fdt_number
 )
+from utils.report import ProcessReport
+from utils.template_validator import validate_boq_template
+
+# Susunan template BOQ: satu kolom per FDT. Template standar hanya punya tiga
+# kolom FDT; FDT di luar itu tidak punya tempat dan dilaporkan sebagai
+# peringatan, bukan dibuang diam-diam.
+FDT_COLUMNS = {1: "C", 2: "I", 3: "O"}
+LINE_ROW_OFFSET = {"A": 0, "B": 1, "C": 2, "D": 3}
+CABLE_ROW_OFFSET = {24: 0, 36: 4, 48: 8}
+FAT_ROWS = {"A": 36, "B": 37, "C": 38, "D": 39}
+POLE_ROWS = {
+    "new pole 7-4": 54,
+    "new pole 7-3": 55,
+    "new pole 7-2.5": 56,
+    "new pole 9-4": 58,
+    "existing pole emr 7-4": 61,
+}
+
+_LINE_RE = re.compile(r"\bLINE[\s\-_]*([A-Z])\b", re.IGNORECASE)
+_CORE_RE = re.compile(r"\b(\d{2,3})\s*C(?:ORE)?\b", re.IGNORECASE)
 
 
-def get_direct_child_name(node: minidom.Element) -> str:
-    """Get the text value of the direct child <name> tag of a node."""
-    for child in node.childNodes:
-        if child.nodeType == minidom.Node.ELEMENT_NODE and child.nodeName == "name":
-            if child.firstChild:
-                return child.firstChild.nodeValue.strip()
-    return ""
-
-
-def get_fdt_name_from_ancestors(node: minidom.Element) -> str:
-    """Find the FDT name by traversing up the parent nodes to find a Folder containing FDT name."""
+def get_fdt_number_from_ancestors(node: minidom.Element) -> Optional[int]:
+    """Nomor FDT dari folder leluhur terdekat yang menyebut FDT, atau None."""
     curr = node
     while curr is not None:
         if curr.nodeType == minidom.Node.ELEMENT_NODE and curr.nodeName == "Folder":
-            name = get_direct_child_name(curr)
-            match = re.search(r'\bFDT\s*(\d+)\b', name, re.IGNORECASE)
-            if match:
-                return f"FDT {int(match.group(1)):02d}"
+            num = fdt_number(get_folder_name(curr))
+            if num is not None:
+                return num
         curr = curr.parentNode
-    return "FDT 01" # Default fallback
+    return None
+
+
+def get_fdt_name_from_ancestors(node: minidom.Element) -> str:
+    """Kompatibilitas lama: 'FDT 01' dari folder leluhur, default FDT 01."""
+    return f"FDT {(get_fdt_number_from_ancestors(node) or 1):02d}"
 
 
 class KMLEngine:
     """Engine to process KML/KMZ files and generate BOQ Excel."""
-    
+
     def __init__(self, template_content: bytes = None):
         if template_content:
+            validate_boq_template(template_content)
             self.template_content = template_content
         else:
             base_dir = Path(__file__).resolve().parent.parent
             default_template = base_dir / "templates" / "default_boq.xlsx"
-            
+
             if default_template.exists():
                 with open(default_template, "rb") as f:
                     self.template_content = f.read()
             else:
                 self.template_content = None
-        
+
         self.doc = None
         self.wb = None
         self.sheet_ae = None
         self.sheet_bo = None
         self.input_filename = ""
-    
+        self.report = ProcessReport()
+        # Nilai dijumlah dalam float dan baru dibulatkan saat ditulis.
+        # Dulu setiap penambahan langsung dibulatkan, sehingga selisih
+        # pembulatan per segmen kabel menumpuk.
+        self._totals: Dict[str, float] = defaultdict(float)
+        self._unsupported_fdt: Dict[int, int] = defaultdict(int)
+
     def load_kml(self, content: bytes, filename: str, is_kmz: bool = False) -> Dict[str, Any]:
         """Load KML/KMZ content."""
         self.input_filename = filename
         self.doc = parse_kml_content(content, is_kmz)
         return {"status": "success", "filename": filename}
-    
+
     def load_template(self, template_content: bytes) -> Dict[str, Any]:
         """Load Excel template from bytes."""
+        validate_boq_template(template_content)
         self.template_content = template_content
         return {"status": "success"}
-    
+
     def _init_workbook(self) -> None:
         """Initialize workbook from template."""
         if self.template_content:
             self.wb = load_workbook(io.BytesIO(self.template_content))
         else:
             self.wb = Workbook()
-        
+
         self.sheet_ae = self.wb["BoM AE"] if "BoM AE" in self.wb.sheetnames else self.wb.active
         self.sheet_bo = self.wb["BoQ NRO Cluster"] if "BoQ NRO Cluster" in self.wb.sheetnames else self.wb.active
-    
+
     def _calculate_length_from_placemark(self, placemark: minidom.Element) -> float:
         """Calculate length from a LineString placemark."""
         coords_tags = placemark.getElementsByTagName("coordinates")
         if coords_tags and coords_tags[0].firstChild:
             coord_list = parse_coords(coords_tags[0].firstChild.nodeValue)
             return sum(
-                geodesic(coord_list[i], coord_list[i+1]).meters 
+                geodesic(coord_list[i], coord_list[i+1]).meters
                 for i in range(len(coord_list)-1)
             )
         return 0
-    
-    def _safe_add(self, sheet, cell: str, value: float) -> None:
-        """Safely add value to a cell."""
-        current = sheet[cell].value
-        if current is None:
-            current_val = 0.0
-        elif isinstance(current, (int, float)):
-            current_val = float(current)
-        else:
+
+    def _column_for(self, node) -> Optional[str]:
+        """Kolom Excel untuk FDT leluhur `node`, atau None kalau di luar template."""
+        num = get_fdt_number_from_ancestors(node) or 1
+        col = FDT_COLUMNS.get(num)
+        if col is None:
+            self._unsupported_fdt[num] += 1
+        return col
+
+    def _add(self, cell: str, value: float) -> None:
+        self._totals[cell] += value
+
+    def _flush_totals(self) -> None:
+        for cell, value in self._totals.items():
+            current = self.sheet_ae[cell].value
             try:
-                current_val = float(str(current).strip())
-            except ValueError:
-                current_val = 0.0
-        sheet[cell] = round(current_val + value)
-    
-    def _is_true_fat_folder(self, name: str) -> bool:
-        """Check if folder is a FAT folder (not FAT COVER)."""
-        up = (name or "").upper()
-        return "FAT" in up and "COVER" not in up
-    
-    def _count_fat_in_line(self, line_folder: minidom.Element) -> int:
-        """Count all Placemarks in FAT subfolders recursively."""
-        total = 0
-        subfolders = find_all_folders(line_folder)
-        for f in subfolders:
-            if self._is_true_fat_folder(get_folder_name(f)):
-                total += len(f.getElementsByTagName("Placemark"))
-        return total
-    
+                base = float(current) if current not in (None, "") else 0.0
+            except (TypeError, ValueError):
+                base = 0.0
+            self.sheet_ae[cell] = round(base + value)
+
     def process(self) -> Dict[str, Any]:
         """Process the KML and generate Excel output."""
         if not self.doc:
             return {"status": "error", "message": "No KML loaded"}
-        
+
         self._init_workbook()
         all_folders = find_all_folders(self.doc.documentElement)
-        
-        # Setiap FDT menulis HANYA ke kolomnya sendiri.
-        #
-        # Versi sebelumnya punya cabang "backward compatible": kalau cuma
-        # satu FDT terdeteksi, jumlah FAT dan tiang ditulis ke KETIGA kolom
-        # sekaligus. Akibatnya konversi satu FDT memunculkan tiang dan FAT
-        # yang sama di kolom FDT 02 dan FDT 03 — data yang tidak ada di KML.
-        # Kabel distribusi tidak pernah ikut cabang itu, jadi hanya sebagian
-        # komponen yang tersalin dan hasilnya jadi tidak konsisten.
-        fdt_map = {"FDT 01": "C", "FDT 02": "I", "FDT 03": "O"}
-        
-        # Process FDT columns
-        for fdt_name, col in fdt_map.items():
-            self._process_fdt_column(col, all_folders, fdt_name)
-        
-        # Process FAT per Line
-        self._process_fat_per_line(fdt_map)
-        
-        # Process Pole Counts
-        self._process_pole_counts(all_folders, fdt_map)
-        
-        # Process HP Cover (remains global)
+
+        # Setiap FDT menulis HANYA ke kolomnya sendiri. Satu FDT tidak lagi
+        # disalin ke kolom FDT 02/03.
+        self._process_cables(all_folders)
+        self._process_fat_per_line()
+        self._process_pole_counts(all_folders)
         self._process_hp_cover(all_folders)
-        
-        # Save output to bytes
+        self._flush_totals()
+
+        if self._unsupported_fdt:
+            self.report.warn(
+                "Template BOQ hanya punya kolom FDT 01–03; elemen milik FDT berikut "
+                "TIDAK masuk hitungan",
+                [f"FDT {n:02d} ({c} elemen)" for n, c in sorted(self._unsupported_fdt.items())],
+            )
+
         output_buffer = io.BytesIO()
         self.wb.save(output_buffer)
         output_buffer.seek(0)
-        
+
         output_filename = f"Hasil_{os.path.splitext(self.input_filename)[0]}.xlsx"
-        
+
         return {
             "status": "success",
             "filename": output_filename,
-            "content": output_buffer.getvalue()
+            "content": output_buffer.getvalue(),
+            "report": self.report.to_dict(),
         }
-    
-    def _process_fdt_column(self, col: str, all_folders: List, target_fdt: str) -> None:
-        """Process Distribution Cable for an FDT column."""
-        processed_pms = set()  # Track processed Placemarks to avoid double counting
-        total_sling_length = 0.0
-        
+
+    def _process_cables(self, all_folders: List) -> None:
+        """Kabel distribusi (per line & kapasitas) dan sling wire per FDT."""
+        processed = set()
+        unmatched_cable: List[str] = []
+        sling_len: Dict[str, float] = defaultdict(float)
+        cable_total = 0.0
+
         for sub in all_folders:
-            if get_fdt_name_from_ancestors(sub) != target_fdt:
+            fname = get_folder_name(sub).lower()
+            is_sling = "sling" in fname
+            is_dist = "distribution" in fname and not is_sling
+            if not (is_sling or is_dist):
                 continue
-                
-            if "distribution" in get_folder_name(sub).lower():
-                for pm in sub.getElementsByTagName("Placemark"):
-                    pm_id = id(pm)
-                    if pm_id in processed_pms:
-                        continue
-                    processed_pms.add(pm_id)
-                    
-                    nm_nodes = pm.getElementsByTagName("name")
-                    pm_name = (nm_nodes[0].firstChild.nodeValue if nm_nodes and nm_nodes[0].firstChild else "").upper()
-                    length = self._calculate_length_from_placemark(pm)
-                    
-                    # Process by line and cable type
-                    self._process_cable_entry(col, pm_name, length)
-            
-            # Process Sling Wire
-            if "sling" in get_folder_name(sub).lower():
-                for pm in sub.getElementsByTagName("Placemark"):
-                    pm_id = id(pm)
-                    if pm_id in processed_pms:
-                        continue
-                    processed_pms.add(pm_id)
-                    total_sling_length += self._calculate_length_from_placemark(pm)
-                    
-        if total_sling_length > 0:
-            self.sheet_ae[f"{col}15"] = round(total_sling_length)
-    
-    def _process_cable_entry(self, col: str, pm_name: str, length: float) -> None:
-        """Process a cable entry based on line and type."""
-        lines = ["LINE A", "LINE B", "LINE C", "LINE D"]
-        cable_types = {"24C": 0, "36C": 4, "48C": 8}
-        
-        for line_idx, line in enumerate(lines):
-            if line in pm_name:
-                for cable, offset in cable_types.items():
-                    if cable in pm_name:
-                        cell = f"{col}{2 + line_idx + offset}"
-                        self._safe_add(self.sheet_ae, cell, length)
-                break
-    
-    def _process_fat_per_line(self, fdt_map: Dict[str, str]) -> None:
+
+            for pm in sub.getElementsByTagName("Placemark"):
+                if id(pm) in processed:
+                    continue
+                processed.add(id(pm))
+                length = self._calculate_length_from_placemark(pm)
+                if length <= 0:
+                    continue
+                col = self._column_for(pm)
+                if col is None:
+                    continue
+
+                if is_sling:
+                    sling_len[col] += length
+                    continue
+
+                name = get_folder_name(pm)
+                line_m = _LINE_RE.search(name)
+                core_m = _CORE_RE.search(name)
+                line = line_m.group(1).upper() if line_m else None
+                cores = int(core_m.group(1)) if core_m else None
+                if line not in LINE_ROW_OFFSET or cores not in CABLE_ROW_OFFSET:
+                    unmatched_cable.append(f"{name or '(tanpa nama)'} {length:.0f} m")
+                    continue
+                self._add(f"{col}{2 + LINE_ROW_OFFSET[line] + CABLE_ROW_OFFSET[cores]}", length)
+                cable_total += length
+
+        for col, total in sling_len.items():
+            self.sheet_ae[f"{col}15"] = round(total)
+
+        self.report.stat("kabel_distribusi_m", round(cable_total))
+        self.report.stat("sling_wire_m", round(sum(sling_len.values())))
+        if unmatched_cable:
+            self.report.warn(
+                "Kabel distribusi yang tidak masuk BOQ karena nama tidak memuat "
+                "LINE A–D dan kapasitas 24C/36C/48C",
+                unmatched_cable,
+            )
+
+    def _process_fat_per_line(self) -> None:
         """Hitung FAT per Line, tulis ke kolom FDT yang bersangkutan saja."""
+        total = 0
         for line_folder in self.doc.getElementsByTagName("Folder"):
-            line_name = get_folder_name(line_folder).upper()
-            
-            matched_line = None
-            for l in ["LINE A", "LINE B", "LINE C", "LINE D"]:
-                if l in line_name:
-                    matched_line = l
+            m = _LINE_RE.search(get_folder_name(line_folder))
+            if not m:
+                continue
+            letter = m.group(1).upper()
+
+            fat_count = None
+            for sub in line_folder.getElementsByTagName("Folder"):
+                if get_folder_name(sub).strip().upper() == "FAT":
+                    fat_count = len(sub.getElementsByTagName("Placemark"))
                     break
-            
-            if matched_line:
-                total_fat = 0
-                has_fat = False
-                for sub_folder in line_folder.getElementsByTagName("Folder"):
-                    sub_name = get_folder_name(sub_folder).upper()
-                    if sub_name == "FAT":
-                        total_fat = len(sub_folder.getElementsByTagName("Placemark"))
-                        has_fat = True
-                        break
-                
-                if has_fat:
-                    row_map = {"LINE A": 36, "LINE B": 37, "LINE C": 38, "LINE D": 39}
-                    row = row_map[matched_line]
-                    fdt_name = get_fdt_name_from_ancestors(line_folder)
-                    col = fdt_map.get(fdt_name)
-                    if col:
-                        self.sheet_ae[f"{col}{row}"] = total_fat
-    
-    def _process_pole_counts(self, all_folders: List, fdt_map: Dict[str, str]) -> None:
-        """Hitung tiang, tulis ke kolom FDT yang bersangkutan saja."""
-        target_rows = {
-            "new pole 7-4": 54,
-            "new pole 7-3": 55,
-            "new pole 7-2.5": 56,
-            "new pole 9-4": 58,
-            "existing pole emr 7-4": 61,
-        }
-        
-        processed_pms = defaultdict(set)
-        pole_totals = defaultdict(int)  # key: (fdt_name, target_name)
-        
-        for folder in all_folders:
-            folder_name = get_folder_name(folder).strip().lower()
-            for target_name, row in target_rows.items():
-                if folder_name == target_name:
-                    fdt_name = get_fdt_name_from_ancestors(folder)
-                    for pm in folder.getElementsByTagName("Placemark"):
-                        pm_id = id(pm)
-                        key = (fdt_name, target_name)
-                        if pm_id not in processed_pms[key]:
-                            processed_pms[key].add(pm_id)
-                            pole_totals[key] += 1
-                            
-        for (fdt_name, target_name), total in pole_totals.items():
-            row = target_rows[target_name]
-            col = fdt_map.get(fdt_name)
+            if fat_count is None:
+                continue
+            if letter not in FAT_ROWS:
+                self.report.warn(f"FAT di LINE {letter} tidak punya baris di template BOQ ({fat_count} FAT)")
+                continue
+            col = self._column_for(line_folder)
             if col:
-                self.sheet_ae[f"{col}{row}"] = total
-    
+                self.sheet_ae[f"{col}{FAT_ROWS[letter]}"] = fat_count
+                total += fat_count
+        self.report.stat("fat", total)
+
+    def _process_pole_counts(self, all_folders: List) -> None:
+        """Hitung tiang, tulis ke kolom FDT yang bersangkutan saja."""
+        processed = set()
+        totals: Dict[tuple, int] = defaultdict(int)
+        unknown: Dict[str, int] = defaultdict(int)
+
+        for folder in all_folders:
+            name = get_folder_name(folder).strip().lower()
+            is_pole = "pole" in name or "tiang" in name
+            if not is_pole:
+                continue
+            row = POLE_ROWS.get(re.sub(r"\s+", " ", name))
+            direct = [c for c in folder.childNodes
+                      if getattr(c, "nodeName", None) == "Placemark"]
+            if row is None:
+                if direct:
+                    unknown[get_folder_name(folder)] += len(direct)
+                continue
+            for pm in folder.getElementsByTagName("Placemark"):
+                if id(pm) in processed:
+                    continue
+                processed.add(id(pm))
+                col = self._column_for(pm)
+                if col:
+                    totals[(col, row)] += 1
+
+        for (col, row), count in totals.items():
+            self.sheet_ae[f"{col}{row}"] = count
+        self.report.stat("tiang", sum(totals.values()))
+        if unknown:
+            self.report.warn(
+                "Folder tiang yang tidak dikenali template BOQ (tidak dihitung)",
+                [f"{n} ({c})" for n, c in unknown.items()],
+            )
+
     def _process_hp_cover(self, all_folders: List) -> None:
         """Process HP Cover count."""
-        hp_cover_total = 0
-        processed_pms = set()
+        processed = set()
         for folder in all_folders:
             if "hp cover" in get_folder_name(folder).lower():
                 for pm in folder.getElementsByTagName("Placemark"):
-                    pm_id = id(pm)
-                    if pm_id not in processed_pms:
-                        processed_pms.add(pm_id)
-                        hp_cover_total += 1
-        
-        self.sheet_bo["O5"] = hp_cover_total
+                    processed.add(id(pm))
+
+        self.sheet_bo["O5"] = len(processed)
         self.sheet_bo["O3"] = clean_project_name(self.input_filename)
+        self.report.stat("hp_cover", len(processed))
 
 
 def process_kml_to_excel(
@@ -298,15 +306,9 @@ def process_kml_to_excel(
 ) -> Dict[str, Any]:
     """
     Process KML/KMZ file and generate BOQ Excel.
-    
-    Args:
-        kml_content: Raw bytes of KML/KMZ file
-        filename: Original filename
-        template_content: Optional Excel template bytes
-        is_kmz: Whether the file is KMZ format
-    
+
     Returns:
-        Dict with status, filename, and content bytes
+        Dict with status, filename, content bytes and report
     """
     engine = KMLEngine(template_content)
     engine.load_kml(kml_content, filename, is_kmz)

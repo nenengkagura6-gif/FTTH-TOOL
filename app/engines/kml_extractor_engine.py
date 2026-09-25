@@ -15,6 +15,8 @@ from utils.commons import (
     parse_kml_content, get_folder_name, parse_coords, clean_project_name
 )
 
+_CORE_RE = re.compile(r"\b(\d{1,3})\s*C(?:ORE)?\b", re.IGNORECASE)
+
 
 class KMLExtractorEngine:
     """Engine to extract folder and element summaries from KML/KMZ files."""
@@ -85,10 +87,7 @@ class KMLExtractorEngine:
 
     def _get_placemark_name(self, pm: minidom.Element) -> str:
         """Get the name tag value of a placemark."""
-        names = pm.getElementsByTagName("name")
-        if names and names[0].firstChild:
-            return names[0].firstChild.nodeValue.strip()
-        return ""
+        return get_folder_name(pm)
 
     def process(self) -> Dict[str, Any]:
         """Process KML/KMZ and generate stylized Excel report."""
@@ -118,7 +117,14 @@ class KMLExtractorEngine:
             
             pm_name = self._get_placemark_name(pm)
             if is_cable and is_line:
-                cable_type = pm_name if pm_name else "Kabel Tanpa Nama"
+                # Dikelompokkan per kapasitas (24C, 48C, ...). Dulu nama
+                # placemark dipakai apa adanya, jadi setiap kabel bernama unik
+                # ("... - 1", "... - 2") menjadi baris ringkasan tersendiri.
+                core = _CORE_RE.search(pm_name or "")
+                if core:
+                    cable_type = f"FO {int(core.group(1))}C"
+                else:
+                    cable_type = pm_name if pm_name else "Kabel Tanpa Nama"
             else:
                 cable_type = ""
 
@@ -361,7 +367,17 @@ class KMLExtractorEngine:
             "status": "success",
             "filename": output_filename,
             "content": output_buffer.getvalue(),
-            "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "report": {
+                "warnings": [],
+                "stats": {
+                    "folder": len(groups),
+                    "titik": total_points,
+                    "poligon": total_polygons,
+                    "garis": total_lines,
+                    "panjang_m": round(total_length_m),
+                },
+            },
         }
 
 

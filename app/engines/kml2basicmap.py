@@ -148,11 +148,17 @@ def read_kml_bytes(path: Path) -> bytes:
 
 class Kml:
     def __init__(self, data: bytes):
-        self.root = etree.fromstring(data)
-        self.ns = self.root.nsmap.get(None, "http://www.opengis.net/kml/2.2")
+        # Parser aman: entitas tidak di-resolve, tanpa akses jaringan.
+        parser = etree.XMLParser(resolve_entities=False, no_network=True, huge_tree=False)
+        self.root = etree.fromstring(data, parser)
+        # Namespace diambil dari tag akar. Dulu KML tanpa xmlns dianggap
+        # ber-namespace KML 2.2, sehingga tidak satu pun Placemark cocok dan
+        # berkasnya ditolak ("Tidak ada Placemark").
+        tag = self.root.tag if isinstance(self.root.tag, str) else ""
+        self.ns = tag[1:].split("}", 1)[0] if tag.startswith("{") else ""
 
     def q(self, tag: str) -> str:
-        return "{%s}%s" % (self.ns, tag)
+        return "{%s}%s" % (self.ns, tag) if self.ns else tag
 
     def name_of(self, el) -> str:
         n = el.find(self.q("name"))
@@ -268,7 +274,7 @@ def fetch_osm(bbox_ll, cache: Path, offline: bool, log) -> list:
             log(f"  minta jalan ke {url.split('/')[2]} ...")
             req = urllib.request.Request(
                 url, data=query.encode("utf-8"),
-                headers={"User-Agent": "kml2basicmap/2.0 (FTTH basic map)"})
+                headers={"User-Agent": "kml2basicmap/2.0 (+https://ftthtools.my.id)"})
             with urllib.request.urlopen(req, timeout=120) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
             els = data.get("elements", [])

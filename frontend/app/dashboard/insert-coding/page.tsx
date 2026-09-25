@@ -11,6 +11,8 @@ import {
   Download,
   Loader2,
   Layers,
+  Plus,
+  RotateCcw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getSupabaseClient } from "@/lib/supabase/client"
@@ -25,6 +27,16 @@ interface UploadFile {
   progress: number
 }
 
+interface JobReport {
+  warnings?: string[]
+  stats?: Record<string, string | number | null>
+}
+
+/** Sesuai file_size_limit bucket 'uploads' (50 MB). */
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+const fdtLabel = (i: number) => `FDT ${String(i + 1).padStart(2, "0")}`
+
 export default function InsertCodingPage() {
   const [primary, setPrimary] = useState<UploadFile | null>(null)
   const [status, setStatus] = useState<Status>("idle")
@@ -35,15 +47,22 @@ export default function InsertCodingPage() {
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [progressMessage, setProgressMessage] = useState<string>("")
 
-  // FDT Prefixes
-  const [prefixFdt01, setPrefixFdt01] = useState<string>("")
-  const [prefixFdt02, setPrefixFdt02] = useState<string>("")
-  const [prefixFdt03, setPrefixFdt03] = useState<string>("")
+  // Prefix per FDT, berurutan: indeks 0 = FDT 01. Dulu hanya ada tiga kolom
+  // tetap; FDT 04 ke atas diam-diam memakai kode FDT 01.
+  const [prefixes, setPrefixes] = useState<string[]>([""])
+  const [report, setReport] = useState<JobReport | null>(null)
 
   const primaryInputRef = useRef<HTMLInputElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const pollStartTimeRef = useRef<number>(0)
-  const POLL_TIMEOUT_MS = 3 * 60 * 1000 // 3 minute timeout
+  // Sama dengan ToolPage. Job yang benar-benar macet ditangani reaper DB.
+  const POLL_TIMEOUT_MS = 15 * 60 * 1000
+
+  const setPrefixAt = (index: number, value: string) =>
+    setPrefixes((prev) => prev.map((p, i) => (i === index ? value : p)))
+  const addPrefix = () => setPrefixes((prev) => [...prev, ""])
+  const removePrefix = (index: number) =>
+    setPrefixes((prev) => prev.filter((_, i) => i !== index))
 
   const { canAccess } = useFeatureAccess()
   const { showUpgradeModal } = useUpgradeModal()
@@ -82,7 +101,8 @@ export default function InsertCodingPage() {
   const handleProcess = async () => {
     if (!primary || isLocked) return
 
-    if (!prefixFdt01.trim()) {
+    if (!prefixes[0]?.trim()) {
+      setStatus("error")
       setErrorMsg("Prefix FDT 01 wajib diisi.")
       return
     }
@@ -90,11 +110,19 @@ export default function InsertCodingPage() {
     setStatus("uploading")
     setProgress(0)
     setErrorMsg(null)
+    setReport(null)
+    setProgressMessage("")
 
     try {
       const supabase = getSupabaseClient()
       const { data: userData } = await supabase.auth.getUser()
       if (!userData.user) throw new Error("User tidak terautentikasi")
+
+      if (primary.file.size > MAX_UPLOAD_BYTES) {
+        throw new Error(
+          `Ukuran file ${(primary.file.size / (1024 * 1024)).toFixed(1)} MB melebihi batas 50 MB.`
+        )
+      }
 
       const fileExt = primary.file.name.split('.').pop()
       const fileName = `${crypto.randomUUID()}.${fileExt}`
@@ -123,11 +151,9 @@ export default function InsertCodingPage() {
         original_file_url: filePath,
         original_file_size_bytes: primary.file.size,
         status: 'queued',
-        config: {
-          prefix_fdt_01: prefixFdt01.trim(),
-          prefix_fdt_02: prefixFdt02.trim(),
-          prefix_fdt_03: prefixFdt03.trim()
-        }
+        config: Object.fromEntries(
+          prefixes.map((p, i) => [`prefix_fdt_${String(i + 1).padStart(2, "0")}`, p.trim()])
+        )
       })
 
       if (insertError) throw insertError
@@ -185,26 +211,22 @@ export default function InsertCodingPage() {
         }
 
         if (job.status === 'queued' || job.status === 'processing') {
-          setProgress(prev => {
-            if (job.progress_percent && job.progress_percent > 0) {
-              return job.progress_percent
-            }
-            if (job.status === 'queued') {
-              return prev < 15 ? prev + 1 : 15
-            }
-            const remaining = 90 - prev
-            const increment = Math.max(1, Math.floor(remaining * 0.15))
-            return Math.min(prev + increment, 90)
-          })
-
-          if (!progressMessage) {
-            setProgressMessage(job.status === 'queued' ? 'Antrian...' : 'Sedang diproses...')
-          }
+          // Hanya angka dari backend — bukan persentase karangan.
+          setProgress(
+            typeof job.progress_percent === 'number' && job.progress_percent > 0
+              ? job.progress_percent
+              : 0
+          )
+          // Bentuk fungsional: closure setInterval tidak melihat state terbaru.
+          setProgressMessage(prev =>
+            prev || (job.status === 'queued' ? 'Antrian...' : 'Sedang diproses...')
+          )
         } else if (job.status === 'completed') {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
           setStatus("success")
           setProgress(100)
           setProgressMessage('Selesai!')
+          setReport(((job as unknown as Record<string, unknown>).result_report as JobReport | null) ?? null)
 
           const finalUrl = job.output_file_url
           if (finalUrl) {
@@ -213,7 +235,8 @@ export default function InsertCodingPage() {
                 setResultUrl(data.signedUrl)
              }
           }
-        } else if (job.status === 'failed') {
+        } else {
+          // failed / cancelled / expired — semuanya terminal.
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
           setStatus("error")
           setErrorMsg(job.error_message || "Proses gagal di backend")
@@ -232,6 +255,7 @@ export default function InsertCodingPage() {
     setJobId(null)
     setResultUrl(null)
     setProgressMessage("")
+    setReport(null)
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
   }
 
@@ -277,51 +301,45 @@ export default function InsertCodingPage() {
         <div className="rounded-2xl border border-border bg-card/40 p-5 backdrop-blur-sm space-y-4">
           <h2 className="text-sm font-medium">Pengaturan Prefix FDT</h2>
           <p className="text-xs text-muted-foreground">
-            Masukkan prefix coding yang akan digunakan. Isi FDT 02 dan FDT 03 hanya jika file KML Anda berisi beberapa FDT.
+            Masukkan prefix coding yang akan digunakan. Tambah FDT hanya jika file KML Anda berisi beberapa FDT — FDT tanpa prefix memakai prefix FDT 01.
           </p>
-          
-          <div className="space-y-3">
-            <div>
-              <label htmlFor="prefixFdt01" className="block text-xs font-medium text-muted-foreground mb-1.5">
-                Prefix FDT 01 (Wajib)
-              </label>
-              <input
-                id="prefixFdt01"
-                type="text"
-                placeholder="Contoh: PGKB.032"
-                value={prefixFdt01}
-                onChange={(e) => setPrefixFdt01(e.target.value)}
-                className="w-full bg-surface-1 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="prefixFdt02" className="block text-xs font-medium text-muted-foreground mb-1.5">
-                Prefix FDT 02 (Opsional)
-              </label>
-              <input
-                id="prefixFdt02"
-                type="text"
-                placeholder="Contoh: PGKB.033"
-                value={prefixFdt02}
-                onChange={(e) => setPrefixFdt02(e.target.value)}
-                className="w-full bg-surface-1 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors"
-              />
-            </div>
 
-            <div>
-              <label htmlFor="prefixFdt03" className="block text-xs font-medium text-muted-foreground mb-1.5">
-                Prefix FDT 03 (Opsional)
-              </label>
-              <input
-                id="prefixFdt03"
-                type="text"
-                placeholder="Contoh: PGKB.034"
-                value={prefixFdt03}
-                onChange={(e) => setPrefixFdt03(e.target.value)}
-                className="w-full bg-surface-1 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors"
-              />
-            </div>
+          <div className="space-y-3">
+            {prefixes.map((value, i) => (
+              <div key={i}>
+                <label htmlFor={`prefixFdt${i}`} className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Prefix {fdtLabel(i)} {i === 0 ? "(Wajib)" : "(Opsional)"}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id={`prefixFdt${i}`}
+                    type="text"
+                    placeholder={`Contoh: PGKB.${String(32 + i).padStart(3, "0")}`}
+                    value={value}
+                    onChange={(e) => setPrefixAt(i, e.target.value)}
+                    className="w-full bg-surface-1 border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors"
+                  />
+                  {i > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => removePrefix(i)}
+                      className="p-2 text-muted-foreground hover:text-foreground"
+                      aria-label={`Hapus prefix ${fdtLabel(i)}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addPrefix}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:border-border-strong hover:text-foreground transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Tambah {fdtLabel(prefixes.length)}
+            </button>
           </div>
         </div>
 
@@ -499,6 +517,34 @@ export default function InsertCodingPage() {
                   <p className="mt-1 text-xs text-muted-foreground">
                     File KML/KMZ baru dengan coding yang telah disisipkan siap diunduh.
                   </p>
+                  {report?.stats && Object.keys(report.stats).length > 0 && (
+                    <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-3">
+                      {Object.entries(report.stats).map(([key, value]) => (
+                        <div key={key}>
+                          <dt className="font-mono text-3xs uppercase tracking-[0.14em] text-muted-foreground/70">
+                            {key.replace(/_/g, " ")}
+                          </dt>
+                          <dd className="mt-0.5 font-mono text-2xs text-foreground/85">{value ?? "—"}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                  {report?.warnings && report.warnings.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-warning/30 bg-warning/5 p-3">
+                      <p className="flex items-center gap-2 text-xs font-medium text-warning">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        {report.warnings.length} hal perlu diperiksa
+                      </p>
+                      <ul className="mt-2 space-y-1.5">
+                        {report.warnings.map((w, i) => (
+                          <li key={i} className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
+                            <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-warning/70" />
+                            <span className="break-words">{w}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -532,11 +578,21 @@ export default function InsertCodingPage() {
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-destructive/10 text-destructive ring-1 ring-destructive/30">
                   <AlertCircle className="h-4 w-4" />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <h3 className="text-sm font-medium">Proses Gagal</h3>
-                  <p className="mt-1 text-xs text-muted-foreground text-pretty">
+                  <p className="mt-1 text-xs text-muted-foreground text-pretty break-words">
                     {errorMsg || "Terjadi kesalahan. Silakan coba lagi."}
                   </p>
+                  {primary && (
+                    <button
+                      type="button"
+                      onClick={handleProcess}
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-1.5 text-xs hover:border-border-strong transition-colors"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Coba lagi
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.div>

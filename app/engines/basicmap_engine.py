@@ -54,6 +54,7 @@ def process_basicmap(
     filename: str,
     is_kmz: bool = False,
     progress_cb: Optional[Callable[[str], None]] = None,
+    roads_csv: Optional[bytes] = None,
 ) -> Dict[str, Any]:
     """
     Bikin basic map dari KML/KMZ survei.
@@ -95,6 +96,13 @@ def process_basicmap(
             src.write_bytes(kml_content)
             out = work / f"{stem}_BASICMAP.dxf"
 
+            # CSV nama jalan dari proses sebelumnya (kolom 'nama_dipakai'
+            # diisi tangan). Mesin membacanya dari sebelah file keluaran;
+            # di web tidak ada 'sebelah' yang bertahan antar-job, jadi CSV
+            # diunggah pengguna lalu diletakkan di sini.
+            if roads_csv:
+                (work / f"{stem}_BASICMAP_jalan.csv").write_bytes(roads_csv)
+
             report = engine.process(
                 src,
                 out,
@@ -125,6 +133,13 @@ def process_basicmap(
             "filename": f"{stem}_BASICMAP.zip",
             "content": buf.getvalue(),
             "content_type": "application/zip",
+            "report": {
+                "warnings": _review_notes(report),
+                "stats": {
+                    k: report.get(k) for k in ("hp", "poles", "rects", "roads", "roads_named")
+                    if report.get(k) is not None
+                },
+            },
         }
 
     except SystemExit as exc:
@@ -164,7 +179,8 @@ def _review_notes(report: Dict[str, Any]) -> List[str]:
         notes.append(
             f"{roads - named} ruas jalan belum bernama di OpenStreetMap. Isi "
             "kolom 'nama_dipakai' di file _jalan.csv, lalu proses ulang KML "
-            "yang sama supaya nama jalannya ikut tergambar."
+            "yang sama dengan CSV itu diunggah di kolom 'CSV nama jalan' "
+            "supaya nama jalannya ikut tergambar."
         )
     if report.get("orphan"):
         notes.append(

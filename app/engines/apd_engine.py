@@ -17,16 +17,58 @@ from openpyxl.styles import PatternFill, Border, Side
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
-from utils.commons import haversine, safe_localname, load_kml_bytes
+from utils.commons import haversine, safe_localname, load_kml_bytes, fdt_number
+from utils.report import ProcessReport
+from utils.template_validator import validate_hpdb_template
 from collections import defaultdict
+
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
+# Kebijakan Nominatim mewajibkan User-Agent yang mengidentifikasi aplikasi
+# beserta kontaknya. UA yang menyamar sebagai browser berisiko diblokir —
+# dan blokirnya berlaku untuk semua pengguna yang berbagi IP server ini.
+NOMINATIM_HEADERS = {"User-Agent": "ftth-tool-hpdb/1.3 (+https://ftthtools.my.id)"}
+NOMINATIM_DELAY_S = 1.1
+# Geocoding dilakukan per FAT (bukan sekali per sheet). Batasnya menjaga
+# lama proses tetap wajar dengan laju 1 permintaan/detik.
+MAX_GEOCODE_PER_JOB = int(os.environ.get("HPDB_MAX_GEOCODE", "80"))
+
+FAT_ID_RE = re.compile(r'\b([A-Z]\d{1,2})\b', re.IGNORECASE)
+
+# (jumlah FAT maksimum per line, kapasitas kabel)
+CABLE_CAPACITY = [(10, "24C/2T"), (15, "36C/3T"), (20, "48C/4T"),
+                  (30, "72C/6T"), (40, "96C/8T")]
+FATS_PER_TUBE = 5
+PORTS_PER_TRAY = 8
 
 
 def get_fdt_name_from_folder_path(folder_path: str) -> str:
     """Extract FDT name from folder path (e.g., 'LINE A FDT 02/HP COVER' -> 'FDT 02')"""
-    match = re.search(r'\bFDT\s*(\d+)\b', folder_path, re.IGNORECASE)
-    if match:
-        return f"FDT {int(match.group(1)):02d}"
-    return "FDT 01" # Default fallback
+    return f"FDT {(fdt_number(folder_path) or 1):02d}"
+
+
+def is_skipped_core(core: int) -> bool:
+    """Dua core terakhir setiap tube 12-core dicadangkan (11, 12, 23, 24, ...)."""
+    return core % 12 in (11, 0)
+
+
+def _direct_name(el) -> str:
+    for child in el:
+        if safe_localname(child) == "name":
+            return (child.text or "").strip()
+    return ""
+
+
+def _folder_path(el) -> str:
+    """Jalur nama folder dari akar sampai induk `el`, dipisah '/'."""
+    names = []
+    cur = el.getparent()
+    while cur is not None:
+        if safe_localname(cur) == "Folder":
+            nm = _direct_name(cur)
+            if nm:
+                names.append(nm)
+        cur = cur.getparent()
+    return "/".join(reversed(names))
 
 
 def parse_kml_lxml_with_kmz(content: bytes, is_kmz: bool = False) -> etree.ElementTree:
@@ -47,7 +89,11 @@ class APDEngine:
     def __init__(self, template_content: bytes = None, apd_template_content: bytes = None):
         self.template_content = template_content
         
+        self.report = ProcessReport()
+        self._geocode_calls = 0
+
         if apd_template_content:
+            validate_hpdb_template(apd_template_content)
             self.apd_template_content = apd_template_content
         else:
             base_dir = Path(__file__).resolve().parent.parent
@@ -95,73 +141,69 @@ class APDEngine:
         self.apd_template_content = apd_template_content
     
     def parse_fat_pole(self) -> Tuple[List[Dict], List[Dict]]:
-        """Parse FAT and POLE placemarks from KML."""
+        """Parse FAT and POLE placemarks from KML.
+
+        Setiap FAT membawa nomor FDT-nya. Tanpa itu, FAT A01 milik FDT 01 dan
+        FAT A01 milik FDT 02 dianggap satu FAT dan saling menimpa di peta
+        FAT -> tiang, sehingga salah satu sheet mendapat tiang yang salah.
+        """
         placemarks_fat = []
         placemarks_pole = []
-        
+
         for folder in self.root.iter():
-            if safe_localname(folder) == "Folder":
-                folder_name = ""
-                for child in folder:
-                    if safe_localname(child) == "name":
-                        folder_name = child.text if child.text else ""
-                        break
-                
-                for pm in folder:
-                    if safe_localname(pm) == "Placemark":
-                        name = "NONAME"
-                        coords = None
-                        for child in pm.iter():
-                            if safe_localname(child) == "name":
-                                name = child.text if child.text else "NONAME"
-                            if safe_localname(child) == "coordinates":
-                                coords = child
-                        
-                        if coords is not None:
-                            coords_text = coords.text.strip()
-                            for coord_pair in coords_text.split():
-                                try:
-                                    lon, lat, *_ = map(float, coord_pair.split(","))
-                                    if folder_name.strip().upper() == "FAT":
-                                        match = re.search(r'\b([A-Z]\d{1,2})\b', name, re.IGNORECASE)
-                                        fat_id = match.group(1).upper() if match else name.strip().upper()
-                                        placemarks_fat.append({"fat_id": fat_id, "lat": lat, "lon": lon})
-                                    elif "POLE" in folder_name.upper():
-                                        placemarks_pole.append({"name": name.strip(), "lat": lat, "lon": lon})
-                                    break
-                                except:
-                                    continue
-        
+            if safe_localname(folder) != "Folder":
+                continue
+            folder_name = _direct_name(folder).upper()
+            is_fat = folder_name == "FAT"
+            is_pole = "POLE" in folder_name
+            if not (is_fat or is_pole):
+                continue
+            fdt_num = fdt_number(_folder_path(folder) + "/" + folder_name) or 1
+
+            for pm in folder:
+                if safe_localname(pm) != "Placemark":
+                    continue
+                name = _direct_name(pm) or "NONAME"
+                coords = self._placemark_coords(pm)
+                if not coords:
+                    continue
+                lat, lon = float(coords[0]), float(coords[1])
+                if is_fat:
+                    match = FAT_ID_RE.search(name)
+                    fat_id = match.group(1).upper() if match else name.strip().upper()
+                    placemarks_fat.append({"fat_id": fat_id, "fdt": fdt_num,
+                                           "lat": lat, "lon": lon})
+                else:
+                    placemarks_pole.append({"name": name.strip(), "lat": lat, "lon": lon})
+
         return placemarks_fat, placemarks_pole
-    
-    def build_fat_to_pole_map(self, max_distance: float = 15) -> Dict[str, Dict]:
-        """Build mapping of FAT to nearest POLE."""
+
+    def build_fat_to_pole_map(self, max_distance: float = 15) -> Dict[Tuple[int, str], Dict]:
+        """Petakan (FDT, FAT) ke tiang terdekat."""
         fat_to_pole = {}
         for fat in self.fats:
-            fat_id, flat, flon = fat["fat_id"], fat["lat"], fat["lon"]
             best_match, best_distance = None, float("inf")
             for pole in self.poles:
-                d = haversine(flat, flon, pole["lat"], pole["lon"])
+                d = haversine(fat["lat"], fat["lon"], pole["lat"], pole["lon"])
                 if d < best_distance:
-                    best_distance = d
-                    best_match = pole
+                    best_distance, best_match = d, pole
             if best_match and best_distance <= max_distance:
-                fat_to_pole[fat_id] = best_match
+                fat_to_pole[(fat["fdt"], fat["fat_id"])] = best_match
         return fat_to_pole
-    
-    def build_fat_to_hpc_map(self, max_distance: float = 25) -> Dict[str, List]:
-        """Build mapping of FAT to nearest HP Cover."""
+
+    def build_fat_to_hpc_map(self, max_distance: float = 25) -> Dict[Tuple[int, str], List]:
+        """Petakan (FDT, FAT) ke HP Cover terdekat di FDT yang sama."""
         fat_to_hpc = {}
         for fat in self.fats:
-            fat_id, flat, flon = fat["fat_id"], fat["lat"], fat["lon"]
             best_match, best_distance = None, float("inf")
             for hp in self.hp_points:
-                d = haversine(flat, flon, float(hp[1]), float(hp[2]))
+                if hp[4] != fat["fdt"]:
+                    continue
+                d = haversine(fat["lat"], fat["lon"], float(hp[1]), float(hp[2]))
                 if d < best_distance:
-                    best_distance = d
-                    best_match = hp
+                    best_distance, best_match = d, hp
             if best_match and best_distance <= max_distance:
-                fat_to_hpc[fat_id] = best_match
+                fat_to_hpc[(fat["fdt"], fat["fat_id"])] = best_match
         return fat_to_hpc
     
     def find_hp_cover_folders(self) -> List:
@@ -179,29 +221,27 @@ class APDEngine:
         return hp_cover_folders
     
     def extract_points_recursive(self, element, current_folder: str = "") -> List[List]:
-        """Recursively extract points from folders."""
+        """Kumpulkan titik HP: [nama, lat, lon, jalur lokal, nomor FDT].
+
+        Jalur lokal (induk HP COVER + sub-folder) dipakai untuk mencari ID FAT.
+        Nomor FDT diambil dari jalur LENGKAP sampai akar — dulu hanya induk
+        langsung HP COVER yang dilihat, sehingga struktur
+        'FDT 02/LINE A/HP COVER' jatuh ke FDT 01.
+        """
         points = []
         for child in element:
             tag = safe_localname(child)
             if tag == "Folder":
-                name_elem = None
-                for sub in child:
-                    if safe_localname(sub) == "name":
-                        name_elem = sub
-                        break
-                subfolder_name = name_elem.text.strip() if name_elem is not None else current_folder
+                subfolder_name = _direct_name(child) or current_folder
                 new_folder = f"{current_folder}/{subfolder_name}" if current_folder else subfolder_name
                 points.extend(self.extract_points_recursive(child, new_folder))
             elif tag == "Placemark":
-                name = "No Name"
-                lon, lat = "", ""
-                for sub in child.iter():
-                    if safe_localname(sub) == "name":
-                        name = sub.text.strip() if sub.text else "No Name"
-                    if safe_localname(sub) == "coordinates":
-                        lon, lat = sub.text.strip().split(",")[:2]
-                if lat and lon:
-                    points.append([name, lat, lon, current_folder])
+                name = _direct_name(child) or "No Name"
+                coords = self._placemark_coords(child)
+                if coords:
+                    lat, lon = coords
+                    fdt_num = fdt_number(_folder_path(child)) or 1
+                    points.append([name, lat, lon, current_folder, fdt_num])
         return points
     
     def clean_region_name(self, text: str) -> str:
@@ -220,21 +260,22 @@ class APDEngine:
     def reverse_geocode(self, lat: float, lon: float) -> Dict[str, str]:
         """Reverse geocode coordinates using Nominatim."""
         try:
-            key = f"{round(float(lat), 6)},{round(float(lon), 6)}"
+            # ~11 m: HP bertetangga berbagi satu permintaan.
+            key = f"{round(float(lat), 4)},{round(float(lon), 4)}"
             if key in self.geocode_cache:
                 return self.geocode_cache[key]
-            
-            url = "https://nominatim.openstreetmap.org/reverse"
-            headers = {"User-Agent": "Mozilla/5.0 APD_HPDB_API"}
+
             params = {
                 "lat": lat, "lon": lon,
                 "format": "jsonv2",
                 "addressdetails": 1,
                 "zoom": 18
             }
-            
-            response = self.session.get(url, params=params, headers=headers, timeout=30)
-            time.sleep(1.2)  # Respect rate limiting
+
+            self._geocode_calls += 1
+            response = self.session.get(NOMINATIM_URL, params=params,
+                                        headers=NOMINATIM_HEADERS, timeout=30)
+            time.sleep(NOMINATIM_DELAY_S)  # Respect rate limiting
             
             if response.status_code != 200:
                 return self._empty_geo_result()
@@ -326,13 +367,13 @@ class APDEngine:
         # --- Cadangan 2: panggilan kedua pada zoom kecamatan ---
         try:
             resp = self.session.get(
-                "https://nominatim.openstreetmap.org/reverse",
+                NOMINATIM_URL,
                 params={"lat": lat, "lon": lon, "format": "jsonv2",
                         "addressdetails": 1, "zoom": 12},
-                headers={"User-Agent": "Mozilla/5.0 APD_HPDB_API"},
+                headers=NOMINATIM_HEADERS,
                 timeout=30,
             )
-            time.sleep(1.2)  # hormati rate limit Nominatim
+            time.sleep(NOMINATIM_DELAY_S)  # hormati rate limit Nominatim
             if resp.status_code == 200:
                 d2 = resp.json()
                 a2 = d2.get("address", {})
@@ -386,6 +427,19 @@ class APDEngine:
                         return None
         return None
 
+    _STRUCTURAL_FOLDER_RE = re.compile(
+        r"\b(LINE|FAT|HP|HOMEPASS|POLE|TIANG|NP|EXT|CABLE|KABEL|DISTRIBUTION|SLING|BOUNDARY|SLACK)\b")
+
+    def _inside_structural_folder(self, pm, stop) -> bool:
+        """True kalau di antara `stop` dan `pm` ada folder jaringan (LINE, FAT, ...)."""
+        cur = pm.getparent()
+        while cur is not None and cur is not stop:
+            if safe_localname(cur) == "Folder" and \
+                    self._STRUCTURAL_FOLDER_RE.search(_direct_name(cur).upper()):
+                return True
+            cur = cur.getparent()
+        return False
+
     def get_all_fdt_coords(self) -> Dict[str, Tuple[str, str]]:
         """
         Kumpulkan koordinat setiap FDT, dipetakan sebagai 'FDT 01' -> (lat, lon).
@@ -438,6 +492,12 @@ class APDEngine:
                     if id(pm) in sudah_diproses:
                         continue
                     sudah_diproses.add(id(pm))
+                    # Folder FDT sering membungkus seluruh jaringannya
+                    # ('FDT 01/LINE A/FAT/...'). Titik FAT, tiang, dan HP di
+                    # dalamnya bukan titik FDT dan dulu ikut dinomori sebagai
+                    # FDT 03, FDT 04, dst.
+                    if self._inside_structural_folder(pm, folder):
+                        continue
 
                     coords = self._placemark_coords(pm)
                     if not coords:
@@ -461,151 +521,136 @@ class APDEngine:
     
     def process(self) -> Dict[str, Any]:
         """Main processing method."""
-        if not self.root:
+        if self.root is None:
             return {"status": "error", "message": "No KML/KMZ loaded"}
-        
+
         # Parse FAT and POLE
         self.fats, self.poles = self.parse_fat_pole()
         fat_to_pole = self.build_fat_to_pole_map(max_distance=15)
-        
+
         # Parse HP Cover points
         hp_folders = self.find_hp_cover_folders()
         self.hp_points = []
+        seen_hp = set()
         for folder in hp_folders:
             parent = folder.getparent()
-            parent_name = ""
-            if parent is not None:
-                for child in parent:
-                    if safe_localname(child) == "name":
-                        parent_name = child.text.strip() if child.text else ""
-                        break
-            self.hp_points.extend(self.extract_points_recursive(folder, parent_name))
-        
-        fat_to_hpc = self.build_fat_to_hpc_map(max_distance=25)
-        
-        # Group hp_points by FDT
-        hp_points_by_fdt = defaultdict(list)
-        for row in self.hp_points:
-            name, lat, lon, folder_path = row
-            fdt_name = get_fdt_name_from_folder_path(folder_path)
-            hp_points_by_fdt[fdt_name].append(row)
-            
-        sorted_fdts = sorted(hp_points_by_fdt.keys())
-        if not sorted_fdts:
-            sorted_fdts = ["FDT 01"] # Fallback
-            
-        # Process rows per FDT
-        fdt_processed_rows = {}
-        skip_numbers = {11, 12, 23, 24, 35, 36, 47, 48}
-        
-        for fdt_name in sorted_fdts:
-            rows_in_fdt = hp_points_by_fdt.get(fdt_name, [])
-            
-            # Calculate FAT ID statistics for this FDT
-            fat_id_nums = {}
-            for row in rows_in_fdt:
-                name, lat, lon, folder_path = row
-                match = re.search(r'\b([A-Z]\d{1,2})\b', folder_path + " " + name, re.IGNORECASE)
-                fat_id = match.group(1).upper() if match else ""
-                if not fat_id:
+            parent_name = _direct_name(parent) if parent is not None else ""
+            for row in self.extract_points_recursive(folder, parent_name):
+                # HP COVER bersarang di HP COVER lain tidak boleh terhitung dua kali.
+                key = (row[0], row[1], row[2])
+                if key in seen_hp:
                     continue
-                prefix = fat_id[0].upper()
-                num = int(re.findall(r'\d+', fat_id)[0]) if re.findall(r'\d+', fat_id) else 0
-                if prefix not in fat_id_nums:
-                    fat_id_nums[prefix] = []
-                fat_id_nums[prefix].append(num)
-            fat_id_max = {k: max(v) for k, v in fat_id_nums.items()}
-            
-            # Process rows
-            fat_port_counters = {}
+                seen_hp.add(key)
+                self.hp_points.append(row)
+
+        fat_to_hpc = self.build_fat_to_hpc_map(max_distance=25)
+
+        # Group hp_points by FDT, lalu urutkan per FAT (A01, A02, ..., B01).
+        # Urutan KML dulu dipakai apa adanya: kalau HP satu FAT tidak
+        # berurutan, penghitung port FAT di-reset ke 1 dan nomor port/core
+        # jadi dobel.
+        hp_points_by_fdt = defaultdict(list)
+        no_fat: List[str] = []
+        for row in self.hp_points:
+            name, lat, lon, folder_path, fdt_num = row
+            match = FAT_ID_RE.search(folder_path + " " + name)
+            if not match:
+                no_fat.append(name)
+                continue
+            fat_id = match.group(1).upper()
+            hp_points_by_fdt[f"FDT {fdt_num:02d}"].append((row, fat_id))
+
+        sorted_fdts = sorted(hp_points_by_fdt.keys()) or ["FDT 01"]
+
+        fdt_processed_rows = {}
+        over_capacity, over_tray = [], []
+        fat_without_pole = set()
+
+        for fdt_name in sorted_fdts:
+            fdt_num = int(fdt_name.split()[-1])
+            items = hp_points_by_fdt.get(fdt_name, [])
+            items.sort(key=lambda it: (it[1][0], int(it[1][1:])))  # sort stabil
+
+            fat_id_max: Dict[str, int] = {}
+            for _, fat_id in items:
+                fat_id_max[fat_id[0]] = max(fat_id_max.get(fat_id[0], 0), int(fat_id[1:]))
+
+            fat_port_counters: Dict[str, int] = defaultdict(int)
+            core_by_prefix: Dict[str, int] = defaultdict(lambda: 1)
             fdt_port_counter = 1
-            core_number = 1
-            last_fat_id = ""
-            last_prefix = ""
-            
             processed_list = []
-            
-            for row in rows_in_fdt:
-                name, lat, lon, folder_path = row
+
+            for row, fat_id in items:
+                name, lat, lon, _folder_path, _ = row
                 name_parts = [p.strip() for p in re.split(r"[,/ ]", name) if p.strip()]
                 name_1 = name_parts[0] if len(name_parts) > 0 else ""
                 name_2 = name_parts[1] if len(name_parts) > 1 else ""
-                
-                match = re.search(r'\b([A-Z]\d{1,2})\b', folder_path + " " + name, re.IGNORECASE)
-                fat_id = match.group(1).upper() if match else ""
-                if not fat_id:
-                    continue
-                
-                prefix = fat_id[0].upper()
-                num_part = int(re.findall(r'\d+', fat_id)[0]) if re.findall(r'\d+', fat_id) else 0
-                
-                if fat_id != last_fat_id:
-                    fat_port_counters[fat_id] = 1
-                    last_fat_id = fat_id
-                
-                if prefix != last_prefix:
-                    core_number = 1
-                    last_prefix = prefix
-                
-                fat_port = fat_port_counters[fat_id]
+
+                prefix = fat_id[0]
+                num_part = int(fat_id[1:])
+
                 fat_port_counters[fat_id] += 1
-                
-                fdt_port = fdt_port_counter if fat_port == 1 else ""
+                fat_port = fat_port_counters[fat_id]
+
+                fdt_port = ""
                 if fat_port == 1:
+                    fdt_port = fdt_port_counter
                     fdt_port_counter += 1
-                
+
                 core = ""
-                if fat_port in [1, 2]:
-                    while core_number in skip_numbers:
-                        core_number += 1
-                    core = core_number
-                    core_number += 1
-                
+                if fat_port in (1, 2):
+                    c = core_by_prefix[prefix]
+                    while is_skipped_core(c):
+                        c += 1
+                    core = c
+                    core_by_prefix[prefix] = c + 1
+
                 line, cap, tube_number = "", "", ""
                 if core:
                     line = f"LINE {prefix}"
                     max_num = fat_id_max.get(prefix, 0)
-                    if max_num <= 10:
-                        cap = "24C/2T"
-                    elif max_num <= 15:
-                        cap = "36C/3T"
-                    elif max_num <= 20:
-                        cap = "48C/4T"
-                    
-                    if num_part <= 5:
-                        tube_number = "1"
-                    elif num_part <= 10:
-                        tube_number = "2"
-                    elif num_part <= 15:
-                        tube_number = "3"
-                    elif num_part <= 20:
-                        tube_number = "4"
-                
-                tray = ""
-                if isinstance(fdt_port, int):
-                    if 1 <= fdt_port <= 8: tray = 1
-                    elif 9 <= fdt_port <= 16: tray = 2
-                    elif 17 <= fdt_port <= 24: tray = 3
-                    elif 25 <= fdt_port <= 32: tray = 4
-                    elif 33 <= fdt_port <= 40: tray = 5
-                
-                pole_name, pole_lat, pole_lon = "", "", ""
-                if fat_id in fat_to_pole:
-                    pole_name = fat_to_pole[fat_id]["name"]
-                    pole_lat = fat_to_pole[fat_id]["lat"]
-                    pole_lon = fat_to_pole[fat_id]["lon"]
-                
-                hpc_text = ""
-                if fat_id in fat_to_hpc:
-                    hpc_text = "IN FRONT OF HP NUMBER " + fat_to_hpc[fat_id][0]
-                
+                    cap = next((c for limit, c in CABLE_CAPACITY if max_num <= limit), "")
+                    if not cap:
+                        over_capacity.append(f"{fdt_name} LINE {prefix} ({max_num} FAT)")
+                    tube_number = str(math.ceil(num_part / FATS_PER_TUBE)) if num_part else ""
+
+                tray = math.ceil(fdt_port / PORTS_PER_TRAY) if isinstance(fdt_port, int) else ""
+                if isinstance(tray, int) and tray > 5:
+                    over_tray.append(f"{fdt_name} port {fdt_port}")
+
+                pole = fat_to_pole.get((fdt_num, fat_id))
+                pole_name = pole["name"] if pole else ""
+                pole_lat = pole["lat"] if pole else ""
+                pole_lon = pole["lon"] if pole else ""
+                if not pole:
+                    fat_without_pole.add(f"{fdt_name} {fat_id}")
+
+                hpc = fat_to_hpc.get((fdt_num, fat_id))
+                hpc_text = "IN FRONT OF HP NUMBER " + hpc[0] if hpc else ""
+
                 processed_list.append([
                     tray, fdt_port, line, cap, tube_number, core, fat_id, fat_port,
                     pole_name, pole_lat, pole_lon, hpc_text,
                     name_1, name_2, lat, lon
                 ])
-                
+
             fdt_processed_rows[fdt_name] = processed_list
+
+        rep = self.report
+        rep.stat("hp", sum(len(v) for v in fdt_processed_rows.values()))
+        rep.stat("fat", len({(f, r[6]) for f, rows in fdt_processed_rows.items() for r in rows}))
+        rep.stat("fdt", len([f for f in sorted_fdts if fdt_processed_rows.get(f)]))
+        if no_fat:
+            rep.warn(f"{len(no_fat)} HP dilewati karena ID FAT (mis. A01) tidak "
+                     "ditemukan di nama folder/HP-nya", no_fat)
+        if over_capacity:
+            rep.warn("Kapasitas kabel dikosongkan karena jumlah FAT melebihi 96C/8T",
+                     sorted(set(over_capacity)))
+        if over_tray:
+            rep.warn("Port FDT melebihi 40 (tray > 5)", over_tray)
+        if fat_without_pole:
+            rep.warn("FAT tanpa tiang dalam radius 15 m (kolom POLE kosong)",
+                     sorted(fat_without_pole))
         
         output_filename = f"{os.path.splitext(self.input_filename)[0]}_with_pole.xlsx"
         
@@ -659,7 +704,8 @@ class APDEngine:
         return {
             "status": "success",
             "filename": output_filename,
-            "content": output_buffer.getvalue()
+            "content": output_buffer.getvalue(),
+            "report": self.report.to_dict(),
         }
     
     def _integrate_with_template(self, fdt_processed_rows: Dict[str, List], output_filename: str) -> Dict[str, Any]:
@@ -793,49 +839,34 @@ class APDEngine:
                 # adalah koordinat cluster lain — kalau ditinggal, ia
                 # terbaca seolah data asli. Sel kosong lebih aman.
                 ws["N6"].value = ": "
-                print(f"[apd] PERINGATAN: koordinat FDT tidak ditemukan untuk {fdt_name}; N6 dikosongkan")
+                self.report.warn(f"Koordinat FDT tidak ditemukan untuk {fdt_name}; "
+                                 "sel N6 dikosongkan (titik FDT harus di folder bernama FDT)")
             
             # Set cluster/location name
             ws["C5"].value = lokasi_nama_clean
             ws["Y10"].value = lokasi_nama_clean
             ws["Z10"].value = lokasi_nama_clean
             
-            # Reverse geocode and autocopy (using the first populated row, i=10)
+            # Reverse geocode PER FAT. Dulu satu titik (baris 10) di-geocode
+            # lalu hasilnya disalin ke semua baris, sehingga ratusan HP di
+            # jalan dan desa berbeda tercatat dengan jalan/desa yang sama.
             max_row_data = start_row + len(data_rows) - 1
-            if len(data_rows) > 0:
-                lat_source = ws["J10"].value
-                lon_source = ws["K10"].value
-                
-                if lat_source in (None, "") or lon_source in (None, ""):
-                    lat_source = ws["AV10"].value
-                    lon_source = ws["AW10"].value
-                
-                geo_result = self._empty_geo_result()
-                if lat_source not in (None, "") and lon_source not in (None, ""):
-                    geo_result = self.reverse_geocode(lat_source, lon_source)
-                
+            geo_by_fat = self._geocode_rows(data_rows)
+            for offset, row in enumerate(data_rows):
+                r = start_row + offset
+                geo = geo_by_fat.get(row[6], self._empty_geo_result())
+                ws[f"M{r}"] = geo["province"]
+                ws[f"N{r}"] = geo["kabupaten"]
+                ws[f"W{r}"] = geo["kabupaten"]
+                ws[f"O{r}"] = geo["kecamatan"]
+                ws[f"P{r}"] = geo["desa"]
+                ws[f"Q{r}"] = geo["kodepos"]
+                ws[f"AD{r}"] = geo["jalan"]
+                ws[f"Y{r}"] = lokasi_nama_clean
+                ws[f"Z{r}"] = lokasi_nama_clean
+            if data_rows:
                 # C3 pada kop lembar HPDB memuat nama kabupaten
-                ws["C3"] = geo_result["kabupaten"]
-
-                ws["M10"] = geo_result["province"]
-                ws["N10"] = geo_result["kabupaten"]
-                ws["W10"] = geo_result["kabupaten"]
-                ws["O10"] = geo_result["kecamatan"]
-                ws["P10"] = geo_result["desa"]
-                ws["Q10"] = geo_result["kodepos"]
-                ws["AD10"] = geo_result["jalan"]  # Nama jalan
-                
-                # Autocopy geocoding and cluster data to all rows
-                for r in range(11, max_row_data + 1):
-                    ws[f"M{r}"] = ws["M10"].value
-                    ws[f"N{r}"] = ws["N10"].value
-                    ws[f"W{r}"] = ws["W10"].value
-                    ws[f"O{r}"] = ws["O10"].value
-                    ws[f"P{r}"] = ws["P10"].value
-                    ws[f"Q{r}"] = ws["Q10"].value
-                    ws[f"AD{r}"] = ws["AD10"].value  # Autocopy nama jalan
-                    ws[f"Y{r}"] = ws["Y10"].value    # Autocopy cluster Y
-                    ws[f"Z{r}"] = ws["Z10"].value    # Autocopy cluster Z
+                ws["C3"] = ws["N10"].value
             
             # Count unique FAT IDs to determine capacity (Cell N3)
             fat_id_col_idx = headers.index("FAT ID") if "FAT ID" in headers else -1
@@ -854,8 +885,10 @@ class APDEngine:
             elif fat_count <= 40:
                 capacity = "96C"
             else:
-                capacity = "96C"  # Default untuk lebih dari 40
-            
+                capacity = "96C"
+                self.report.warn(f"{fdt_name}: {fat_count} FAT melebihi kapasitas "
+                                 "standar FDT 96C (40 FAT) — periksa kapasitas FDT")
+
             ws["N3"] = capacity
             
             # Set formula for N4
@@ -882,12 +915,54 @@ class APDEngine:
         # Generate final filename
         final_name = self._generate_final_filename(output_filename)
         
+        self.report.stat("geocoding_request", self._geocode_calls)
         return {
             "status": "success",
             "filename": final_name,
-            "content": output_buffer.getvalue()
+            "content": output_buffer.getvalue(),
+            "report": self.report.to_dict(),
         }
-    
+
+    def _geocode_rows(self, data_rows: List[List]) -> Dict[str, Dict[str, str]]:
+        """Geocode satu titik per FAT (tiang FAT, atau HP pertamanya).
+
+        FAT di atas batas MAX_GEOCODE_PER_JOB memakai hasil FAT terdekat yang
+        sudah di-geocode, supaya job besar tetap selesai dalam waktu wajar.
+        """
+        titik: Dict[str, Tuple[float, float]] = {}
+        for row in data_rows:
+            fat_id = row[6]
+            if fat_id in titik:
+                continue
+            for lat, lon in ((row[9], row[10]), (row[14], row[15])):
+                try:
+                    titik[fat_id] = (float(lat), float(lon))
+                    break
+                except (TypeError, ValueError):
+                    continue
+
+        hasil: Dict[str, Dict[str, str]] = {}
+        dipinjam = []
+        for fat_id, (lat, lon) in titik.items():
+            if self._geocode_calls < MAX_GEOCODE_PER_JOB:
+                geo = self.reverse_geocode(lat, lon)
+                if any(geo.values()):
+                    hasil[fat_id] = geo
+                    continue
+            dipinjam.append(fat_id)
+
+        for fat_id in dipinjam:
+            if not hasil:
+                break
+            lat, lon = titik[fat_id]
+            terdekat = min(hasil, key=lambda f: haversine(lat, lon, *titik[f]))
+            hasil[fat_id] = hasil[terdekat]
+        if dipinjam:
+            self.report.warn(
+                f"{len(dipinjam)} FAT memakai alamat FAT terdekat karena geocoding "
+                "gagal atau melewati batas permintaan", dipinjam)
+        return hasil
+
     def _generate_final_filename(self, output_filename: str) -> str:
         """Generate final filename according to format."""
         excel_name = os.path.basename(output_filename)

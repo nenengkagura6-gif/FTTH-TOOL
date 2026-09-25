@@ -69,6 +69,9 @@ from engines.duplikat_engine import check_duplicates_kml, DuplikatEngine
 from engines.kml_extractor_engine import process_kml_extractor
 from engines.pole_sorter_engine import process_pole_sorter
 from engines.insert_coding_engine import process_insert_coding
+from utils.commons import KmlLoadError
+from utils.template_validator import TemplateError
+from urllib.parse import quote
 import sentry_sdk
 
 sentry_dsn = os.environ.get("SENTRY_DSN_PYTHON")
@@ -82,8 +85,8 @@ if sentry_dsn:
     )
     print("Sentry initialized for FastAPI")
 
-APP_VERSION = "1.3.0"
-APP_BUILD_DATE = "2026-08-29"
+APP_VERSION = "1.4.0"
+APP_BUILD_DATE = "2026-09-25"
 
 app = FastAPI(
     title="KML Processing API",
@@ -137,6 +140,83 @@ MAX_ZIP_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
 
 def _human(n: int) -> str:
     return f"{n / (1024 * 1024):.1f} MB"
+
+
+def content_disposition(filename: str) -> str:
+    """Header Content-Disposition yang aman untuk nama file apa pun.
+
+    Header HTTP di-encode latin-1: nama berhuruf non-latin dulu memicu
+    UnicodeEncodeError (500), dan tanda kutip di nama file merusak header.
+    """
+    ascii_name = "".join(c if 32 <= ord(c) < 127 and c not in '"\\' else "_" for c in filename)
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
+
+
+# =========================
+# Batas Paket per Tool
+# =========================
+# Selaras dengan featureKey di frontend (lib/features.ts & site-config.ts).
+# Tool yang tidak tercantum gratis. Dulu batas paket hanya diperiksa di
+# frontend, jadi user gratis bisa memanggil API langsung.
+PLAN_RANK = {"free": 0, "basic": 1, "pro": 2, "enterprise": 3}
+TOOL_MIN_PLAN = {
+    "kml_to_boq": "pro",
+    "kml_to_database_hp": "pro",
+    "kml_to_database": "pro",
+    "kml_extractor": "pro",
+    "pole_sorter": "pro",
+    "insert_coding": "pro",
+    "kml_apd": "pro",
+    "auto_placemark": "pro",
+    "basicmap": "pro",
+}
+
+
+def assert_plan_allows(user_id: str, tool_name: str) -> None:
+    required = TOOL_MIN_PLAN.get(tool_name)
+    if not required:
+        return
+    from supabase_client import get_user_access
+    access = get_user_access(user_id)
+    if access.get("role") == "admin":
+        return
+    if PLAN_RANK.get(access.get("plan", "free"), 0) < PLAN_RANK[required]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Tool ini membutuhkan paket {required.capitalize()}. Upgrade paket untuk melanjutkan.",
+        )
+
+
+# =========================
+# AUTENTIKASI
+# =========================
+async def require_user_id(authorization: str = Header(None)) -> str:
+    """
+    Verifikasi Supabase JWT dari header Authorization dan kembalikan user id.
+
+    Sebelumnya /api/v1/queue/job tidak punya autentikasi sama sekali, padahal
+    backend memproses request memakai service role key yang mem-bypass RLS.
+    Siapa pun bisa mengirim file_path milik user lain untuk diunduh, diproses,
+    lalu hasilnya ditulis ke folder miliknya sendiri.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    token = authorization.split(" ", 1)[1].strip()
+
+    from supabase_client import get_user_from_token
+    user = get_user_from_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    return str(user.id)
+
+
+def _user_facing_error(exc: Exception) -> Optional[str]:
+    """Pesan error yang aman & berguna untuk ditampilkan ke user, atau None."""
+    if isinstance(exc, (KmlLoadError, TemplateError)):
+        return str(exc)
+    return None
 
 
 async def read_upload_limited(
@@ -244,7 +324,7 @@ async def get_version():
     return {
         "version": APP_VERSION,
         "build_date": APP_BUILD_DATE,
-        "supported_tools": ["kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker"]
+        "supported_tools": list(SUPPORTED_TOOLS)
     }
 
 
@@ -255,14 +335,16 @@ async def get_version():
 @app.post("/kml-to-excel")
 async def convert_kml_to_excel(
     kml_file: UploadFile = File(..., description="KML or KMZ file to process"),
-    template: Optional[UploadFile] = File(None, description="Optional Excel template (BOQ_Template.xlsx)")
+    template: Optional[UploadFile] = File(None, description="Optional Excel template (BOQ_Template.xlsx)"),
+    user_id: str = Depends(require_user_id),
 ):
     """
     Convert KML/KMZ file to BOQ Excel format.
-    
+
     - **kml_file**: KML or KMZ file containing network data
     - **template**: Optional Excel template for BOQ format
     """
+    assert_plan_allows(user_id, "kml_to_boq")
     try:
         # Validate file extension
         filename = kml_file.filename
@@ -296,15 +378,14 @@ async def convert_kml_to_excel(
         return StreamingResponse(
             io.BytesIO(result["content"]),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f'attachment; filename="{result["filename"]}"'
-            }
+            headers={"Content-Disposition": content_disposition(result["filename"])}
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        msg = _user_facing_error(e)
+        raise HTTPException(status_code=400 if msg else 500, detail=msg or str(e))
 
 
 # =========================
@@ -313,11 +394,16 @@ async def convert_kml_to_excel(
 @app.post("/apd-hpdb")
 async def process_apd(
     kml_file: UploadFile = File(..., description="KML or KMZ file to process"),
-    template: Optional[UploadFile] = File(None, description="Optional APD template (APD_HPDB_.xlsx)")
+    template: Optional[UploadFile] = File(None, description="Optional APD template (APD_HPDB_.xlsx)"),
+    user_id: str = Depends(require_user_id),
 ):
     """
     Process APD HPDB from KML or KMZ file with geocoding (Synchronous - Legacy)
+
+    Wajib login: endpoint ini memanggil Nominatim, dan pemakaian anonim
+    yang berlebihan bisa membuat IP server diblokir untuk semua pengguna.
     """
+    assert_plan_allows(user_id, "kml_to_database_hp")
     try:
         # Validate file extension
         filename = kml_file.filename
@@ -347,15 +433,14 @@ async def process_apd(
         return StreamingResponse(
             io.BytesIO(result["content"]),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f'attachment; filename="{result["filename"]}"'
-            }
+            headers={"Content-Disposition": content_disposition(result["filename"])}
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        msg = _user_facing_error(e)
+        raise HTTPException(status_code=400 if msg else 500, detail=msg or str(e))
 
 # =========================
 # ASYNC QUEUE ENDPOINTS
@@ -372,7 +457,62 @@ class JobRequest(BaseModel):
     tool_name: str
     template_path: Optional[str] = None
 
+SUPPORTED_TOOLS = (
+    "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
+    "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor",
+    "pole_sorter", "insert_coding", "kml_apd", "auto_placemark", "basicmap"
+)
+
+# Batas job yang diproses bersamaan. Job berjalan di threadpool proses yang
+# sama; tanpa batas, beberapa job Overpass/geocoding sekaligus menghabiskan
+# CPU & thread instance free tier dan membuat API lain ikut lambat.
+MAX_CONCURRENT_JOBS = max(1, int(os.environ.get("MAX_CONCURRENT_JOBS", "2")))
+_job_slots = threading.BoundedSemaphore(MAX_CONCURRENT_JOBS)
+
+
+def _insert_coding_prefixes(job_config: dict) -> dict:
+    """Prefix per FDT dari config job: prefix_fdt_01, prefix_fdt_02, ... (berapa pun).
+
+    Dulu hanya prefix_fdt_01..03 yang dibaca; FDT 04 ke atas diam-diam
+    memakai kode FDT 01.
+    """
+    import re as _re
+    prefixes = {}
+    for key, value in (job_config or {}).items():
+        m = _re.fullmatch(r"prefix_fdt_0*(\d+)", str(key))
+        if m and isinstance(value, str) and value.strip():
+            prefixes[int(m.group(1))] = value.strip()
+    for i, value in enumerate((job_config or {}).get("prefixes") or [], start=1):
+        if isinstance(value, str) and value.strip():
+            prefixes.setdefault(i, value.strip())
+    return prefixes or {1: "DEFAULT"}
+
+
 def _process_job_sync(
+    job_id: str,
+    file_path: str,
+    original_filename: str,
+    user_id: str,
+    tool_name: str,
+    template_path: Optional[str] = None
+):
+    """Jalankan job dengan batas konkurensi (lihat MAX_CONCURRENT_JOBS)."""
+    if not _job_slots.acquire(blocking=False):
+        try:
+            from supabase_client import update_job_status
+            update_job_status(job_id, "queued", {
+                "progress_message": "Menunggu giliran — server sedang memproses job lain..."
+            })
+        except Exception:
+            pass
+        _job_slots.acquire()
+    try:
+        _run_job(job_id, file_path, original_filename, user_id, tool_name, template_path)
+    finally:
+        _job_slots.release()
+
+
+def _run_job(
     job_id: str,
     file_path: str,
     original_filename: str,
@@ -392,7 +532,9 @@ def _process_job_sync(
 
     # Import supabase functions early, fail fast if missing
     try:
-        from supabase_client import update_job_status, download_input_file, upload_output_file
+        from supabase_client import (
+            update_job_status, download_input_file, upload_output_file, save_job_report,
+        )
     except Exception as import_err:
         print(f"[job {job_id}] ❌ FATAL: Cannot import supabase_client: {import_err}")
         traceback.print_exc()
@@ -575,25 +717,8 @@ def _process_job_sync(
                 "progress_message": "Menyisipkan kode prefix FDT/FAT/Kabel/Pole..."
             })
             from supabase_client import get_job_config
-            job_config = get_job_config(job_id)
-            
-            # Extract FDT prefixes from job config
-            prefix_1 = job_config.get("prefix_fdt_01", "").strip()
-            prefix_2 = job_config.get("prefix_fdt_02", "").strip()
-            prefix_3 = job_config.get("prefix_fdt_03", "").strip()
-            
-            prefixes_dict = {}
-            if prefix_1:
-                prefixes_dict[1] = prefix_1
-            if prefix_2:
-                prefixes_dict[2] = prefix_2
-            if prefix_3:
-                prefixes_dict[3] = prefix_3
-                
-            # Fallback if dictionary is empty
-            if not prefixes_dict:
-                prefixes_dict[1] = "DEFAULT"
-                
+            prefixes_dict = _insert_coding_prefixes(get_job_config(job_id))
+
             result = process_insert_coding(
                 kml_content=file_bytes,
                 filename=original_filename,
@@ -643,7 +768,10 @@ def _process_job_sync(
                 kml_content=file_bytes,
                 filename=original_filename,
                 is_kmz=is_kmz,
-                progress_cb=_bm_progress
+                progress_cb=_bm_progress,
+                # Unggahan opsional BasicMap adalah CSV nama jalan hasil run
+                # sebelumnya (kolom 'nama_dipakai' diisi tangan).
+                roads_csv=template_bytes,
             )
         else:
             raise Exception(f"Unsupported tool: {tool_name}")
@@ -674,6 +802,12 @@ def _process_job_sync(
 
         if not output_path:
             raise Exception("Failed to upload output file to storage")
+
+        # Laporan disimpan SEBELUM status 'completed', supaya frontend yang
+        # berhenti polling saat melihat 'completed' sudah bisa membacanya.
+        report = result.get("report")
+        if report:
+            save_job_report(job_id, report)
 
         # 4. Mark as completed
         processing_time_ms = int((time.time() - start_time) * 1000)
@@ -712,31 +846,6 @@ def _process_job_sync(
             traceback.print_exc()
 
 
-# =========================
-# AUTENTIKASI
-# =========================
-async def require_user_id(authorization: str = Header(None)) -> str:
-    """
-    Verifikasi Supabase JWT dari header Authorization dan kembalikan user id.
-
-    Sebelumnya /api/v1/queue/job tidak punya autentikasi sama sekali, padahal
-    backend memproses request memakai service role key yang mem-bypass RLS.
-    Siapa pun bisa mengirim file_path milik user lain untuk diunduh, diproses,
-    lalu hasilnya ditulis ke folder miliknya sendiri.
-    """
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
-
-    token = authorization.split(" ", 1)[1].strip()
-
-    from supabase_client import get_user_from_token
-    user = get_user_from_token(token)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    return str(user.id)
-
-
 def _assert_owned_path(path: str, user_id: str, label: str) -> None:
     """Storage key wajib berada di dalam folder milik user, tanpa traversal."""
     if not path:
@@ -759,11 +868,7 @@ async def queue_job(
 
     Semua identitas diambil dari JWT yang terverifikasi — bukan dari body.
     """
-    supported_tools = (
-        "kml_to_boq", "kml_to_database_hp", "kml_to_database", "kml_duplicate_checker",
-        "kml_to_csv", "kml_to_shp", "shp_to_kml", "kml_to_dxf", "dxf_to_kml", "kml_extractor",
-        "pole_sorter", "insert_coding", "kml_apd", "auto_placemark", "basicmap"
-    )
+    supported_tools = SUPPORTED_TOOLS
     print(f"[queue_job] Received: tool_name={req.tool_name}, job_id={req.job_id}, file={req.original_filename}")
     
     if req.tool_name not in supported_tools:
@@ -776,10 +881,17 @@ async def queue_job(
     if req.template_path:
         _assert_owned_path(req.template_path, auth_user_id, "template_path")
 
-    from supabase_client import job_belongs_to_user
+    from supabase_client import job_belongs_to_user, merge_job_config
     if not job_belongs_to_user(req.job_id, auth_user_id):
         print(f"[queue_job] ❌ Rejected: job {req.job_id} bukan milik user {auth_user_id}")
         raise HTTPException(status_code=403, detail="Job does not belong to this user")
+
+    assert_plan_allows(auth_user_id, req.tool_name)
+
+    # Path template disimpan di config job supaya job bisa dilanjutkan
+    # utuh kalau server restart sebelum job selesai (lihat _recover_jobs).
+    if req.template_path:
+        merge_job_config(req.job_id, {"_template_path": req.template_path})
 
     # Schedule processing as a background task
     background_tasks.add_task(
@@ -796,6 +908,54 @@ async def queue_job(
     return {"status": "queued", "job_id": req.job_id}
 
 
+def _recover_jobs() -> None:
+    """Lanjutkan job yang terputus karena server restart/tidur.
+
+    Antrian berada di memori proses; tanpa ini job semacam itu menggantung
+    di status 'processing' sampai reaper database (30 menit) menandainya
+    gagal. Job yang sudah melewati max_retries langsung ditandai gagal.
+    """
+    import time
+    from supabase_client import get_interrupted_jobs, update_job_status
+
+    time.sleep(5)  # biarkan server selesai start dulu
+    jobs = get_interrupted_jobs(int(os.environ.get("JOB_RECOVERY_MAX_AGE_MIN", "30")))
+    for job in jobs:
+        job_id = job["id"]
+        retries = int(job.get("retry_count") or 0)
+        if job.get("tool_name") not in SUPPORTED_TOOLS or retries >= int(job.get("max_retries") or 3):
+            update_job_status(job_id, "failed", {
+                "error_message": "Proses terhenti karena server restart. Silakan proses ulang.",
+                "progress_percent": 0,
+            })
+            continue
+        update_job_status(job_id, "queued", {
+            "retry_count": retries + 1,
+            "progress_percent": 0,
+            "progress_message": "Dilanjutkan setelah server restart...",
+        })
+        config = job.get("config") or {}
+        print(f"[recovery] melanjutkan job {job_id} ({job['tool_name']})")
+        threading.Thread(
+            target=_process_job_sync,
+            kwargs=dict(
+                job_id=job_id,
+                file_path=job["original_file_url"],
+                original_filename=job["original_filename"],
+                user_id=str(job["user_id"]),
+                tool_name=job["tool_name"],
+                template_path=config.get("_template_path"),
+            ),
+            daemon=True,
+        ).start()
+
+
+@app.on_event("startup")
+async def _start_job_recovery() -> None:
+    if os.environ.get("JOB_RECOVERY", "true").lower() == "true":
+        threading.Thread(target=_recover_jobs, daemon=True).start()
+
+
 # =========================
 # Check Duplicates
 # =========================
@@ -804,7 +964,8 @@ async def check_duplicates(
     kml_files: List[UploadFile] = File(..., description="One or more KML files to check"),
     max_distance: float = Form(1.0, description="Maximum distance in meters for duplicate detection"),
     output_format: str = Form("text", description="Output format: 'text' or 'json'"),
-    keywords: Optional[str] = Form(None, description="Comma-separated keywords (default: POLE,HP)")
+    keywords: Optional[str] = Form(None, description="Comma-separated keywords (default: POLE,HP)"),
+    user_id: str = Depends(require_user_id),
 ):
     """
     Check for duplicate POLE/HP points across KML files.
@@ -868,12 +1029,13 @@ async def check_duplicates(
 async def check_duplicates_json(
     kml_files: List[UploadFile] = File(..., description="One or more KML files to check"),
     max_distance: float = Form(1.0, description="Maximum distance in meters"),
-    keywords: Optional[str] = Form(None, description="Comma-separated keywords")
+    keywords: Optional[str] = Form(None, description="Comma-separated keywords"),
+    user_id: str = Depends(require_user_id),
 ):
     """
     Check duplicates and return JSON format (convenience endpoint).
     """
-    return await check_duplicates(kml_files, max_distance, "json", keywords)
+    return await check_duplicates(kml_files, max_distance, "json", keywords, user_id)
 
 
 # =========================
@@ -991,7 +1153,7 @@ async def parse_otdr_batch(
 # File Validation
 # =========================
 @app.post("/validate-kml")
-async def validate_kml(kml_file: UploadFile = File(...)):
+async def validate_kml(kml_file: UploadFile = File(...), user_id: str = Depends(require_user_id)):
     """
     Validate if a KML file is properly formatted.
     """

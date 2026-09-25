@@ -25,6 +25,36 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def lonlat_to_xy(lon: float, lat: float, lat0: float) -> Tuple[float, float]:
+    """Proyeksi ekuirektangular lokal (meter) — cukup akurat untuk skala cluster."""
+    return lon * 111320.0 * math.cos(math.radians(lat0)), lat * 110540.0
+
+
+def polyline_projection(
+    point: Tuple[float, float], coords: List[Tuple[float, float]]
+) -> Optional[Tuple[float, float]]:
+    """Proyeksikan titik (lon, lat) ke polyline [(lon, lat), ...].
+
+    Mengembalikan (jarak sepanjang garis dari titik awal, jarak tegak lurus),
+    keduanya dalam meter, atau None kalau garisnya kurang dari dua titik.
+    """
+    if not coords or len(coords) < 2:
+        return None
+    lat0 = point[1]
+    px, py = lonlat_to_xy(point[0], point[1], lat0)
+    xy = [lonlat_to_xy(lon, lat, lat0) for lon, lat in coords]
+    best_perp, best_along, acc = float("inf"), 0.0, 0.0
+    for (x1, y1), (x2, y2) in zip(xy, xy[1:]):
+        dx, dy = x2 - x1, y2 - y1
+        seg = math.hypot(dx, dy)
+        t = 0.0 if seg == 0 else max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / (seg * seg)))
+        d = math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+        if d < best_perp:
+            best_perp, best_along = d, acc + t * seg
+        acc += seg
+    return best_along, best_perp
+
+
 def safe_localname(elem) -> Optional[str]:
     """Safely get the local name of an XML element."""
     try:
@@ -164,6 +194,62 @@ class KmlLoadError(ValueError):
     """Berkas benar-benar tidak bisa dibaca; pesannya layak ditampilkan ke user."""
 
 
+# Batas isi arsip KMZ. Upload dibatasi 50 MB, tetapi itu ukuran TERKOMPRESI:
+# KMZ buatan yang mengembang ribuan kali lipat (zip bomb) dulu dibaca apa
+# adanya ke memori. KML asli jarang terkompresi lebih dari ~30x.
+MAX_KMZ_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
+MAX_KMZ_RATIO = 200
+
+
+def _check_zip_size(arsip: zipfile.ZipFile, compressed_len: int) -> None:
+    total = sum(i.file_size for i in arsip.infolist())
+    if total > MAX_KMZ_UNCOMPRESSED_BYTES:
+        raise KmlLoadError(
+            "Isi arsip KMZ terlalu besar setelah diekstrak "
+            f"({total / (1024 * 1024):.0f} MB)."
+        )
+    if compressed_len > 0 and total / compressed_len > MAX_KMZ_RATIO:
+        raise KmlLoadError(
+            "Arsip KMZ ditolak: rasio kompresinya tidak wajar (kemungkinan zip bomb)."
+        )
+
+
+def is_zip_bytes(content: bytes) -> bool:
+    return content[:4] in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+
+
+def read_kmz_attachments(content: bytes) -> Dict[str, bytes]:
+    """Ambil lampiran KMZ (ikon, overlay) selain KML utama, dengan batas ukuran.
+
+    Dipakai tool yang mengemas ulang hasilnya sebagai KMZ. KML tambahan di
+    dalam arsip ikut dipertahankan; hanya KML utama yang diganti hasil proses.
+    """
+    if not content or not is_zip_bytes(content):
+        return {}
+    try:
+        with zipfile.ZipFile(io.BytesIO(content), "r") as arsip:
+            _check_zip_size(arsip, len(content))
+            utama = _pilih_kml_dalam_kmz(arsip.namelist())
+            return {
+                n: arsip.read(n)
+                for n in arsip.namelist()
+                if n != utama and not n.endswith("/")
+            }
+    except zipfile.BadZipFile:
+        return {}
+
+
+def strip_doctype(teks: str) -> str:
+    """Buang deklarasi <!DOCTYPE ...>, termasuk internal subset-nya.
+
+    KML tidak pernah butuh DTD. Yang memakainya hanya serangan XML — entitas
+    eksternal (membaca file server) dan 'billion laughs'. Tidak semua engine
+    memakai defusedxml, jadi pembersihan dilakukan sekali di pemuat bersama.
+    """
+    return re.sub(r"<!DOCTYPE[^\[>]*(\[.*?\])?\s*>", "", teks, count=1,
+                  flags=re.DOTALL | re.IGNORECASE)
+
+
 # Karakter yang dilarang XML 1.0 di luar tab/newline/carriage-return.
 _KARAKTER_TERLARANG = re.compile(
     r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x84\x86-\x9f﷐-﷟￾￿]"
@@ -266,6 +352,7 @@ def normalize_kml_text(raw_text: str) -> str:
         raw_text = raw_text[mulai:]
 
     raw_text = _KARAKTER_TERLARANG.sub("", raw_text)
+    raw_text = strip_doctype(raw_text)
     raw_text = _perbaiki_entitas_luar_cdata(raw_text)
     return repair_unbound_prefixes(raw_text)
 
@@ -305,9 +392,10 @@ def load_kml_text(content: bytes, is_kmz: Optional[bool] = None) -> str:
     if not content:
         raise KmlLoadError("Berkas kosong.")
 
-    if content[:4] in (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"):
+    if is_zip_bytes(content):
         try:
             with zipfile.ZipFile(io.BytesIO(content), "r") as arsip:
+                _check_zip_size(arsip, len(content))
                 nama = _pilih_kml_dalam_kmz(arsip.namelist())
                 if nama is None:
                     raise KmlLoadError(
@@ -362,11 +450,27 @@ def parse_kml_lxml(content: bytes, is_kmz: bool = False) -> etree.ElementTree:
 
 
 def get_folder_name(folder) -> str:
-    """Extract name from a KML Folder element."""
-    names = folder.getElementsByTagName("name")
-    if names and names[0].firstChild:
-        return names[0].firstChild.nodeValue.strip()
+    """Nama sebuah Folder/Placemark — hanya dari anak <name> langsung.
+
+    getElementsByTagName("name") mencari ke seluruh keturunan, jadi folder
+    tanpa <name> sendiri dulu 'meminjam' nama Placemark pertama di dalamnya.
+    """
+    for child in getattr(folder, "childNodes", []):
+        if getattr(child, "nodeType", None) == 1 and child.nodeName == "name":
+            return "".join(
+                n.nodeValue for n in child.childNodes
+                if n.nodeType in (n.TEXT_NODE, n.CDATA_SECTION_NODE)
+            ).strip()
     return ""
+
+
+_FDT_NUM_RE = re.compile(r"\bFDT[\s._\-]*0*(\d+)", re.IGNORECASE)
+
+
+def fdt_number(text: str) -> Optional[int]:
+    """Nomor FDT dari teks bebas: 'FDT 01', 'FDT-2', 'MR.ABC.FDT03' -> 1, 2, 3."""
+    m = _FDT_NUM_RE.search(text or "")
+    return int(m.group(1)) if m else None
 
 
 def parse_coords(text: str) -> List[Tuple[float, float]]:

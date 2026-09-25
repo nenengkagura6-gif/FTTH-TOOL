@@ -45,6 +45,16 @@ interface ToolPageProps {
   primaryAccept?: string
   /** Whether to show the optional Excel template upload */
   supportsExcelTemplate?: boolean
+  /**
+   * Unggahan opsional kedua selain template Excel (mis. CSV nama jalan untuk
+   * BasicMap). Kalau diisi, menggantikan slot template Excel. Berkasnya
+   * dikirim ke backend lewat template_path yang sama.
+   */
+  secondaryUpload?: {
+    label: string
+    buttonLabel: string
+    accept: string
+  }
   /** Feature key for plan gating */
   featureKey?: FeatureKey
   /** Explicit tool name to process */
@@ -86,6 +96,24 @@ interface UploadFile {
   progress: number
 }
 
+/** Laporan engine yang disimpan backend di processing_jobs.result_report. */
+interface JobReport {
+  warnings?: string[]
+  stats?: Record<string, string | number | null>
+}
+
+function formatStatKey(key: string): string {
+  return key.replace(/_/g, " ")
+}
+
+/** Format yang diterima, untuk teks drop zone ("KML, KMZ, GeoJSON"). */
+function describeFormats(formats: string[]): string {
+  return formats
+    .filter((f) => f !== ".xlsx")
+    .map((f) => (f === ".geojson" ? "GeoJSON" : f.replace(/^\./, "").toUpperCase()))
+    .join("/")
+}
+
 export function ToolPage({
   title,
   description,
@@ -93,6 +121,7 @@ export function ToolPage({
   processingNotes = [],
   primaryAccept = ".kml,.kmz",
   supportsExcelTemplate = true,
+  secondaryUpload,
   featureKey,
   toolName,
   guide,
@@ -116,7 +145,17 @@ export function ToolPage({
     ms: null,
   })
   const [activeTab, setActiveTab] = useState<"tool" | "tutorial">("tool")
-  
+  const [jobReport, setJobReport] = useState<JobReport | null>(null)
+
+  // Slot unggahan opsional: CSV/berkas lain kalau secondaryUpload diisi,
+  // selain itu template Excel. Hanya .xlsx — openpyxl tidak bisa membaca
+  // .xls, dan dulu pilihan .xls baru gagal setelah diunggah dan diproses.
+  const optionalUpload = secondaryUpload
+    ?? (supportsExcelTemplate
+      ? { label: "Optional Excel template", buttonLabel: "Add Excel template (.xlsx)", accept: ".xlsx" }
+      : null)
+  const formatsLabel = describeFormats(acceptedFormats) || "KML/KMZ"
+
   const primaryInputRef = useRef<HTMLInputElement>(null)
   const templateInputRef = useRef<HTMLInputElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -289,6 +328,8 @@ export function ToolPage({
     setStatus("uploading")
     setProgress(0)
     setErrorMsg(null)
+    setJobReport(null)
+    setProgressMessage("")
 
     try {
       if (clientProcessor) {
@@ -492,6 +533,10 @@ export function ToolPage({
             bytes: job.output_file_size_bytes ?? null,
             ms: job.processing_time_ms ?? null,
           })
+          // Kolom result_report ditambahkan lewat migrasi
+          // 2026-09-25-job-result-report.sql; tipe DB yang digenerate
+          // mungkin belum memuatnya.
+          setJobReport(((job as unknown as Record<string, unknown>).result_report as JobReport | null) ?? null)
           
           const finalUrl = job.output_file_url
           if (finalUrl) {
@@ -526,6 +571,7 @@ export function ToolPage({
     setProgressMessage("")
     setOutputFilename(null)
     setJobStats({ bytes: null, ms: null })
+    setJobReport(null)
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     releaseBlobUrl()
   }
@@ -763,7 +809,7 @@ export function ToolPage({
       {/* Left side - description */}
       <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-balance">
+          <h1 className="anim-reveal-mask text-2xl sm:text-3xl font-semibold tracking-tight text-balance">
             {title}
           </h1>
           <p className="mt-3 text-sm text-muted-foreground leading-relaxed text-pretty">
@@ -1035,7 +1081,7 @@ export function ToolPage({
                     </div>
                     <div className="text-center">
                       <p className="text-sm font-medium">
-                        Drop your KML/KMZ file here
+                        Drop your {formatsLabel} file here
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         or click to browse — max 50MB
@@ -1075,11 +1121,11 @@ export function ToolPage({
                     )}
                   </AnimatePresence>
 
-                  {/* Optional Excel template */}
-                  {supportsExcelTemplate && (
+                  {/* Optional Excel template / secondary upload */}
+                  {optionalUpload && (
                     <div>
                       <label className="text-xs text-muted-foreground">
-                        Optional Excel template
+                        {optionalUpload.label}
                       </label>
                       <div className="mt-2">
                         {template ? (
@@ -1111,13 +1157,13 @@ export function ToolPage({
                             className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-transparent px-4 py-3 text-sm text-muted-foreground hover:border-border-strong hover:text-foreground transition-colors"
                           >
                             <FileSpreadsheet className="h-4 w-4" />
-                            Add Excel template (.xlsx)
+                            {optionalUpload.buttonLabel}
                           </button>
                         )}
                         <input
                           ref={templateInputRef}
                           type="file"
-                          accept=".xlsx,.xls"
+                          accept={optionalUpload.accept}
                           className="sr-only"
                           onChange={(e) => handleTemplate(e.target.files)}
                         />
@@ -1143,7 +1189,10 @@ export function ToolPage({
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span className="flex items-center gap-2">
                             <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                            {progressMessage || (progress < 10 ? "Antrian..." : "Sedang diproses...")}
+                            <span>
+                              {progressMessage || (progress < 10 ? "Antrian..." : "Sedang diproses...")}
+                              <span className="anim-cursor ml-1" aria-hidden="true" />
+                            </span>
                           </span>
                           {/* Persentase hanya ditampilkan kalau backend
                               benar-benar mengirimkannya. */}
@@ -1241,6 +1290,43 @@ export function ToolPage({
                             </div>
                           )}
                         </dl>
+                        {jobReport?.stats && Object.keys(jobReport.stats).length > 0 && (
+                          <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-3">
+                            {Object.entries(jobReport.stats).map(([key, value]) => (
+                              <div key={key}>
+                                <dt className="font-mono text-3xs uppercase tracking-[0.14em] text-muted-foreground/70">
+                                  {formatStatKey(key)}
+                                </dt>
+                                <dd className="mt-0.5 font-mono text-2xs text-foreground/85">
+                                  {value ?? "—"}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        )}
+
+                        {/* Peringatan engine: bagian data yang dilewati atau
+                            perlu diperiksa. Tanpa ini hasil yang tidak
+                            lengkap terlihat sama dengan hasil yang sempurna. */}
+                        {jobReport?.warnings && jobReport.warnings.length > 0 && (
+                          <div className="mt-3 rounded-lg border border-warning/30 bg-warning/5 p-3">
+                            <p className="flex items-center gap-2 text-xs font-medium text-warning">
+                              <AlertCircle className="h-3.5 w-3.5" />
+                              {locale === "id"
+                                ? `${jobReport.warnings.length} hal perlu diperiksa`
+                                : `${jobReport.warnings.length} item(s) need review`}
+                            </p>
+                            <ul className="mt-2 space-y-1.5">
+                              {jobReport.warnings.map((w, i) => (
+                                <li key={i} className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
+                                  <span className="mt-1.5 h-1 w-1 flex-shrink-0 rounded-full bg-warning/70" />
+                                  <span className="break-words">{w}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
                         <div className="mt-4 flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -1274,11 +1360,21 @@ export function ToolPage({
                       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-destructive/10 text-destructive ring-1 ring-destructive/30">
                         <AlertCircle className="h-4 w-4" />
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <h3 className="text-sm font-medium">Processing failed</h3>
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="mt-1 text-xs text-muted-foreground break-words">
                           {errorMsg || "Something went wrong. Please try again."}
                         </p>
+                        {primary && (
+                          <button
+                            type="button"
+                            onClick={handleProcess}
+                            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-3 py-1.5 text-xs hover:border-border-strong transition-colors"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            {locale === "id" ? "Coba lagi" : "Try again"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </motion.div>

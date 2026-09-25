@@ -67,7 +67,14 @@ BBOX_MARGIN_DEG = 0.00015
 MAX_DISTANCE_TO_ROAD_M = 25.0
 ENABLE_BLOCKED_BY_BUILDING_FILTER = True
 ENABLE_FIRST_ROW_BIN_FILTER = True
-FRONTAGE_BIN_M = 6.0
+# Satu rumah per sekian meter muka jalan. 6 m terlalu lebar untuk rumah
+# deret di Indonesia (umumnya 4-5 m), sehingga rumah asli ikut terbuang.
+# Rumah baris kedua sudah disaring oleh filter 'terhalang bangunan lain'.
+FRONTAGE_BIN_M = 4.0
+
+# Batas waktu total pengambilan data OSM per job. Tanpa batas, 80 tile x
+# percobaan ulang bisa menahan worker selama berjam-jam.
+MAX_FETCH_SECONDS = int(__import__("os").environ.get("AUTO_PLACEMARK_MAX_SECONDS", "900"))
 
 ROAD_HIGHWAY_REGEX = (
     "residential|service|living_street|unclassified|tertiary|secondary|primary|"
@@ -404,6 +411,85 @@ def overpass_request(query: str) -> Dict[str, Any]:
 # ==========================================================
 # BUILDINGS FROM OVERPASS
 # ==========================================================
+def build_overpass_combined_query(south: float, west: float, north: float, east: float) -> str:
+    """Bangunan + jalan dalam SATU permintaan per tile (dulu dua permintaan
+    terpisah — jumlah request, dan risiko HTTP 429, jadi dua kali lipat)."""
+    bbox = f"({south:.7f},{west:.7f},{north:.7f},{east:.7f})"
+    return f"""
+[out:json][timeout:{OVERPASS_TIMEOUT_SECONDS}];
+(
+  way["building"]{bbox};
+  relation["building"]{bbox};
+  way["highway"~"{ROAD_HIGHWAY_REGEX}"]{bbox};
+);
+out body geom;
+"""
+
+
+class FetchStats:
+    def __init__(self):
+        self.tiles = 0
+        self.failed = 0
+        self.skipped_timeout = 0
+        self.started = time.monotonic()
+
+    def out_of_time(self) -> bool:
+        return time.monotonic() - self.started > MAX_FETCH_SECONDS
+
+
+def download_osm_features(boundary_geom: BaseGeometry, progress_cb=None,
+                          stats: Optional[FetchStats] = None
+                          ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    """Unduh bangunan dan jalan untuk satu boundary; tile gagal dicatat di stats."""
+    stats = stats or FetchStats()
+    tiles = make_tiles(boundary_geom.bounds)
+    buildings: Dict[str, Dict[str, Any]] = {}
+    roads: Dict[str, Dict[str, Any]] = {}
+
+    for i, (south, west, north, east) in enumerate(tiles, start=1):
+        if stats.out_of_time():
+            stats.skipped_timeout += len(tiles) - i + 1
+            break
+        stats.tiles += 1
+        if progress_cb:
+            progress_cb(f"Query OSM tile {i}/{len(tiles)}")
+        try:
+            data = overpass_request(build_overpass_combined_query(south, west, north, east))
+        except Exception as e:
+            print(f"  GAGAL tile {i}: {e}")
+            stats.failed += 1
+            continue
+
+        for el in data.get("elements", []) or []:
+            tags = el.get("tags", {}) or {}
+            if "building" in tags:
+                rec = element_to_building_record(el)
+                if rec is not None:
+                    buildings[rec["source_id"]] = rec
+            elif "highway" in tags:
+                rec = element_to_road_record(el)
+                if rec is not None:
+                    roads[rec["road_id"]] = rec
+
+        if i < len(tiles):
+            time.sleep(OVERPASS_SLEEP_SECONDS)
+
+    b_gdf = (gpd.GeoDataFrame(list(buildings.values()), geometry="geometry", crs="EPSG:4326")
+             if buildings else gpd.GeoDataFrame(
+                 columns=["source_id", "source", "building", "name", "geometry"],
+                 geometry="geometry", crs="EPSG:4326"))
+    r_gdf = (gpd.GeoDataFrame(list(roads.values()), geometry="geometry", crs="EPSG:4326")
+             if roads else gpd.GeoDataFrame(
+                 columns=["road_id", "highway", "name", "service", "geometry"],
+                 geometry="geometry", crs="EPSG:4326"))
+    if not r_gdf.empty:
+        try:
+            r_gdf = r_gdf[r_gdf.geometry.intersects(boundary_geom.buffer(BBOX_MARGIN_DEG * 2))].copy()
+        except Exception:
+            pass
+    return b_gdf, r_gdf
+
+
 def build_overpass_building_query(south: float, west: float, north: float, east: float) -> str:
     return f"""
 [out:json][timeout:{OVERPASS_TIMEOUT_SECONDS}];
@@ -607,13 +693,19 @@ def nearest_road_info(point_m: Point, roads_m: gpd.GeoDataFrame) -> Optional[Dic
     if roads_m.empty:
         return None
 
-    distances = roads_m.geometry.distance(point_m)
-    if distances.empty:
-        return None
-    min_pos = int(distances.values.argmin())
+    # Indeks spasial: dulu jarak ke SEMUA jalan dihitung untuk setiap
+    # bangunan (O(bangunan x jalan)).
+    try:
+        idx = roads_m.sindex.nearest(point_m, return_all=False)
+        min_pos = int(idx[1][0])
+    except Exception:
+        distances = roads_m.geometry.distance(point_m)
+        if distances.empty:
+            return None
+        min_pos = int(distances.values.argmin())
     road_row = roads_m.iloc[min_pos]
     road_geom = road_row.geometry
-    dist_m = float(distances.iloc[min_pos])
+    dist_m = float(road_geom.distance(point_m))
     try:
         foot = nearest_points(point_m, road_geom)[1]
     except Exception:
@@ -780,6 +872,7 @@ def prepare_candidate_points(
         accepted_stage.append({
             "boundary": boundary_name,
             "point": p4326,
+            "projection_m": road_info["projection_m"],
             "source_id": str(buildings_in.iloc[i].get("source_id", "")),
             "road_id": road_info["road_id"],
             "road_name": road_info["road_name"],
@@ -863,6 +956,9 @@ def process_auto_placemark(
 
         accepted_rows: List[Dict[str, Any]] = []
         global_no = 1
+        stats = FetchStats()
+        warnings: List[str] = []
+        empty_boundaries: List[str] = []
 
         for idx, brow in boundaries.iterrows():
             boundary_name = clean_name(str(brow["boundary_name"]), f"AREA_{idx+1:02d}")
@@ -871,25 +967,9 @@ def process_auto_placemark(
                 boundary_geom = boundary_geom.buffer(0)
 
             if progress_cb:
-                progress_cb(f"Mengunduh data bangunan OSM untuk {boundary_name}...")
+                progress_cb(f"Mengunduh data bangunan & jalan OSM untuk {boundary_name}...")
 
-            try:
-                buildings = download_buildings_osm(boundary_geom, progress_cb)
-            except Exception as e:
-                print(f"[auto_placemark] GAGAL building untuk {boundary_name}: {e}")
-                continue
-
-            if progress_cb:
-                progress_cb(f"Mengunduh data jalan/gang OSM untuk {boundary_name}...")
-
-            try:
-                roads = download_roads_osm(boundary_geom, progress_cb)
-            except Exception as e:
-                print(f"[auto_placemark] GAGAL roads untuk {boundary_name}: {e}")
-                roads = gpd.GeoDataFrame(
-                    columns=["road_id", "highway", "name", "service", "geometry"],
-                    geometry="geometry", crs="EPSG:4326"
-                )
+            buildings, roads = download_osm_features(boundary_geom, progress_cb, stats)
 
             print(f"[auto_placemark] {boundary_name}: {len(buildings)} buildings, {len(roads)} roads")
 
@@ -897,9 +977,18 @@ def process_auto_placemark(
                 progress_cb(f"Memfilter rumah frontage untuk {boundary_name}...")
 
             accepted_stage = prepare_candidate_points(boundary_name, boundary_geom, buildings, roads)
+            if not accepted_stage:
+                empty_boundaries.append(boundary_name)
 
-            # Sort: north to south, then west to east
-            accepted_stage.sort(key=lambda r: (-r["point"].y, r["point"].x))
+            # Penomoran menyusuri jalan: jalan diurutkan dari yang paling
+            # utara, lalu per sisi jalan, lalu menurut jarak sepanjang jalan.
+            # Dulu diurutkan murni utara->selatan sehingga nomor HP melompat
+            # bolak-balik antar jalan.
+            road_rank: Dict[str, float] = {}
+            for r in accepted_stage:
+                road_rank[r["road_id"]] = max(road_rank.get(r["road_id"], -1e9), r["point"].y)
+            accepted_stage.sort(key=lambda r: (-road_rank[r["road_id"]], r["road_id"],
+                                               r["road_side"], r["projection_m"]))
 
             for item in accepted_stage:
                 placemark = make_placemark_name(global_no)
@@ -912,6 +1001,15 @@ def process_auto_placemark(
                 })
                 global_no += 1
 
+        if stats.tiles and stats.failed == stats.tiles:
+            return {
+                "status": "error",
+                "message": (
+                    "Semua permintaan ke server OpenStreetMap gagal (rate limit atau "
+                    "server tidak dapat dihubungi). Coba lagi beberapa menit lagi."
+                ),
+            }
+
         if not accepted_rows:
             return {
                 "status": "error",
@@ -922,6 +1020,20 @@ def process_auto_placemark(
                     "(3) Filter terlalu ketat."
                 ),
             }
+
+        if stats.failed:
+            warnings.append(
+                f"{stats.failed} dari {stats.tiles} bagian area gagal diunduh dari "
+                "OpenStreetMap — rumah di bagian itu TIDAK ada di hasil. Proses ulang "
+                "nanti untuk melengkapinya."
+            )
+        if stats.skipped_timeout:
+            warnings.append(
+                f"{stats.skipped_timeout} bagian area dilewati karena melewati batas waktu "
+                f"{MAX_FETCH_SECONDS // 60} menit — perkecil boundary atau pecah jadi beberapa file."
+            )
+        if empty_boundaries:
+            warnings.append("Boundary tanpa rumah frontage: " + ", ".join(empty_boundaries[:10]))
 
         if progress_cb:
             progress_cb("Mengekspor KML...")
@@ -940,8 +1052,13 @@ def process_auto_placemark(
             "content": kml_bytes,
             "content_type": "application/vnd.google-earth.kml+xml",
             "report": {
-                "total_accepted": len(accepted_rows),
-                "boundaries_processed": len(boundaries),
+                "warnings": warnings,
+                "stats": {
+                    "hp": len(accepted_rows),
+                    "boundary": len(boundaries),
+                    "tile_osm": stats.tiles,
+                    "tile_gagal": stats.failed,
+                },
             },
         }
 
