@@ -127,6 +127,18 @@ export default async function BlogPostPage({ params }: PageProps) {
       { label: "Alat Pendeteksi Duplikat", href: "/dashboard/kml-checker", primary: true },
       { label: "Alat KML ke BOQ", href: "/dashboard/kml-boq", primary: false }
     ]
+  } else if (ctaKey === "drafter-suite") {
+    ctaTitle = locale === "en" ? "FTTH Drafter Tools" : "Tool Drafter FTTH"
+    ctaDesc = locale === "en"
+      ? "From HP tagging to APD design and AutoCAD drawings with a filled DESIGN SUMMARY — run the whole drafter workflow from your KML/KMZ."
+      : "Dari tagging HP sampai desain APD dan gambar AutoCAD lengkap dengan DESIGN SUMMARY — jalankan seluruh alur drafter langsung dari KML/KMZ Anda."
+    ctaLinks = locale === "en" ? [
+      { label: "KML to CAD", href: "/dashboard/kml-cad", primary: true },
+      { label: "KML To APD", href: "/dashboard/kml-apd", primary: false }
+    ] : [
+      { label: "KML ke CAD", href: "/dashboard/kml-cad", primary: true },
+      { label: "KML ke APD", href: "/dashboard/kml-apd", primary: false }
+    ]
   } else if (ctaKey === "design-suite") {
     ctaTitle = locale === "en" ? "FTTH Design Suite" : "Paket Desain FTTH"
     ctaDesc = locale === "en"
