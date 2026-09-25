@@ -556,3 +556,404 @@ svg[data-play="true"] .rm-fade.rm-d4 { animation-delay: 2820ms; }
 .animate-indeterminate {
   animation: indeterminate 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
+
+/* ==================================================
+   Primitif gerak — kosakata bersama
+
+   Dua belas primitif dari halaman spesimen, ditambah dua kurva easing
+   yang dipakai berulang. Semua gerak di bawah ini ambient: berjalan
+   sendiri tanpa perlu disorot kursor.
+
+   Pola ulangnya meniru data-play pada skema FTTH di atas. Satu atribut
+   `data-play` di elemen seksi mengatur dua hal sekaligus:
+
+     "false" -> gerak masuk DIRESET (siap diputar ulang),
+                gerak ambient DIJEDA (hemat daya saat di luar layar)
+     "true"  -> keduanya jalan
+
+   IntersectionObserver menyalakan dan mematikan atribut itu tiap kali
+   seksi keluar-masuk layar, jadi animasinya hidup ulang tanpa refresh.
+
+   Keadaan DASAR tetap TERLIHAT. Semua aturan yang menyembunyikan hanya
+   hidup di dalam [data-play="false"], dan atribut itu cuma dipasang oleh
+   JavaScript — tanpa JS, tidak ada yang pernah tersembunyi.
+
+   Reduced motion ditangani blok global di atas.
+   ================================================== */
+
+:root {
+  /* Melesat lalu mendarat — serba guna untuk gerak masuk. */
+  --ease-entrance: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Berat di kedua ujung — untuk gerak besar seperti tirai. */
+  --ease-curtain: cubic-bezier(0.77, 0, 0.18, 1);
+}
+
+/* ---------- Primitif: gerak masuk ---------- */
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes char-in {
+  from { opacity: 0; transform: translateY(1em) skewY(4deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes reveal-mask {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0% 0 0); }
+}
+
+/* ---------- Primitif: ambient ---------- */
+
+@keyframes drift {
+  0%, 100% { transform: translateY(0)     rotate(0); }
+  33%      { transform: translateY(-18px) rotate(1.5deg); }
+  66%      { transform: translateY(8px)   rotate(-1deg); }
+}
+
+@keyframes morph {
+  0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  25%      { border-radius: 30% 60% 70% 40% / 50% 60% 30%; }
+  50%      { border-radius: 50% 60% 30%    / 30% 40% 60% 50%; }
+  75%      { border-radius: 40% 50% 60% 30% / 60% 30% 40% 70%; }
+}
+
+@keyframes orb-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 0.9; transform: scale(1.08); }
+}
+
+/* Aslinya menempuh 100vh dengan position:fixed. Di sini dilingkup ke
+   dalam seksi supaya tidak melintasi modal atau dropdown. Pitanya
+   digambar lewat background-size 2px di puncak kotak setinggi seksi,
+   jadi translateY persen mengacu ke tinggi seksi — bukan tinggi pita. */
+@keyframes scan-line {
+  from { transform: translateY(-2%); }
+  to   { transform: translateY(102%); }
+}
+
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* Jalur menggambar dirinya, menahan sebentar, lalu terhapus dari ujung
+   satunya — offset negatif menggeser dash ke arah berlawanan. Hasilnya
+   satu aliran yang tak pernah berhenti, bukan gambar-hapus yang kentara. */
+@keyframes curve-draw {
+  0%        { stroke-dashoffset: 1; }
+  42%, 58%  { stroke-dashoffset: 0; }
+  100%      { stroke-dashoffset: -1; }
+}
+
+/* Pulsa cahaya menyusuri jalur. offset-distance, bukan translate —
+   titiknya mengikuti lengkung path, bukan memotong lurus. */
+@keyframes curve-pulse {
+  0%        { offset-distance: 0%;   opacity: 0; }
+  12%       { opacity: 1; }
+  80%       { opacity: 1; }
+  100%      { offset-distance: 100%; opacity: 0; }
+}
+
+/* Versi amplitudo kecil untuk elemen UI. `drift` asli menempuh -18px;
+   pada ikon setinggi 40px itu terlihat rusak, bukan melayang. */
+@keyframes drift-soft {
+  0%, 100% { transform: translateY(0)    rotate(0); }
+  33%      { transform: translateY(-6px) rotate(1.5deg); }
+  66%      { transform: translateY(3px)  rotate(-1deg); }
+}
+
+@keyframes counter-up {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+/* ---------- Kelas pakai ---------- */
+
+.curve-track {
+  /* Jejak samar jalur penuh, supaya kurvanya tetap terbaca sebagai
+     bentuk meski bagian yang menyala sedang lewat. */
+  vector-effect: non-scaling-stroke;
+}
+.curve-draw {
+  stroke-dasharray: 1;
+  vector-effect: non-scaling-stroke;
+  animation-name: curve-draw;
+  animation-iteration-count: infinite;
+}
+.curve-pulse {
+  offset-rotate: 0deg;
+  opacity: 0;
+  animation-name: curve-pulse;
+  animation-iteration-count: infinite;
+}
+
+/* Bentuk hiasan yang BENAR-BENAR kelihatan melayang.
+
+   Blob ber-blur sebelumnya memakai drift juga, tapi dengan blur 34px
+   dan opacity efektif 0,28 geraknya tidak terbaca sebagai "melayang
+   naik-turun sambil miring" — yang terlihat cuma kabut yang bergeming.
+   Kelas ini tidak di-blur sama sekali, jadi gerakannya jelas. */
+.amb-drift {
+  animation: drift var(--drift-d, 9s) ease-in-out infinite;
+}
+.amb-drift-soft {
+  animation: drift-soft var(--drift-d, 7s) ease-in-out infinite;
+}
+
+/* Angka menggulung naik. Induknya memotong, jadi angkanya seolah muncul
+   dari balik garis — itu sebabnya jaraknya 100%, setinggi elemen sendiri. */
+.counter-slot {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  font-variant-numeric: tabular-nums;
+}
+.anim-counter-up {
+  display: inline-block;
+  animation: counter-up 0.6s var(--ease-entrance) both;
+}
+[data-play="false"] .anim-counter-up {
+  animation: none;
+  opacity: 0;
+  transform: translateY(100%);
+}
+
+.anim-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 1em;
+  background: currentColor;
+  vertical-align: text-bottom;
+  animation: blink-cursor 0.8s step-end infinite;
+}
+
+/* Pembungkus per KATA: tiap huruf inline-block, dan tanpa ini browser
+   boleh memutus baris di antara dua huruf. */
+.anim-char-word { display: inline-block; white-space: nowrap; }
+
+/* Blob ambient. drift dan morph ditumpuk dengan durasi berbeda supaya
+   siklusnya tak pernah sinkron — itu yang membuatnya terasa organik
+   alih-alih seperti pendulum. */
+.amb-blob {
+  position: absolute;
+  pointer-events: none;
+  /* Opacity elemen DIKALIKAN alpha latarnya. Versi pertama memakai
+     0,5 x 0,25 = 0,125 efektif lalu di-blur 42px — praktis tak terlihat.
+     Sekarang 0,8 x alpha, blur lebih rapat. */
+  filter: blur(34px);
+  opacity: 0.8;
+  animation:
+    morph var(--morph-d, 12s) ease-in-out infinite,
+    drift var(--drift-d, 9s) ease-in-out infinite;
+}
+
+.amb-orb {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+  animation: orb-pulse 8s ease-in-out infinite;
+}
+
+.amb-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  background-size: 100% 2px;
+  background-repeat: no-repeat;
+  opacity: 0.7;
+  animation: scan-line 14s linear infinite;
+}
+
+/* Pita berjalan. Kontennya WAJIB digandakan dua kali di markup: geseran
+   -50% membuat posisi akhir identik dengan posisi awal, jadi loop-nya
+   mulus tanpa lompatan. */
+.amb-ticker-row {
+  display: flex;
+  width: max-content;
+  animation: ticker var(--ticker-d, 34s) linear infinite;
+}
+
+/* ---------- Gerak masuk: reset & ulang ---------- */
+
+[data-play="false"] .stagger-grid > * { opacity: 0; }
+[data-play="true"] .stagger-grid > * {
+  animation: fade-in-up 0.6s var(--ease-entrance) both;
+}
+
+/* Dua kelas ini jalan SENDIRI begitu elemennya lahir, supaya tetap
+   berguna di tempat yang tidak punya leluhur data-play — judul halaman
+   tool di dashboard, misalnya. Aturan [data-play] di bawahnya hanya
+   menambahkan kemampuan MENGULANG, bukan syarat untuk jalan. */
+.anim-char-in {
+  display: inline-block;
+  animation: char-in 0.7s var(--ease-entrance) both;
+}
+.anim-reveal-mask {
+  animation: reveal-mask 0.9s var(--ease-curtain) both;
+}
+
+[data-play="false"] .anim-char-in {
+  animation: none;
+  opacity: 0;
+}
+[data-play="false"] .anim-reveal-mask {
+  animation: none;
+  clip-path: inset(0 100% 0 0);
+}
+
+/* Ambient dijeda saat seksinya di luar layar. Dijeda, bukan direset —
+   blob tidak perlu mulai dari nol tiap kali di-scroll. */
+[data-play="false"] .amb-blob,
+[data-play="false"] .amb-orb,
+[data-play="false"] .amb-scan,
+[data-play="false"] .amb-ticker-row,
+[data-play="false"] .amb-drift,
+[data-play="false"] .amb-drift-soft,
+[data-play="false"] .curve-draw,
+[data-play="false"] .curve-pulse,
+[data-play="false"] .tool-card svg * {
+  animation-play-state: paused;
+}
+
+/* ==================================================
+   Gerak ikon kartu tool (components/landing/tool-icons.tsx)
+
+   Sebelumnya hanya jalan saat hover. Sekarang ambient penuh.
+
+   Supaya delapan ikon yang bergerak terus tidak jadi bising, tiap
+   siklus dibuat panjang (9 detik) dengan ISTIRAHAT PANJANG di dalamnya:
+   gerakannya cuma menempati sekitar sepertiga akhir siklus, sisanya
+   ikon diam utuh. Ditambah offset per kartu lewat --i, hasilnya pada
+   satu waktu hanya satu-dua ikon yang bergerak, bergantian.
+
+   Keadaan diam tiap keyframe SELALU ikon yang utuh — tidak pernah ada
+   momen ikon terlihat terpotong saat sedang istirahat.
+
+   Garis memakai pathLength={1} seperti skema FTTH, jadi dasharray tidak
+   perlu tahu panjang asli path.
+   ================================================== */
+
+/* Utuh -> terhapus -> digambar ulang -> utuh. */
+@keyframes ti-draw-amb {
+  0%, 58%   { stroke-dashoffset: 0; }
+  72%       { stroke-dashoffset: 1; }
+  88%, 100% { stroke-dashoffset: 0; }
+}
+
+@keyframes ti-pop-amb {
+  0%, 62%   { opacity: 1; transform: scale(1); }
+  70%       { opacity: 0.3; transform: scale(0.5); }
+  84%       { opacity: 1; transform: scale(1.9); }
+  92%, 100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ti-snip-a-amb {
+  0%, 60%, 72%, 84%, 100% { transform: rotate(0deg); }
+  66%, 78%                { transform: rotate(-9deg); }
+}
+@keyframes ti-snip-b-amb {
+  0%, 60%, 72%, 84%, 100% { transform: rotate(0deg); }
+  66%, 78%                { transform: rotate(9deg); }
+}
+
+@keyframes ti-swing-amb {
+  0%, 60%   { transform: rotate(0deg); }
+  74%       { transform: rotate(-11deg); }
+  88%, 100% { transform: rotate(0deg); }
+}
+
+@keyframes ti-rise-amb {
+  0%, 60%   { opacity: 1; transform: none; }
+  68%       { opacity: 0; transform: translateY(3px); }
+  86%, 100% { opacity: 1; transform: none; }
+}
+
+/* Pulsa sinyal — satu-satunya yang memang pantas berjalan terus, karena
+   yang diwakilinya (sinyal di jalur optik) juga terus mengalir. */
+@keyframes ti-run-amb {
+  0%        { stroke-dashoffset: 0; opacity: 0; }
+  8%        { opacity: 1; }
+  38%       { opacity: 1; }
+  46%, 100% { stroke-dashoffset: 1; opacity: 0; }
+}
+
+/* Offset per kartu: 640ms dikali indeks, dikirim dari features.tsx. */
+.tool-card svg .ti-draw,
+.tool-card svg .ti-pop,
+.tool-card svg .ti-snip-a,
+.tool-card svg .ti-snip-b,
+.tool-card svg .ti-swing,
+.tool-card svg .ti-rise,
+.tool-card svg .ti-run {
+  animation-duration: 9s;
+  animation-iteration-count: infinite;
+  animation-delay: calc(var(--i, 0) * 640ms + var(--d-extra, 0ms));
+}
+
+.tool-card svg .ti-draw {
+  stroke-dasharray: 1;
+  animation-name: ti-draw-amb;
+  animation-timing-function: var(--ease-curtain);
+}
+
+.tool-card svg .ti-pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: ti-pop-amb;
+  animation-timing-function: var(--ease-entrance);
+}
+
+/* Poros kedua bilah adalah titik silangnya, tepat di tengah viewBox. */
+.tool-card svg .ti-snip-a,
+.tool-card svg .ti-snip-b {
+  transform-box: view-box;
+  transform-origin: center;
+  animation-timing-function: ease-in-out;
+}
+.tool-card svg .ti-snip-a { animation-name: ti-snip-a-amb; }
+.tool-card svg .ti-snip-b { animation-name: ti-snip-b-amb; }
+
+/* Jangka mengayun pada kepalanya, bukan pada tengah ikon. */
+.tool-card svg .ti-swing {
+  transform-box: view-box;
+  transform-origin: 12px 5px;
+  animation-name: ti-swing-amb;
+  animation-timing-function: var(--ease-entrance);
+}
+
+.tool-card svg .ti-rise {
+  animation-name: ti-rise-amb;
+  animation-timing-function: var(--ease-entrance);
+}
+
+.ti-run { opacity: 0; }
+.tool-card svg .ti-run {
+  stroke-dasharray: 0.16 0.84;
+  animation-name: ti-run-amb;
+  animation-duration: 4.5s;
+  animation-timing-function: linear;
+}
+
+/* Tingkatan jeda di dalam satu ikon — dipakai bersama kelas gerak. */
+.ti-d0 { --d-extra: 0ms; }
+.ti-d1 { --d-extra: 90ms; }
+.ti-d2 { --d-extra: 180ms; }
+.ti-d3 { --d-extra: 270ms; }
+
+/* Hover tetap punya jawabannya sendiri: ikonnya membesar sedikit.
+   Gerakan ambient jalan terus, hover menambahi — bukan menggantikan. */
+.tool-card svg {
+  transition: transform 0.35s var(--ease-entrance);
+}
+.tool-card:hover svg {
+  transform: scale(1.12);
+}

@@ -7,6 +7,11 @@ import { useTheme } from "next-themes"
 import { useAuth } from "@/components/auth/auth-provider"
 import { toolMenuItems, TOOL_CATEGORIES, getToolsByCategory } from "@/lib/site-config"
 import { dashboardTranslations } from "./dashboard-translations"
+import {
+  renderNotification,
+  formatRelativeTime,
+  type NotificationRow,
+} from "@/lib/notifications"
 import { cn } from "@/lib/utils"
 import {
   CommandDialog,
@@ -70,55 +75,58 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
   const { theme, setTheme } = useTheme()
 
   const [showNotifications, setShowNotifications] = React.useState(false)
-  const [readIds, setReadIds] = React.useState<number[]>([3])
 
-  const notifications = [
-    {
-      id: 1,
-      title: {
-        en: "System Update",
-        id: "Pembaruan Sistem"
-      },
-      desc: {
-        en: "KML Parser now supports custom Excel template schemas.",
-        id: "Parser KML kini mendukung skema template Excel kustom."
-      },
-      time: {
-        en: "5m ago",
-        id: "5m yang lalu"
-      }
-    },
-    {
-      id: 2,
-      title: {
-        en: "Account Plan Active",
-        id: "Paket Akun Aktif"
-      },
-      desc: {
-        en: "Welcome to your active FTTH Tool account!",
-        id: "Selamat datang di akun FTTH Tool aktif Anda!"
-      },
-      time: {
-        en: "2h ago",
-        id: "2j yang lalu"
-      }
-    },
-    {
-      id: 3,
-      title: {
-        en: "Documentation Updated",
-        id: "Dokumentasi Diperbarui"
-      },
-      desc: {
-        en: "API endpoints and guides are fully translated.",
-        id: "Endpoint API dan panduan telah diterjemahkan sepenuhnya."
-      },
-      time: {
-        en: "1d ago",
-        id: "1h yang lalu"
-      }
+  // Sebelumnya tiga entri ini ditulis mati di dalam komponen dan status
+  // bacanya disimpan di localStorage — jadi lonceng tidak pernah membawa
+  // kabar nyata, dan hasil verifikasi pembayaran tidak pernah sampai ke
+  // penggunanya. Sekarang isinya baris tabel `notifications`.
+  const [notifications, setNotifications] = React.useState<NotificationRow[]>([])
+
+  const fetchNotifications = React.useCallback(async () => {
+    if (!user?.id) return
+    try {
+      const { getSupabaseClient } = await import("@/lib/supabase/client")
+      const { data, error } = await getSupabaseClient()
+        .from("notifications")
+        .select("id, kind, payload, read_at, created_at")
+        .order("created_at", { ascending: false })
+        .limit(20)
+
+      if (error) throw error
+      setNotifications((data || []) as unknown as NotificationRow[])
+    } catch (err) {
+      // Lonceng tidak boleh menjatuhkan header. Kalau tabelnya belum ada
+      // (migrasi belum dijalankan), daftarnya cukup tetap kosong.
+      console.error("Gagal memuat notifikasi:", err)
     }
-  ]
+  }, [user?.id])
+
+  React.useEffect(() => {
+    fetchNotifications()
+  }, [fetchNotifications])
+
+  const markRead = React.useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return
+    const waktu = new Date().toISOString()
+
+    // Optimistis: lonceng harus terasa langsung. Kalau gagal, pemuatan
+    // berikutnya mengembalikan keadaan sebenarnya.
+    setNotifications((prev) =>
+      prev.map((n) => (ids.includes(n.id) ? { ...n, read_at: n.read_at ?? waktu } : n))
+    )
+
+    try {
+      const { getSupabaseClient } = await import("@/lib/supabase/client")
+      const { error } = await getSupabaseClient()
+        .from("notifications")
+        .update({ read_at: waktu })
+        .in("id", ids)
+      if (error) throw error
+    } catch (err) {
+      console.error("Gagal menandai notifikasi terbaca:", err)
+      fetchNotifications()
+    }
+  }, [fetchNotifications])
 
   const notificationRef = React.useRef<HTMLDivElement>(null)
 
@@ -132,7 +140,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
     return () => document.removeEventListener("mousedown", handleOutsideClick)
   }, [])
 
-  const unreadCount = notifications.filter((n) => !readIds.includes(n.id)).length
+  const unreadCount = notifications.filter((n) => !n.read_at).length
 
   React.useEffect(() => {
     setMounted(true)
@@ -141,17 +149,6 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
       setLocale(stored)
     } else {
       setLocale("en")
-    }
-
-    const storedRead = localStorage.getItem("ftth_read_notification_ids")
-    if (storedRead) {
-      try {
-        setReadIds(JSON.parse(storedRead))
-      } catch (e) {
-        // ignore
-      }
-    } else {
-      localStorage.setItem("ftth_read_notification_ids", JSON.stringify([3]))
     }
   }, [])
 
@@ -258,7 +255,11 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
         <div className="relative" ref={notificationRef}>
           <button
             type="button"
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={() => {
+              const akanDibuka = !showNotifications
+              setShowNotifications(akanDibuka)
+              if (akanDibuka) fetchNotifications()
+            }}
             aria-label="Notifications"
             className={cn(
               "relative inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-all cursor-pointer",
@@ -282,11 +283,7 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
                 {unreadCount > 0 && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const allIds = notifications.map(n => n.id)
-                      setReadIds(allIds)
-                      localStorage.setItem("ftth_read_notification_ids", JSON.stringify(allIds))
-                    }}
+                    onClick={() => markRead(notifications.filter(n => !n.read_at).map(n => n.id))}
                     className="text-xs font-medium text-primary hover:text-primary/80 transition-colors cursor-pointer"
                   >
                     {notifT[currentLocale].markAllRead}
@@ -299,40 +296,44 @@ export function DashboardHeader({ onMenuClick }: HeaderProps) {
                     {notifT[currentLocale].noNotifications}
                   </div>
                 ) : (
-                  notifications.map((n) => (
-                    <button
-                      key={n.id}
-                      type="button"
-                      onClick={() => {
-                        const newReadIds = [...readIds]
-                        if (!newReadIds.includes(n.id)) {
-                          newReadIds.push(n.id)
-                          setReadIds(newReadIds)
-                          localStorage.setItem("ftth_read_notification_ids", JSON.stringify(newReadIds))
-                        }
-                      }}
-                      className={cn(
-                        "w-full text-left flex gap-3 rounded-lg p-2.5 transition-all text-sm cursor-pointer",
-                        readIds.includes(n.id) 
-                          ? "text-muted-foreground hover:bg-surface-2" 
-                          : "bg-surface-1 text-foreground hover:bg-surface-2 border-l-2 border-primary pl-2"
-                      )}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <span className={cn("font-medium truncate text-xs sm:text-sm", !readIds.includes(n.id) && "text-foreground")}>
-                            {n.title[currentLocale]}
-                          </span>
-                          <span className="text-2xs text-muted-foreground shrink-0">
-                            {n.time[currentLocale]}
-                          </span>
+                  notifications.map((n) => {
+                    const isi = renderNotification(n, currentLocale)
+                    const belumDibaca = !n.read_at
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => belumDibaca && markRead([n.id])}
+                        className={cn(
+                          "w-full text-left flex gap-3 rounded-lg p-2.5 transition-all text-sm cursor-pointer",
+                          belumDibaca
+                            ? "bg-surface-1 text-foreground hover:bg-surface-2 border-l-2 pl-2"
+                            : "text-muted-foreground hover:bg-surface-2",
+                          belumDibaca &&
+                            {
+                              info: "border-primary",
+                              success: "border-success",
+                              warning: "border-warning",
+                              danger: "border-danger",
+                            }[isi.tone]
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <span className={cn("font-medium truncate text-xs sm:text-sm", belumDibaca && "text-foreground")}>
+                              {isi.title}
+                            </span>
+                            <span className="text-2xs text-muted-foreground shrink-0">
+                              {formatRelativeTime(n.created_at, currentLocale)}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {isi.body}
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {n.desc[currentLocale]}
-                        </p>
-                      </div>
-                    </button>
-                  ))
+                      </button>
+                    )
+                  })
                 )}
               </div>
             </div>

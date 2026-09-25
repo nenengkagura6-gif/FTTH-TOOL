@@ -3,9 +3,12 @@
 import { motion } from "framer-motion"
 import { Zap, Lock, Globe, Code2 } from "lucide-react"
 import { translations } from "@/lib/translations"
+import { useSectionPlay } from "@/components/landing/use-section-play"
+import { CharIn } from "@/components/landing/char-in"
 
 export function WhyUs({ locale = "en" }: { locale?: string }) {
   const t = translations[locale as "en" | "id"] || translations.en
+  const { ref, dataPlay } = useSectionPlay<HTMLElement>()
 
   const reasons = [
     {
@@ -30,7 +33,7 @@ export function WhyUs({ locale = "en" }: { locale?: string }) {
       description:
         locale === "en"
           ? "Designed by FTTH engineers who understand BOQ, HP, splitters, and PON architecture."
-          : "Dirancang oleh insinyur FTTH yang mengerti seluk-beluk BOQ, HP, splitter, dan arsitektur PON.",
+          : "Dirancang oleh insinyur FTTH yang sudah expert di bidang FTTH.",
     },
     {
       icon: Code2,
@@ -46,20 +49,31 @@ export function WhyUs({ locale = "en" }: { locale?: string }) {
   ]
 
   return (
-    <section className="relative isolate py-16 sm:py-20">
+    <section
+      ref={ref}
+      data-play={dataPlay}
+      className="relative isolate overflow-hidden py-16 sm:py-20"
+    >
       <div className="mx-auto max-w-6xl px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
           <div>
-            <p className="text-sm font-medium text-primary">Why FTTH Tool</p>
-            <h2 className="mt-2 text-3xl sm:text-5xl font-semibold tracking-tight text-balance">
-              {locale === "en"
-                ? "The fastest path from KML chaos to clean deliverables"
-                : "Jalur tercepat mengubah kekacauan KML menjadi dokumen bersih"}
+            <p className="text-sm font-medium text-primary">
+              {locale === "en" ? "Why FTTH Tool" : "Kenapa FTTH Tool"}
+            </p>
+            <h2 className="mt-2 font-display text-3xl sm:text-5xl font-semibold tracking-tight text-balance">
+              <CharIn
+                text={
+                  locale === "en"
+                    ? "From raw KML to Basemap, APD, BOQ, HPDB, CAD — in seconds"
+                    : "Dari KML mentah jadi Basemap, APD, BOQ, HPDB, CAD — dalam hitungan detik"
+                }
+                step={18}
+              />
             </h2>
             <p className="mt-5 text-muted-foreground leading-relaxed text-pretty">
               {locale === "en"
-                ? "We replace spreadsheet wizardry and one-off scripts with a cohesive platform that scales from a single project to a national rollout."
-                : "Kami menggantikan skrip sekali pakai dan kerumitan spreadsheet dengan satu platform otomatisasi terpadu."}
+                ? "No more copying coordinates one by one, tallying cable runs in a spreadsheet, or redrawing everything in CAD."
+                : "Tanpa menyalin koordinat satu per satu, menghitung panjang kabel di spreadsheet, atau menggambar ulang di CAD."}
             </p>
 
             {/* Angka di bawah ini bisa diverifikasi dari kode:
@@ -91,10 +105,20 @@ export function WhyUs({ locale = "en" }: { locale?: string }) {
                   en: "Result retention, then auto-deleted",
                   id: "Hasil tersimpan, lalu terhapus otomatis",
                 },
-              ].map((s) => (
+              ].map((s, i) => (
                 <div key={s.nilai}>
+                  {/* Angka menggulung naik dari balik garis (primitif
+                      `counter-up`). Induknya memotong, jadi jaraknya 100%
+                      — setinggi angkanya sendiri. */}
                   <dt className="font-display text-3xl font-semibold text-foreground">
-                    {s.nilai}
+                    <span className="counter-slot">
+                      <span
+                        className="anim-counter-up"
+                        style={{ animationDelay: `${i * 90}ms` }}
+                      >
+                        {s.nilai}
+                      </span>
+                    </span>
                   </dt>
                   <dd className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     {locale === "en" ? s.en : s.id}
@@ -104,15 +128,18 @@ export function WhyUs({ locale = "en" }: { locale?: string }) {
             </dl>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="stagger-grid grid grid-cols-1 sm:grid-cols-2 gap-4">
             {reasons.map((r, i) => (
               <motion.div
                 key={r.title}
                 whileTap={{ scale: 0.98 }}
                 style={{ animationDelay: `${i * 50}ms` }}
-                className="reveal group relative rounded-2xl border border-border bg-card/90 p-5 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+                className="group relative rounded-2xl border border-border bg-card/90 p-5 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 transition-all duration-300 group-hover:scale-105 group-hover:bg-primary group-hover:text-primary-foreground group-active:bg-primary group-active:text-primary-foreground">
+                <div
+                  className="amb-drift-soft flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20 transition-all duration-300 group-hover:scale-105 group-hover:bg-primary group-hover:text-primary-foreground group-active:bg-primary group-active:text-primary-foreground"
+                  style={{ ["--drift-d" as string]: `${7 + i * 0.6}s`, animationDelay: `${i * 700}ms` }}
+                >
                   <r.icon className="h-4 w-4" />
                 </div>
                 <h3 className="mt-4 text-sm font-medium text-foreground">

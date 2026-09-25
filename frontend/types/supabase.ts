@@ -199,6 +199,31 @@ export interface Database {
                 }
                 Relationships: []
             }
+            // Notifikasi lahir HANYA dari fungsi SECURITY DEFINER di
+            // supabase/2026-09-14-admin-panel-upgrade.sql — role authenticated
+            // tidak punya hak INSERT, dan hanya boleh meng-update read_at.
+            notifications: {
+                Row: {
+                    id: string
+                    user_id: string
+                    kind: string
+                    payload: Json
+                    read_at: string | null
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    kind: string
+                    payload?: Json
+                    read_at?: string | null
+                    created_at?: string
+                }
+                Update: {
+                    read_at?: string | null
+                }
+                Relationships: []
+            }
             device_registrations: {
                 Row: {
                     id: string
@@ -584,6 +609,135 @@ export interface Database {
                     p_metadata: Json
                 }
                 Returns: string
+            }
+            // ── Panel admin (supabase/2026-09-14-admin-panel-upgrade.sql) ──
+            get_admin_stats: {
+                Args: Record<string, never>
+                Returns: Json
+            }
+            get_admin_users: {
+                Args: {
+                    p_search?: string | null
+                    p_limit?: number
+                    p_offset?: number
+                    p_filter?: string
+                }
+                Returns: {
+                    id: string
+                    email: string
+                    full_name: string | null
+                    plan: 'free' | 'basic' | 'pro' | 'enterprise'
+                    role: 'user' | 'admin'
+                    quota_used: number
+                    quota_limit: number
+                    is_active: boolean
+                    created_at: string
+                    last_login_at: string | null
+                    sub_status: string | null
+                    sub_billing_cycle: string | null
+                    sub_started_at: string | null
+                    sub_expires_at: string | null
+                    days_remaining: number | null
+                    device_count: number
+                    total_count: number
+                }[]
+            }
+            get_admin_user_detail: {
+                Args: {
+                    p_user_id: string
+                    p_limit?: number
+                }
+                Returns: Json
+            }
+            get_admin_audit_logs: {
+                Args: {
+                    p_search?: string | null
+                    p_limit?: number
+                    p_offset?: number
+                }
+                Returns: {
+                    id: string
+                    event_type: string
+                    description: string | null
+                    severity: 'info' | 'warning' | 'error' | 'critical'
+                    metadata: Json
+                    created_at: string
+                    actor_id: string | null
+                    actor_email: string | null
+                    target_id: string | null
+                    target_email: string | null
+                    total_count: number
+                }[]
+            }
+            admin_reset_devices: {
+                Args: { p_user_id: string }
+                Returns: Json
+            }
+            admin_reject_payment: {
+                Args: {
+                    p_payment_id: string
+                    p_notes?: string | null
+                }
+                Returns: Json
+            }
+            // Step-up: kesegaran autentikasi dibaca dari klaim `amr` JWT,
+            // jadi tidak bisa dikarang dari sisi browser.
+            my_auth_age: {
+                Args: Record<string, never>
+                Returns: Json
+            }
+            auth_age_seconds: {
+                Args: Record<string, never>
+                Returns: number | null
+            }
+            require_fresh_auth: {
+                Args: { p_max_age?: number }
+                Returns: undefined
+            }
+            has_mfa_enrolled: {
+                Args: Record<string, never>
+                Returns: boolean
+            }
+            my_security_status: {
+                Args: Record<string, never>
+                Returns: Json
+            }
+            admin_log_step_up_failure: {
+                Args: { p_alasan?: string | null }
+                Returns: Json
+            }
+            admin_log_mfa_change: {
+                Args: { p_terdaftar: boolean }
+                Returns: Json
+            }
+            admin_extend_subscription: {
+                Args: {
+                    p_user_id: string
+                    p_days?: number
+                }
+                Returns: Json
+            }
+            admin_revoke_subscription: {
+                Args: { p_user_id: string }
+                Returns: Json
+            }
+            admin_set_user_role: {
+                Args: {
+                    p_user_id: string
+                    p_role: string
+                }
+                Returns: Json
+            }
+            admin_set_user_active: {
+                Args: {
+                    p_user_id: string
+                    p_active: boolean
+                }
+                Returns: Json
+            }
+            admin_reset_quota: {
+                Args: { p_user_id: string }
+                Returns: Json
             }
         }
         Enums: {

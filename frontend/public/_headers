@@ -1,0 +1,46 @@
+# ==================================================
+# Header keamanan — Cloudflare Pages
+# ==================================================
+#
+# Kenapa di sini, bukan di middleware.ts:
+#
+# next.config.mjs memakai `output: 'export'` dan hosting-nya Cloudflare
+# Pages (wrangler.toml). Hasil build adalah folder statis — tidak ada
+# proses server yang menjalankan Next.js middleware, jadi header keamanan
+# di middleware.ts TIDAK PERNAH terpasang. Itu juga sebabnya berkas
+# middleware.ts.disabled aman dibiarkan mati: ia memang tidak bisa hidup
+# selama mode export masih dipakai.
+#
+# Cloudflare Pages membaca berkas ini dari root hasil build. Isi folder
+# public/ disalin apa adanya ke out/, jadi public/_headers -> out/_headers.
+#
+# Dokumentasi: https://developers.cloudflare.com/pages/configuration/headers/
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+  # CSP sengaja masih Report-Only.
+  #
+  # Versi lama di middleware.ts hanya mengizinkan connect-src ke Supabase
+  # dan Google — padahal aplikasi memanggil backend di NEXT_PUBLIC_API_URL,
+  # dan panel admin memuat bukti transfer dari Supabase Storage. Kalau CSP
+  # itu sempat aktif, panggilan tool dan gambar struk mati tanpa pesan
+  # yang jelas di UI.
+  #
+  # Cara menaikkannya jadi penegakan:
+  #   1. Buka aplikasi, pakai beberapa tool, buka panel admin + lihat struk.
+  #   2. Cek Console browser untuk pelanggaran CSP yang terlaporkan.
+  #   3. Kalau bersih, ganti nama header di bawah menjadi
+  #      Content-Security-Policy (hapus akhiran -Report-Only).
+  #
+  # connect-src memuat origin backend saat ini (Hugging Face Space).
+  # Kalau NEXT_PUBLIC_API_URL berpindah domain, baris ini WAJIB ikut diubah.
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://*.supabase.co https://*.googleusercontent.com; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://nenengkagura-ftthtools.hf.space https://*.sentry.io; frame-src 'self' https://accounts.google.com https://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'
+
+# Aset ber-hash aman di-cache selamanya.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable

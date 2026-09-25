@@ -4,12 +4,20 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { ArrowRight } from "lucide-react"
 import { translations } from "@/lib/translations"
+import { useSectionPlay } from "@/components/landing/use-section-play"
+import { CharIn } from "@/components/landing/char-in"
+import { CurveBand } from "@/components/landing/curve-band"
 
 export function CtaBanner({ locale = "en" }: { locale?: string }) {
   const t = translations[locale as "en" | "id"] || translations.en
+  const { ref, dataPlay } = useSectionPlay<HTMLElement>()
 
   return (
-    <section className="relative isolate py-16 sm:py-20">
+    <section
+      ref={ref}
+      data-play={dataPlay}
+      className="relative isolate py-16 sm:py-20"
+    >
       <div className="mx-auto max-w-5xl px-6">
         <motion.div
           className="reveal relative overflow-hidden rounded-2xl border border-border bg-card/40 px-8 py-16 sm:px-16 sm:py-20 text-center backdrop-blur-sm"
@@ -20,9 +28,11 @@ export function CtaBanner({ locale = "en" }: { locale?: string }) {
           <div className="tech-bracket-bl opacity-60" />
           <div className="tech-bracket-br opacity-60" />
 
-          {/* Glow */}
+          {/* Glow yang bernapas (primitif `orb-pulse`) dan garis sapu
+              (primitif `scan-line`), menggantikan glow diam. */}
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[600px] rounded-full bg-primary/10 blur-[120px]" />
+            <div className="amb-orb absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[600px] bg-primary/10 blur-[120px]" />
+            <div className="amb-scan" />
           </div>
           <div
             aria-hidden="true"
@@ -31,7 +41,7 @@ export function CtaBanner({ locale = "en" }: { locale?: string }) {
 
           <div className="relative">
             <h2 className="text-3xl sm:text-5xl font-semibold tracking-tight text-balance font-display">
-              {t.ctaBanner.title}
+<CharIn text={t.ctaBanner.title} step={22} />
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-muted-foreground text-pretty">
               {t.ctaBanner.subtitle}
@@ -56,6 +66,9 @@ export function CtaBanner({ locale = "en" }: { locale?: string }) {
             </div>
           </div>
         </motion.div>
+
+        {/* Menutup halaman dengan gerak, bukan berhenti mati. */}
+        <CurveBand className="mt-12 h-20 w-full text-primary sm:h-24" />
       </div>
     </section>
   )

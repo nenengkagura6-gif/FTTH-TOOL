@@ -8,14 +8,24 @@ import { DashboardHeader } from "./header"
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, profile } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push("/login")
+      return
     }
-  }, [isLoading, isAuthenticated, router])
+
+    // Akun yang ditangguhkan lewat panel admin (profiles.is_active = false)
+    // sudah diblokir di level database — has_quota_remaining() mensyaratkan
+    // is_active, dan policy INSERT processing_jobs memanggilnya. Tanpa
+    // pengalihan ini user cuma melihat error penolakan yang tidak jelas
+    // di setiap tool, tanpa pernah tahu akunnya ditangguhkan.
+    if (!isLoading && isAuthenticated && profile && profile.is_active === false) {
+      router.push("/account-suspended")
+    }
+  }, [isLoading, isAuthenticated, profile, router])
 
   if (isLoading) {
     return (

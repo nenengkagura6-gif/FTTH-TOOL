@@ -25,11 +25,6 @@ export function Hero({ locale = "en" }: { locale?: string }) {
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 pt-24 pb-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-8 lg:pt-28 lg:pb-20">
         {/* ---------- Kolom kiri: teks, tenang ---------- */}
         <div>
-          {/* Penanda kategori, bukan badge "✨ Powered by AI" */}
-          <p className="font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground">
-            {isId ? "Otomatisasi Perencanaan FTTH" : "FTTH Planning Automation"}
-          </p>
-
           <h1 className="mt-5 font-display text-4xl font-semibold leading-[1.06] tracking-tight text-balance sm:text-5xl lg:text-6xl">
             {isId ? (
               <>

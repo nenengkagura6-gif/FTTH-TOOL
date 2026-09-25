@@ -3,9 +3,12 @@
 import { motion } from "framer-motion"
 import { Upload, Cpu, Download } from "lucide-react"
 import { translations } from "@/lib/translations"
+import { useSectionPlay } from "@/components/landing/use-section-play"
+import { CharIn } from "@/components/landing/char-in"
 
 export function Workflow({ locale = "en" }: { locale?: string }) {
   const t = translations[locale as "en" | "id"] || translations.en
+  const { ref, dataPlay } = useSectionPlay<HTMLElement>()
 
   const steps = [
     {
@@ -29,16 +32,28 @@ export function Workflow({ locale = "en" }: { locale?: string }) {
   ]
 
   return (
-    <section className="relative isolate py-16 sm:py-20">
+    <section
+      ref={ref}
+      data-play={dataPlay}
+      className="relative isolate overflow-hidden py-16 sm:py-20"
+    >
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-medium text-primary">Workflow</p>
-          <h2 className="mt-2 text-3xl sm:text-5xl font-semibold tracking-tight text-balance">
-            {locale === "en" ? "From file to deliverable in three steps" : "Dari file ke hasil akhir dalam tiga langkah"}
+          <p className="text-sm font-medium text-primary">
+            {locale === "en" ? "Workflow" : "Alur Kerja"}
+          </p>
+          <h2 className="mt-2 font-display text-3xl sm:text-5xl font-semibold tracking-tight text-balance">
+            <CharIn
+              text={
+                locale === "en"
+                  ? "From file to deliverable in three steps"
+                  : "Dari file ke hasil akhir dalam tiga langkah"
+              }
+            />
           </h2>
         </div>
 
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-5 relative">
+        <div className="stagger-grid mt-16 grid grid-cols-1 md:grid-cols-3 gap-5 relative">
           {/* Connecting line on desktop */}
           <div
             aria-hidden="true"
@@ -50,10 +65,13 @@ export function Workflow({ locale = "en" }: { locale?: string }) {
               key={step.step}
               whileTap={{ scale: 0.98 }}
               style={{ animationDelay: `${i * 70}ms` }}
-              className="reveal group relative rounded-2xl border border-border bg-card/90 p-6 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+              className="group relative rounded-2xl border border-border bg-card/90 p-6 backdrop-blur-sm shadow-md shadow-black/5 dark:shadow-black/20 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-primary transition-all duration-300 group-hover:scale-105 group-hover:bg-primary group-hover:text-primary-foreground group-active:bg-primary group-active:text-primary-foreground">
+                <div
+                  className="amb-drift-soft flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-primary transition-all duration-300 group-hover:scale-105 group-hover:bg-primary group-hover:text-primary-foreground group-active:bg-primary group-active:text-primary-foreground"
+                  style={{ ["--drift-d" as string]: `${7 + i}s`, animationDelay: `${i * 900}ms` }}
+                >
                   <step.icon className="h-4 w-4" />
                 </div>
                 <span className="font-mono text-xs text-muted-foreground">
