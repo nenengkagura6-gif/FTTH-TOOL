@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import io
 import math
+import os
 import re
 import time
 import zipfile
@@ -28,6 +29,17 @@ from defusedxml.ElementTree import fromstring as safe_fromstring
 from typing import Any, Dict, List, Tuple, Optional
 
 from utils.commons import load_kml_bytes
+from engines.building_sources import (
+    BUILDING_SOURCE,
+    GOB_MIN_CONFIDENCE,
+    BuildingSourceUnavailable,
+    empty_buildings,
+    empty_roads,
+    fetch_gob_buildings,
+    fetch_overture_features,
+    load_custom_buildings,
+    merge_buildings,
+)
 
 import geopandas as gpd
 import pandas as pd
@@ -54,6 +66,9 @@ OVERPASS_SLEEP_SECONDS = 1.0
 OVERPASS_ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    # Instance lz4 berbagi basis data dengan overpass-api.de tapi antreannya
+    # terpisah, jadi sering lolos ketika yang utama sedang penuh.
+    "https://lz4.overpass-api.de/api/interpreter",
     "https://overpass.openstreetmap.ru/api/interpreter",
 ]
 
@@ -66,21 +81,42 @@ MAX_TILE_SIZE_DEG = 0.02
 MAX_TOTAL_TILES = 80
 BBOX_MARGIN_DEG = 0.00015
 
-MAX_DISTANCE_TO_ROAD_M = 25.0
+MAX_DISTANCE_TO_ROAD_M = float(os.environ.get("AUTO_PLACEMARK_MAX_ROAD_M", "25"))
+# Luas minimum footprint supaya pos ronda, kanopi, dan WC luar tidak ikut
+# jadi HP. Dihitung dari geometri dalam UTM, bukan dari atribut sumber, agar
+# berlaku sama untuk footprint OSM maupun hasil deteksi citra.
+MIN_BUILDING_AREA_M2 = float(os.environ.get("AUTO_PLACEMARK_MIN_AREA_M2", "12"))
 ENABLE_BLOCKED_BY_BUILDING_FILTER = True
 ENABLE_FIRST_ROW_BIN_FILTER = True
-# Satu rumah per sekian meter muka jalan. 6 m terlalu lebar untuk rumah
-# deret di Indonesia (umumnya 4-5 m), sehingga rumah asli ikut terbuang.
-# Rumah baris kedua sudah disaring oleh filter 'terhalang bangunan lain'.
-FRONTAGE_BIN_M = 4.0
+# Jarak minimal antar rumah di sepanjang muka jalan yang sama. 6 m terlalu
+# lebar untuk rumah deret di Indonesia (umumnya 4-5 m), sehingga rumah asli
+# ikut terbuang. Rumah baris kedua sudah disaring oleh filter 'terhalang
+# bangunan lain'.
+MIN_FRONTAGE_SPACING_M = float(os.environ.get("AUTO_PLACEMARK_SPACING_M", "4"))
+
+# Titik yang ditolak ikut di KML sebagai folder tak tercentang. Nyala secara
+# bawaan: tanpa ini, satu-satunya cara tahu KENAPA sebuah rumah hilang adalah
+# menebak dari angka agregat.
+INCLUDE_REJECTED_IN_KML = os.environ.get(
+    "AUTO_PLACEMARK_DEBUG_KML", "1").strip().lower() not in ("0", "false", "off")
+MAX_REJECTED_IN_KML = int(os.environ.get("AUTO_PLACEMARK_MAX_REJECTED", "5000"))
+# Laporan Excel (DITERIMA / DITOLAK / DIAGNOSTIK). Mati secara bawaan karena
+# menyalakannya mengubah unduhan dari .kml menjadi .zip.
+EXPORT_EXCEL_REPORT = os.environ.get(
+    "AUTO_PLACEMARK_EXCEL", "0").strip().lower() not in ("0", "false", "off")
 
 # Batas waktu total pengambilan data OSM per job. Tanpa batas, 80 tile x
 # percobaan ulang bisa menahan worker selama berjam-jam.
-MAX_FETCH_SECONDS = int(__import__("os").environ.get("AUTO_PLACEMARK_MAX_SECONDS", "900"))
+MAX_FETCH_SECONDS = int(os.environ.get("AUTO_PLACEMARK_MAX_SECONDS", "900"))
 
+# `trunk` ditambahkan: banyak jalan nasional/provinsi di Indonesia di-tag
+# highway=trunk. Tanpa itu, rumah di pinggir jalan raya tidak menemukan
+# jalan mana pun dalam radius 25 m lalu dibuang diam-diam. Regex Overpass
+# tidak berjangkar, jadi `trunk` sekaligus mencakup `trunk_link` (begitu
+# pula `primary` mencakup `primary_link`, dst).
 ROAD_HIGHWAY_REGEX = (
     "residential|service|living_street|unclassified|tertiary|secondary|primary|"
-    "path|footway|pedestrian|track|road|steps|cycleway"
+    "trunk|path|footway|pedestrian|track|road|steps|cycleway"
 )
 
 
@@ -202,7 +238,10 @@ def read_kml_kmz_boundaries(content: bytes, is_kmz: bool) -> gpd.GeoDataFrame:
                 continue
 
         if polygons:
-            geom = polygons[0] if len(polygons) == 1 else MultiPolygon(polygons)
+            # unary_union, bukan MultiPolygon(): MultiPolygon menolak bagian
+            # yang saling tumpang tindih, dan boundary hasil digitasi tangan
+            # kerap begitu.
+            geom = polygons[0] if len(polygons) == 1 else unary_union(polygons)
             rows.append({"boundary_name": name, "geometry": geom})
             area_idx += 1
 
@@ -302,6 +341,56 @@ def read_boundary(content: bytes, filename: str) -> gpd.GeoDataFrame:
 # ==========================================================
 # GEOMETRY HELPERS
 # ==========================================================
+def indonesia_coord_warning(geom: BaseGeometry) -> str:
+    """Deteksi dini boundary yang bukan lon/lat WGS84.
+
+    Tanpa ini, boundary dalam UTM meter tetap diproses sampai selesai lalu
+    berakhir nol placemark tanpa sebab yang jelas — bbox-nya sekadar tidak
+    beririsan dengan data mana pun.
+    """
+    minx, miny, maxx, maxy = geom.bounds
+    if not (90 <= minx <= 145 and 90 <= maxx <= 145
+            and -15 <= miny <= 10 and -15 <= maxy <= 10):
+        return (
+            "Koordinat boundary tampaknya bukan lon/lat WGS84 Indonesia. "
+            f"BBOX terbaca: lon {minx:.6f}..{maxx:.6f}, lat {miny:.6f}..{maxy:.6f}. "
+            "Proyeksikan ulang ke EPSG:4326 (derajat desimal)."
+        )
+    return ""
+
+
+def approx_area_km2(geom: BaseGeometry) -> float:
+    try:
+        return float(
+            gpd.GeoSeries([geom], crs="EPSG:4326").to_crs("EPSG:6933").area.iloc[0] / 1_000_000
+        )
+    except Exception:
+        return 0.0
+
+
+def to_polygonal(geom: Optional[BaseGeometry]) -> Optional[BaseGeometry]:
+    """Paksa jadi Polygon/MultiPolygon, termasuk menyelamatkan isi
+    GeometryCollection yang kalau tidak begini akan dibuang utuh."""
+    if geom is None or geom.is_empty:
+        return None
+    if not geom.is_valid:
+        try:
+            geom = geom.buffer(0)
+        except Exception:
+            return None
+    if geom is None or geom.is_empty:
+        return None
+    if geom.geom_type in ("Polygon", "MultiPolygon"):
+        return geom
+    if geom.geom_type == "GeometryCollection":
+        polys = [g for g in geom.geoms
+                 if g.geom_type in ("Polygon", "MultiPolygon") and not g.is_empty]
+        if not polys:
+            return None
+        return unary_union(polys)
+    return None
+
+
 def estimate_local_utm_crs(geom: BaseGeometry) -> str:
     lon = geom.centroid.x
     lat = geom.centroid.y
@@ -312,7 +401,11 @@ def estimate_local_utm_crs(geom: BaseGeometry) -> str:
 
 def get_point_from_building(geom: BaseGeometry) -> Point:
     if CENTER_METHOD.lower() == "centroid":
-        return geom.centroid
+        # Centroid bangunan berbentuk L atau U bisa jatuh di luar
+        # bangunannya sendiri; kalau begitu pakai representative_point.
+        c = geom.centroid
+        if geom.contains(c):
+            return c
     return geom.representative_point()
 
 
@@ -556,11 +649,8 @@ def element_to_building_record(element: Dict[str, Any]) -> Dict[str, Any] | None
     elif etype == "relation":
         geom = polygon_from_relation(element)
 
-    if geom is None or geom.is_empty:
-        return None
-    if not geom.is_valid:
-        geom = geom.buffer(0)
-    if geom.is_empty or geom.geom_type not in ["Polygon", "MultiPolygon"]:
+    geom = to_polygonal(geom)
+    if geom is None:
         return None
 
     return {
@@ -761,19 +851,28 @@ def access_line_blocked_by_other_building(
     access_line: LineString,
     self_building_idx: int,
     buildings_m: gpd.GeoDataFrame,
+    geoms_m: Optional[List[BaseGeometry]] = None,
+    source_ids: Optional[List[str]] = None,
 ) -> Tuple[bool, str]:
+    """geoms_m/source_ids: kolom yang sudah dimaterialkan pemanggil, supaya
+    tidak ada .iloc per kandidat di dalam loop panas ini."""
     if access_line.is_empty:
         return False, ""
+
+    if geoms_m is None:
+        geoms_m = list(buildings_m.geometry)
+    if source_ids is None:
+        source_ids = [str(x) for x in buildings_m.get("source_id", [""] * len(geoms_m))]
 
     try:
         candidate_indices = list(buildings_m.sindex.query(access_line, predicate="intersects"))
     except Exception:
-        candidate_indices = list(range(len(buildings_m)))
+        candidate_indices = list(range(len(geoms_m)))
 
     for idx in candidate_indices:
         if idx == self_building_idx:
             continue
-        geom = buildings_m.iloc[idx].geometry
+        geom = geoms_m[idx]
         if geom is None or geom.is_empty:
             continue
         try:
@@ -783,11 +882,53 @@ def access_line_blocked_by_other_building(
             inter = access_line.intersection(test_geom)
             if not inter.is_empty:
                 if getattr(inter, "length", 0.0) > 0.20 or inter.geom_type in ["Point", "MultiPoint"]:
-                    source_id = str(buildings_m.iloc[idx].get("source_id", ""))
-                    return True, source_id
+                    return True, source_ids[idx] if idx < len(source_ids) else ""
         except Exception:
             continue
     return False, ""
+
+
+REJECT_STATUS_LABEL = {
+    "TANPA_DATA_JALAN": "Tidak ada data jalan/gang sama sekali di boundary ini",
+    "TERLALU_KECIL": "Luas footprint di bawah ambang minimum",
+    "TANPA_AKSES_JALAN": "Tidak ditemukan jalan/gang terdekat",
+    "TERLALU_JAUH_JALAN": "Jarak ke jalan melebihi batas",
+    "TERHALANG_BANGUNAN": "Jalur ke jalan terhalang bangunan lain (rumah baris kedua)",
+    "BERDEMPETAN": "Ada rumah lain yang lebih dekat jalan di muka jalan yang sama",
+}
+
+
+def make_reject_row(
+    boundary_name: str,
+    point: Optional[Point],
+    source_id: str,
+    source: str,
+    status: str,
+    note: str,
+    road_info: Optional[Dict[str, Any]] = None,
+    area_m2: Optional[float] = None,
+) -> Dict[str, Any]:
+    road_info = road_info or {}
+    try:
+        lat = round(point.y, 7)
+        lon = round(point.x, 7)
+    except Exception:
+        lat, lon = "", ""
+    return {
+        "Boundary": boundary_name,
+        "Latitude": lat,
+        "Longitude": lon,
+        "Source_ID": source_id,
+        "Source": source,
+        "Luas_m2": round(area_m2, 1) if area_m2 is not None else "",
+        "Road_ID": str(road_info.get("road_id", "")),
+        "Road_Name": str(road_info.get("road_name", "")),
+        "Road_Type": str(road_info.get("road_highway", "")),
+        "Jarak_Ke_Jalan_m": (round(float(road_info["distance_m"]), 2)
+                             if "distance_m" in road_info else ""),
+        "Status": status,
+        "Alasan": note,
+    }
 
 
 def prepare_candidate_points(
@@ -795,11 +936,43 @@ def prepare_candidate_points(
     boundary_geom: BaseGeometry,
     buildings: gpd.GeoDataFrame,
     roads: gpd.GeoDataFrame,
-) -> List[Dict[str, Any]]:
-    """Filter buildings and return list of accepted frontage points."""
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, int]]:
+    """Filter buildings -> (diterima, ditolak, diagnostik).
 
-    if buildings.empty or roads.empty:
-        return []
+    Daftar 'ditolak' berisi titik + alasan per bangunan, bukan sekadar
+    hitungan. Angka agregat memberi tahu BERAPA yang gugur; hanya titiknya
+    yang memberi tahu DI MANA, dan itu yang menentukan apakah gang tertentu
+    perlu dipetakan atau ambang filter yang perlu diubah.
+    """
+    diag = {
+        "di_dalam_boundary": 0,
+        "dibuang_kecil": 0,
+        "dibuang_tanpa_jalan": 0,
+        "dibuang_jauh": 0,
+        "dibuang_terhalang": 0,
+        "dibuang_rapat": 0,
+    }
+    rejected: List[Dict[str, Any]] = []
+
+    if buildings.empty:
+        return [], rejected, diag
+
+    if roads.empty:
+        # Tanpa jalan semua rumah gugur. Tetap catat titiknya supaya
+        # terlihat di peta bahwa rumahnya ADA, yang hilang jalannya.
+        for _, b in buildings.iterrows():
+            geom = to_polygonal(b.geometry)
+            if geom is None:
+                continue
+            p = get_point_from_building(geom)
+            if boundary_geom.contains(p) or boundary_geom.touches(p):
+                diag["dibuang_tanpa_jalan"] += 1
+                rejected.append(make_reject_row(
+                    boundary_name, p, str(b.get("source_id", "")),
+                    str(b.get("source", "")), "TANPA_DATA_JALAN",
+                    REJECT_STATUS_LABEL["TANPA_DATA_JALAN"]))
+        diag["di_dalam_boundary"] = diag["dibuang_tanpa_jalan"]
+        return [], rejected, diag
 
     crs_m = estimate_local_utm_crs(boundary_geom)
 
@@ -839,8 +1012,9 @@ def prepare_candidate_points(
             "point_geom": point,
         })
 
+    diag["di_dalam_boundary"] = len(temp_rows)
     if not temp_rows:
-        return []
+        return [], rejected, diag
 
     buildings_in = gpd.GeoDataFrame(temp_rows, geometry="geometry", crs="EPSG:4326")
     points_in = gpd.GeoDataFrame(temp_rows, geometry="point_geom", crs="EPSG:4326")
@@ -849,64 +1023,150 @@ def prepare_candidate_points(
     points_m = points_in.to_crs(crs_m)
     roads_m = roads.to_crs(crs_m)
 
+    # Materialkan kolom sekali di depan. Sebelumnya tiap iterasi memanggil
+    # .iloc[i] tiga kali, dan .iloc pada GeoDataFrame membangun Series baru
+    # setiap panggilan — tiga ribu Series untuk seribu bangunan.
+    pts_4326 = list(points_in.geometry)
+    pts_m = list(points_m.geometry)
+    geoms_m = list(buildings_m.geometry)
+    areas_m2 = list(buildings_m.geometry.area)
+    source_ids = [str(x) for x in buildings_in["source_id"]]
+    sources = [str(x) for x in buildings_in["source"]]
+
     accepted_stage: List[Dict[str, Any]] = []
 
-    for i in range(len(buildings_m)):
-        p4326 = points_in.geometry.iloc[i]
-        p_m = points_m.geometry.iloc[i]
+    for i in range(len(geoms_m)):
+        p4326 = pts_4326[i]
+        p_m = pts_m[i]
+
+        src = source_ids[i]
+        origin = sources[i]
+
+        area = areas_m2[i]
+        # Geometri rusak memberi luas NaN; perbandingan apa pun dengan NaN
+        # bernilai False, jadi tanpa cek ini bangunan rusak justru lolos.
+        if math.isnan(area):
+            diag["dibuang_kecil"] += 1
+            rejected.append(make_reject_row(
+                boundary_name, p4326, src, origin, "TERLALU_KECIL",
+                "Geometri bangunan rusak (luas tidak terhitung)"))
+            continue
+        if MIN_BUILDING_AREA_M2 > 0 and area < MIN_BUILDING_AREA_M2:
+            diag["dibuang_kecil"] += 1
+            rejected.append(make_reject_row(
+                boundary_name, p4326, src, origin, "TERLALU_KECIL",
+                f"Luas {area:.1f} m2 di bawah {MIN_BUILDING_AREA_M2:.0f} m2",
+                area_m2=area))
+            continue
 
         road_info = nearest_road_info(p_m, roads_m)
         if road_info is None:
+            diag["dibuang_tanpa_jalan"] += 1
+            rejected.append(make_reject_row(
+                boundary_name, p4326, src, origin, "TANPA_AKSES_JALAN",
+                REJECT_STATUS_LABEL["TANPA_AKSES_JALAN"], area_m2=areas_m2[i]))
             continue
 
         if road_info["distance_m"] > MAX_DISTANCE_TO_ROAD_M:
+            diag["dibuang_jauh"] += 1
+            rejected.append(make_reject_row(
+                boundary_name, p4326, src, origin, "TERLALU_JAUH_JALAN",
+                f"Jarak ke jalan {road_info['distance_m']:.1f} m melebihi "
+                f"{MAX_DISTANCE_TO_ROAD_M:.0f} m",
+                road_info, areas_m2[i]))
             continue
 
         if ENABLE_BLOCKED_BY_BUILDING_FILTER:
             access_line = LineString([p_m, road_info["foot_point"]])
-            blocked, _ = access_line_blocked_by_other_building(access_line, i, buildings_m)
+            blocked, blocker = access_line_blocked_by_other_building(
+                access_line, i, buildings_m, geoms_m, source_ids)
             if blocked:
+                diag["dibuang_terhalang"] += 1
+                rejected.append(make_reject_row(
+                    boundary_name, p4326, src, origin, "TERHALANG_BANGUNAN",
+                    f"Jalur ke jalan terhalang bangunan lain: {blocker}",
+                    road_info, areas_m2[i]))
                 continue
 
-        bin_no = int(road_info["projection_m"] // FRONTAGE_BIN_M) if FRONTAGE_BIN_M > 0 else 0
-        group_key = (road_info["road_id"], road_info["side"], bin_no)
+        group_key = (road_info["road_id"], road_info["side"])
 
         accepted_stage.append({
             "boundary": boundary_name,
             "point": p4326,
+            "source": origin,
+            "area_m2": areas_m2[i],
             "projection_m": road_info["projection_m"],
             "source_id": str(buildings_in.iloc[i].get("source_id", "")),
             "road_id": road_info["road_id"],
             "road_name": road_info["road_name"],
             "distance_to_road_m": road_info["distance_m"],
             "road_side": road_info["side"],
-            "frontage_bin": bin_no,
             "frontage_key": group_key,
         })
 
-    # First-row filter: per frontage bin, keep only nearest building
-    if ENABLE_FIRST_ROW_BIN_FILTER:
-        best_by_key: Dict[Tuple, int] = {}
-        for idx, row in enumerate(accepted_stage):
-            key = row["frontage_key"]
-            if key not in best_by_key:
-                best_by_key[key] = idx
-            else:
-                prev_idx = best_by_key[key]
-                if row["distance_to_road_m"] < accepted_stage[prev_idx]["distance_to_road_m"]:
-                    best_by_key[key] = idx
+    # Satu rumah per sepenggal muka jalan.
+    #
+    # Versi sebelumnya memakai grid tetap (projection_m // 4) sehingga
+    # hasilnya bergantung kebetulan posisi grid: dua rumah berjarak 3,8 m
+    # bisa jatuh di bin yang sama (satu dibuang), sementara dua rumah
+    # berjarak 0,3 m bisa beda bin (dua-duanya lolos). Untuk rumah deret
+    # kampung itu membuang rumah asli. Sekarang jaraknya diukur langsung
+    # antar rumah di sepanjang jalan.
+    if ENABLE_FIRST_ROW_BIN_FILTER and MIN_FRONTAGE_SPACING_M > 0:
+        before = len(accepted_stage)
+        grouped: Dict[Tuple, List[Dict[str, Any]]] = {}
+        for row in accepted_stage:
+            grouped.setdefault(row["frontage_key"], []).append(row)
 
-        keep_indices = set(best_by_key.values())
-        accepted_stage = [row for idx, row in enumerate(accepted_stage) if idx in keep_indices]
+        swept: List[Dict[str, Any]] = []
+        dropped: List[Dict[str, Any]] = []
+        for group in grouped.values():
+            group.sort(key=lambda r: r["projection_m"])
+            kept: List[Dict[str, Any]] = []
+            for row in group:
+                if kept and row["projection_m"] - kept[-1]["projection_m"] < MIN_FRONTAGE_SPACING_M:
+                    # Dua kandidat berebut muka jalan yang sama: pilih yang
+                    # paling dekat jalan (baris depan). Menggeser yang
+                    # tersimpan ke projection lebih besar hanya melebarkan
+                    # jarak ke rumah sebelumnya, jadi tetap aman.
+                    if row["distance_to_road_m"] < kept[-1]["distance_to_road_m"]:
+                        dropped.append(kept[-1])
+                        kept[-1] = row
+                    else:
+                        dropped.append(row)
+                    continue
+                kept.append(row)
+            swept.extend(kept)
 
-    return accepted_stage
+        accepted_stage = swept
+        diag["dibuang_rapat"] = len(dropped)
+        for row in dropped:
+            rejected.append(make_reject_row(
+                boundary_name, row["point"], row["source_id"], row.get("source", ""),
+                "BERDEMPETAN",
+                f"Ada rumah lain lebih dekat jalan dalam {MIN_FRONTAGE_SPACING_M:.0f} m "
+                f"di muka jalan yang sama ({row['road_id']}, sisi {row['road_side']})",
+                {"road_id": row["road_id"], "road_name": row["road_name"],
+                 "distance_m": row["distance_to_road_m"]},
+                row.get("area_m2")))
+
+    return accepted_stage, rejected, diag
 
 
 # ==========================================================
 # KML EXPORT
 # ==========================================================
-def export_kml_accepted(rows: List[Dict[str, Any]]) -> bytes:
+def export_kml_accepted(rows: List[Dict[str, Any]],
+                        attribution: str = "",
+                        rejected: Optional[List[Dict[str, Any]]] = None) -> bytes:
+    """KML hasil. Titik yang ditolak ikut sebagai folder terpisah yang
+    default-nya tidak tercentang, jadi tampilan normal tidak berubah tapi
+    alasan penolakan bisa diperiksa langsung di peta."""
     kml = simplekml.Kml()
+    if attribution:
+        # Google Open Buildings (CC BY 4.0) dan Overture (ODbL) sama-sama
+        # mewajibkan atribusi ikut pada karya turunan.
+        kml.document.description = attribution
     root_folder = kml.newfolder(name="Auto Placemark Frontage")
 
     folders: Dict[str, Any] = {}
@@ -920,7 +1180,101 @@ def export_kml_accepted(rows: List[Dict[str, Any]]) -> bytes:
             coords=[(row["Longitude"], row["Latitude"])],
         )
 
+    if INCLUDE_REJECTED_IN_KML and rejected:
+        debug_root = kml.newfolder(name="DEBUG - DITOLAK")
+        debug_root.visibility = 0
+        per_status: Dict[str, Any] = {}
+        for i, row in enumerate(rejected[:MAX_REJECTED_IN_KML], start=1):
+            if row["Latitude"] == "" or row["Longitude"] == "":
+                continue
+            status = row.get("Status", "DITOLAK")
+            if status not in per_status:
+                sub = debug_root.newfolder(
+                    name=f"{status} — {REJECT_STATUS_LABEL.get(status, '')}".strip(" —"))
+                sub.visibility = 0
+                per_status[status] = sub
+            pnt = per_status[status].newpoint(
+                name=f"{status}-{i:04d}",
+                coords=[(row["Longitude"], row["Latitude"])],
+            )
+            pnt.visibility = 0
+            pnt.description = row.get("Alasan", "")
+
     return kml.kml().encode("utf-8")
+
+
+def export_excel_report(accepted: List[Dict[str, Any]],
+                        rejected: List[Dict[str, Any]],
+                        diagnostics: List[Dict[str, Any]]) -> bytes:
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        pd.DataFrame(accepted).to_excel(writer, index=False, sheet_name="DITERIMA")
+        (pd.DataFrame(rejected) if rejected else pd.DataFrame(columns=["Boundary"])) \
+            .to_excel(writer, index=False, sheet_name="DITOLAK")
+        pd.DataFrame(diagnostics).to_excel(writer, index=False, sheet_name="DIAGNOSTIK")
+    return buf.getvalue()
+
+
+def pack_outputs(base_name: str, kml_bytes: bytes,
+                 xlsx_bytes: Optional[bytes]) -> Tuple[bytes, str, str]:
+    """(content, filename, content_type). ZIP hanya kalau ada Excel."""
+    if not xlsx_bytes:
+        return (kml_bytes, f"{base_name}_placemark.kml",
+                "application/vnd.google-earth.kml+xml")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f"{base_name}_placemark.kml", kml_bytes)
+        z.writestr(f"{base_name}_laporan.xlsx", xlsx_bytes)
+    return buf.getvalue(), f"{base_name}_placemark.zip", "application/zip"
+
+
+# ==========================================================
+# DIAGNOSTIK
+# ==========================================================
+def explain_empty_boundary(d: Dict[str, Any]) -> str:
+    """Terjemahkan hitungan per tahap jadi satu kalimat sebab-akibat.
+
+    Menggantikan pesan lama yang hanya menyodorkan tiga kemungkinan tanpa
+    data, sehingga pemakai tidak bisa tahu mana yang sebenarnya terjadi.
+    """
+    name = d.get("boundary", "?")
+    src = d.get("sumber", "-")
+    bangunan = d.get("bangunan_total", 0)
+    jalan = d.get("jalan", 0)
+    gagal = d.get("tile_gagal", 0)
+    ekor = f" ({gagal} bagian area gagal diunduh)" if gagal else ""
+
+    if bangunan == 0 and jalan == 0:
+        return (f"{name}: sumber {src} tidak punya data bangunan maupun jalan "
+                f"di area ini{ekor}.")
+    if bangunan == 0:
+        return (f"{name}: {jalan} jalan terbaca, tapi TIDAK ADA footprint bangunan"
+                f"{ekor}. Ini batas liputan data, bukan filter — aktifkan sumber "
+                "Google Open Buildings (AUTO_PLACEMARK_SOURCE=merge).")
+    if jalan == 0:
+        return (f"{name}: {bangunan} bangunan terbaca, tapi TIDAK ADA jalan{ekor}. "
+                "Tanpa jalan seluruh rumah otomatis dibuang — jalan/gang di area "
+                "ini belum terpetakan di OSM.")
+    if d.get("di_dalam_boundary", 0) == 0:
+        # Data diambil per bbox, jadi sedikit bangunan yang semuanya jatuh di
+        # luar poligon itu wajar. Salah CRS baru masuk akal kalau bangunannya
+        # banyak tapi tak satu pun masuk.
+        if bangunan >= 20:
+            return (f"{name}: {bangunan} bangunan terbaca tapi tidak satu pun titik "
+                    "pusatnya jatuh di dalam boundary. Periksa apakah boundary "
+                    "memakai koordinat WGS84 (lon,lat derajat desimal).")
+        return (f"{name}: hanya {bangunan} bangunan di bbox area ini dan semuanya "
+                "di luar garis boundary. Liputan footprint di sini praktis kosong — "
+                "aktifkan Google Open Buildings (AUTO_PLACEMARK_SOURCE=merge).")
+    return (f"{name}: {d['di_dalam_boundary']} bangunan di dalam boundary, semuanya "
+            f"tersaring — {d.get('dibuang_kecil', 0)} luasnya di bawah "
+            f"{MIN_BUILDING_AREA_M2:.0f} m2, "
+            f"{d.get('dibuang_jauh', 0)} lebih dari "
+            f"{MAX_DISTANCE_TO_ROAD_M:.0f} m dari jalan, "
+            f"{d.get('dibuang_terhalang', 0)} terhalang bangunan lain, "
+            f"{d.get('dibuang_rapat', 0)} berdempetan kurang dari "
+            f"{MIN_FRONTAGE_SPACING_M:.0f} m di muka jalan yang sama.")
 
 
 # ==========================================================
@@ -931,6 +1285,8 @@ def process_auto_placemark(
     filename: str,
     is_kmz: bool = False,
     progress_cb=None,
+    buildings_file: Optional[bytes] = None,
+    buildings_filename: str = "",
 ) -> Dict[str, Any]:
     """
     Main processing function.
@@ -940,6 +1296,9 @@ def process_auto_placemark(
         filename: original filename (used to detect format)
         is_kmz: True if KMZ
         progress_cb: optional callback(message: str) for progress updates
+        buildings_file: unggahan opsional berisi footprint bangunan sendiri
+            (hasil survei/digitasi). Kalau ada, sumber online tidak dipakai.
+        buildings_filename: nama berkas unggahan itu, untuk deteksi format
 
     Returns:
         dict with status, filename, content (bytes), content_type
@@ -957,10 +1316,32 @@ def process_auto_placemark(
         print(f"[auto_placemark] Jumlah boundary terbaca: {len(boundaries)}")
 
         accepted_rows: List[Dict[str, Any]] = []
+        rejected_rows: List[Dict[str, Any]] = []
         global_no = 1
         stats = FetchStats()
         warnings: List[str] = []
-        empty_boundaries: List[str] = []
+        diagnostics: List[Dict[str, Any]] = []
+        source_errors: List[str] = []
+        attributions: List[str] = []
+
+        mode = BUILDING_SOURCE if BUILDING_SOURCE in ("osm", "gob", "merge", "overture") else "merge"
+
+        # Footprint sendiri menggantikan seluruh sumber online. Jalan tetap
+        # dari OSM karena unggahan ini isinya bangunan.
+        custom_buildings = None
+        if buildings_file:
+            try:
+                custom_buildings, cinfo = load_custom_buildings(
+                    buildings_file, buildings_filename or "bangunan.geojson")
+                attributions.append(cinfo["attribution"])
+                mode = "custom"
+                warnings.append(
+                    f"Memakai {len(custom_buildings)} footprint dari unggahan "
+                    f"'{cinfo['file']}'; sumber bangunan online dilewati."
+                )
+            except BuildingSourceUnavailable as e:
+                source_errors.append(str(e))
+                warnings.append(f"File bangunan diabaikan: {e}")
 
         for idx, brow in boundaries.iterrows():
             boundary_name = clean_name(str(brow["boundary_name"]), f"AREA_{idx+1:02d}")
@@ -968,19 +1349,90 @@ def process_auto_placemark(
             if not boundary_geom.is_valid:
                 boundary_geom = boundary_geom.buffer(0)
 
-            if progress_cb:
-                progress_cb(f"Mengunduh data bangunan & jalan OSM untuk {boundary_name}...")
+            coord_warning = indonesia_coord_warning(boundary_geom)
+            if coord_warning:
+                warnings.append(f"{boundary_name}: {coord_warning}")
+                print(f"[auto_placemark] {boundary_name}: {coord_warning}")
 
-            buildings, roads = download_osm_features(boundary_geom, progress_cb, stats)
+            buildings = empty_buildings()
+            roads = empty_roads()
+            source_label = "-"
+            osm_count = 0
+            added_count = 0
+            failed_before = stats.failed
 
-            print(f"[auto_placemark] {boundary_name}: {len(buildings)} buildings, {len(roads)} roads")
+            if mode == "custom":
+                if progress_cb:
+                    progress_cb(f"Mengunduh jalan OSM untuk {boundary_name}...")
+                _, roads = download_osm_features(boundary_geom, progress_cb, stats)
+                buildings = custom_buildings
+                added_count = len(buildings)
+                source_label = "CUSTOM"
+            elif mode == "overture":
+                # Bangunan DAN jalan dari Overture. Lambat; lihat catatan di
+                # engines/building_sources.py.
+                if progress_cb:
+                    progress_cb(f"Mengambil data Overture untuk {boundary_name}...")
+                try:
+                    buildings, roads, oinfo = fetch_overture_features(boundary_geom, progress_cb)
+                    source_label = f"Overture {oinfo['release']}"
+                    attributions.append(oinfo["attribution"])
+                except BuildingSourceUnavailable as e:
+                    source_errors.append(f"{boundary_name}: {e}")
+            else:
+                # Jalan SELALU dari OSM: liputan jalan & gang di Indonesia
+                # sudah bagus, dan Google Open Buildings memang tidak punya
+                # data jalan sama sekali.
+                if progress_cb:
+                    progress_cb(f"Mengunduh data bangunan & jalan OSM untuk {boundary_name}...")
+                buildings, roads = download_osm_features(boundary_geom, progress_cb, stats)
+                osm_count = len(buildings)
+                source_label = "OSM"
+
+                if mode in ("gob", "merge"):
+                    if progress_cb:
+                        progress_cb(f"Melengkapi bangunan dari Google Open Buildings untuk {boundary_name}...")
+                    try:
+                        gob, ginfo = fetch_gob_buildings(boundary_geom, progress_cb)
+                        if mode == "gob":
+                            buildings = gob
+                            added_count = len(gob)
+                            source_label = "GOB"
+                        else:
+                            buildings, added_count = merge_buildings(buildings, gob)
+                            source_label = f"OSM+GOB" if added_count else "OSM"
+                        if added_count:
+                            attributions.append(ginfo["attribution"])
+                    except BuildingSourceUnavailable as e:
+                        source_errors.append(f"{boundary_name}: {e}")
+
+            tiles_failed_here = stats.failed - failed_before
+
+            print(f"[auto_placemark] {boundary_name}: {len(buildings)} buildings "
+                  f"({source_label}, OSM={osm_count}, tambahan={added_count}), "
+                  f"{len(roads)} roads, tile gagal={tiles_failed_here}")
 
             if progress_cb:
                 progress_cb(f"Memfilter rumah frontage untuk {boundary_name}...")
 
-            accepted_stage = prepare_candidate_points(boundary_name, boundary_geom, buildings, roads)
-            if not accepted_stage:
-                empty_boundaries.append(boundary_name)
+            accepted_stage, rejected_stage, diag = prepare_candidate_points(
+                boundary_name, boundary_geom, buildings, roads)
+            rejected_rows.extend(rejected_stage)
+
+            diag.update({
+                "boundary": boundary_name,
+                "sumber": source_label,
+                "luas_km2": round(approx_area_km2(boundary_geom), 3),
+                "bangunan_osm": int(osm_count),
+                "bangunan_tambahan": int(added_count),
+                "bangunan_total": int(len(buildings)),
+                "jalan": int(len(roads)),
+                "tile_gagal": int(tiles_failed_here),
+                "diterima": len(accepted_stage),
+                "ditolak": len(rejected_stage),
+                "peringatan_koordinat": coord_warning,
+            })
+            diagnostics.append(diag)
 
             # Penomoran menyusuri jalan: jalan diurutkan dari yang paling
             # utara, lalu per sisi jalan, lalu menurut jarak sepanjang jalan.
@@ -1000,6 +1452,14 @@ def process_auto_placemark(
                     "Placemark": placemark,
                     "Latitude": round(item["point"].y, 7),
                     "Longitude": round(item["point"].x, 7),
+                    "Sumber": item.get("source", ""),
+                    "Source_ID": item.get("source_id", ""),
+                    "Luas_m2": (round(item["area_m2"], 1)
+                                if item.get("area_m2") is not None else ""),
+                    "Road_ID": item.get("road_id", ""),
+                    "Road_Name": item.get("road_name", ""),
+                    "Sisi_Jalan": item.get("road_side", ""),
+                    "Jarak_Ke_Jalan_m": round(item.get("distance_to_road_m", 0.0), 2),
                 })
                 global_no += 1
 
@@ -1013,14 +1473,31 @@ def process_auto_placemark(
             }
 
         if not accepted_rows:
+            reasons = [explain_empty_boundary(d) for d in diagnostics]
+            coord_warns = [w for w in warnings if "WGS84" in w]
+            detail = " ".join(coord_warns + reasons[:5]) or "Tidak ada boundary yang terbaca."
+            if source_errors:
+                detail += " Sumber tambahan gagal: " + "; ".join(source_errors[:3])
+            ringkasan_tolak: Dict[str, int] = {}
+            for r in rejected_rows:
+                s = r.get("Status", "?")
+                ringkasan_tolak[s] = ringkasan_tolak.get(s, 0) + 1
             return {
                 "status": "error",
-                "message": (
-                    "Tidak ada placemark frontage yang berhasil dibuat. "
-                    "Kemungkinan: (1) Data bangunan/jalan OSM di area boundary kosong. "
-                    "(2) Boundary bukan koordinat WGS84. "
-                    "(3) Filter terlalu ketat."
-                ),
+                "message": "Tidak ada placemark frontage yang berhasil dibuat. " + detail,
+                "report": {
+                    "warnings": coord_warns + reasons,
+                    "diagnostics": diagnostics,
+                    "ditolak_per_alasan": ringkasan_tolak,
+                    "stats": {
+                        "hp": 0,
+                        "ditolak": len(rejected_rows),
+                        "boundary": len(boundaries),
+                        "tile_osm": stats.tiles,
+                        "tile_gagal": stats.failed,
+                        "sumber": mode,
+                    },
+                },
             }
 
         if stats.failed:
@@ -1034,32 +1511,89 @@ def process_auto_placemark(
                 f"{stats.skipped_timeout} bagian area dilewati karena melewati batas waktu "
                 f"{MAX_FETCH_SECONDS // 60} menit — perkecil boundary atau pecah jadi beberapa file."
             )
-        if empty_boundaries:
-            warnings.append("Boundary tanpa rumah frontage: " + ", ".join(empty_boundaries[:10]))
+        for d in diagnostics:
+            if d["diterima"] == 0:
+                warnings.append(explain_empty_boundary(d))
+        if source_errors:
+            warnings.append("Sumber bangunan tambahan gagal: " + "; ".join(source_errors[:3]))
+
+        # Rumah yang jauh dari jalan biasanya bukan rumah kebun, melainkan
+        # rumah di gang yang belum terpetakan. Kalau porsinya besar, pemakai
+        # perlu tahu — kalau tidak, hasilnya terlihat "sudah lengkap".
+        jauh = sum(d.get("dibuang_jauh", 0) for d in diagnostics)
+        dalam = sum(d.get("di_dalam_boundary", 0) for d in diagnostics)
+        if dalam and jauh / dalam >= 0.15:
+            warnings.append(
+                f"{jauh} dari {dalam} bangunan ({jauh / dalam:.0%}) dibuang karena "
+                f"lebih dari {MAX_DISTANCE_TO_ROAD_M:.0f} m dari jalan terdekat. "
+                "Biasanya berarti gang di area itu belum ada di OpenStreetMap — "
+                "petakan gangnya, atau naikkan batas jarak lewat env "
+                "AUTO_PLACEMARK_MAX_ROAD_M."
+            )
+
+        total_tambahan = sum(d["bangunan_tambahan"] for d in diagnostics)
+        # Peringatan "hasil deteksi citra" hanya berlaku untuk sumber ML.
+        # Footprint unggahan pemakai sudah tervalidasi olehnya sendiri.
+        if total_tambahan and mode in ("gob", "merge"):
+            warnings.append(
+                f"{total_tambahan} bangunan yang tidak ada di OSM ditambahkan dari "
+                "Google Open Buildings (footprint hasil deteksi citra, "
+                f"confidence >= {GOB_MIN_CONFIDENCE:.2f}). Verifikasi di lapangan "
+                "sebelum dipakai untuk HPDB final."
+            )
+
+        if INCLUDE_REJECTED_IN_KML and rejected_rows:
+            warnings.append(
+                f"{len(rejected_rows)} bangunan yang tidak jadi HP ikut di KML pada "
+                "folder 'DEBUG - DITOLAK' (tidak tercentang), dikelompokkan per "
+                "alasan — centang di Google Earth untuk memeriksanya."
+            )
 
         if progress_cb:
-            progress_cb("Mengekspor KML...")
+            progress_cb("Mengekspor hasil...")
 
-        kml_bytes = export_kml_accepted(accepted_rows)
+        attribution = " | ".join(dict.fromkeys(attributions))
+        kml_bytes = export_kml_accepted(accepted_rows, attribution, rejected_rows)
+
+        xlsx_bytes = None
+        if EXPORT_EXCEL_REPORT:
+            try:
+                xlsx_bytes = export_excel_report(accepted_rows, rejected_rows, diagnostics)
+            except Exception as e:
+                warnings.append(f"Laporan Excel gagal dibuat: {type(e).__name__}: {e}")
 
         # Output filename follows input name
         base_name = filename.rsplit(".", 1)[0] if "." in filename else filename
-        output_filename = f"{base_name}_placemark.kml"
+        content, output_filename, content_type = pack_outputs(
+            base_name, kml_bytes, xlsx_bytes)
 
-        print(f"[auto_placemark] Total accepted: {len(accepted_rows)}, output: {output_filename}")
+        print(f"[auto_placemark] Total accepted: {len(accepted_rows)}, "
+              f"rejected: {len(rejected_rows)}, output: {output_filename}")
+
+        ringkasan_tolak: Dict[str, int] = {}
+        for r in rejected_rows:
+            s = r.get("Status", "?")
+            ringkasan_tolak[s] = ringkasan_tolak.get(s, 0) + 1
 
         return {
             "status": "success",
             "filename": output_filename,
-            "content": kml_bytes,
-            "content_type": "application/vnd.google-earth.kml+xml",
+            "content": content,
+            "content_type": content_type,
             "report": {
                 "warnings": warnings,
+                "diagnostics": diagnostics,
+                "ditolak_per_alasan": ringkasan_tolak,
+                "attribution": attribution,
                 "stats": {
                     "hp": len(accepted_rows),
+                    "ditolak": len(rejected_rows),
                     "boundary": len(boundaries),
                     "tile_osm": stats.tiles,
                     "tile_gagal": stats.failed,
+                    "sumber": mode,
+                    "bangunan_dari_gob": total_tambahan if mode in ("gob", "merge") else 0,
+                    "bangunan_dari_unggahan": total_tambahan if mode == "custom" else 0,
                 },
             },
         }

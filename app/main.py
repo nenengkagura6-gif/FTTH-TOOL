@@ -752,7 +752,12 @@ def _run_job(
                 boundary_content=file_bytes,
                 filename=original_filename,
                 is_kmz=is_kmz,
-                progress_cb=_ap_progress
+                progress_cb=_ap_progress,
+                # Unggahan opsional Auto Placemark adalah footprint bangunan
+                # sendiri (hasil survei/digitasi). Kalau ada, sumber online
+                # dilewati sepenuhnya.
+                buildings_file=template_bytes,
+                buildings_filename=(template_path or "").rsplit("/", 1)[-1],
             )
         elif tool_name == "basicmap":
             def _bm_progress(msg: str):
@@ -808,6 +813,16 @@ def _run_job(
         })
 
         if result.get("status") == "error":
+            # Simpan laporan dulu kalau engine menyertakannya. Auto Placemark
+            # mengirim diagnostik per boundary justru pada kasus gagal — di
+            # situlah pemakai perlu tahu sebabnya, dan tanpa ini laporannya
+            # ikut hilang bersama exception.
+            error_report = result.get("report")
+            if error_report:
+                try:
+                    save_job_report(job_id, error_report)
+                except Exception as report_error:
+                    print(f"[job {job_id}] Gagal menyimpan laporan error: {report_error}")
             raise Exception(result.get("message", "Unknown processing error"))
 
         # 3. Upload output to Supabase Storage
