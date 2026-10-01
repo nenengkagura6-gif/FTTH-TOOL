@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { motion } from "framer-motion"
+import { motion, Reorder, useDragControls } from "framer-motion"
 import {
   Upload,
   FileText,
@@ -12,7 +12,8 @@ import {
   ShieldAlert,
   Sparkles,
   Layers,
-  ArrowUpDown
+  ArrowUpDown,
+  GripVertical
 } from "lucide-react"
 import { 
   ResponsiveContainer, 
@@ -146,6 +147,9 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: "loss-desc", label: "Span loss: terbesar dulu" },
 ]
 
+// Nilai <select> saat daftar sedang diurutkan manual dengan cara diseret
+const MANUAL_SORT = "manual"
+
 // v2: default berubah jadi urutan nama; pilihan lama "original" tidak dibawa
 const SORT_STORAGE_KEY = "otdr-analyzer:sort:v2"
 const DEFAULT_SORT: SortMode = "name-asc"
@@ -196,6 +200,81 @@ function sortTraces(traces: TraceItem[], mode: SortMode): TraceItem[] {
   })
 }
 
+// Satu baris di daftar file: pegangan seret (⠿) + tombol pilih trace.
+// Seret hanya dari pegangan supaya klik & scroll daftar di HP tetap normal.
+function TraceListItem({
+  trace,
+  position,
+  total,
+  isActive,
+  onSelect,
+  onMove,
+}: {
+  trace: TraceItem
+  position: number
+  total: number
+  isActive: boolean
+  onSelect: () => void
+  onMove: (delta: number) => void
+}) {
+  const dragControls = useDragControls()
+
+  return (
+    <Reorder.Item
+      as="div"
+      value={trace.uid}
+      dragListener={false}
+      dragControls={dragControls}
+      className={`flex items-center rounded-xl text-xs font-medium group ${
+        isActive
+          ? "bg-primary text-primary-foreground font-semibold"
+          : "bg-background/60 hover:bg-surface-2 text-muted-foreground hover:text-foreground"
+      }`}
+      whileDrag={{ scale: 1.03, boxShadow: "0 8px 24px rgba(0,0,0,0.35)" }}
+    >
+      <button
+        type="button"
+        aria-label={`Pindahkan ${trace.filename} (posisi ${position} dari ${total}). Seret, atau tekan panah atas/bawah.`}
+        title="Seret untuk memindah posisi"
+        onPointerDown={(e) => {
+          e.preventDefault()
+          dragControls.start(e)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp") {
+            e.preventDefault()
+            onMove(-1)
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault()
+            onMove(1)
+          }
+        }}
+        className={`pl-1.5 pr-0.5 py-2.5 touch-none cursor-grab active:cursor-grabbing rounded-l-xl ${
+          isActive ? "opacity-80 hover:opacity-100" : "opacity-50 hover:opacity-100"
+        }`}
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onSelect}
+        title={trace.filename}
+        className="flex-1 min-w-0 text-left pl-1 pr-3 py-2.5 flex items-center gap-2"
+      >
+        <span className={`text-3xs font-mono tabular-nums w-5 flex-shrink-0 ${isActive ? "opacity-80" : "opacity-60"}`}>
+          {position}
+        </span>
+        <span className="truncate flex-1">{trace.filename}</span>
+        {trace.message && (
+          <span className={`text-3xs px-1 py-0.5 rounded font-mono ${isActive ? 'bg-warning/30 text-warning' : 'bg-warning/10 text-warning group-hover:bg-warning/20'}`} title={trace.message}>
+            ⚠️
+          </span>
+        )}
+      </button>
+    </Reorder.Item>
+  )
+}
+
 export default function OtdrAnalyzerPage() {
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -205,6 +284,9 @@ export default function OtdrAnalyzerPage() {
   // Trace aktif dilacak lewat uid agar tidak berpindah saat urutan diganti
   const [activeUid, setActiveUid] = useState<number | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>(DEFAULT_SORT)
+  // Urutan hasil seret manual (daftar uid). null = ikut sortMode.
+  // Tidak disimpan ke browser karena hanya berlaku untuk file yang sedang dibuka.
+  const [manualOrder, setManualOrder] = useState<number[] | null>(null)
 
   // Dictionary of overrides: trace uid -> override distance string
   const [overrideDistances, setOverrideDistances] = useState<Record<number, string>>({})
@@ -219,15 +301,37 @@ export default function OtdrAnalyzerPage() {
     } catch {}
   }, [])
 
-  const handleSortChange = (mode: SortMode) => {
-    setSortMode(mode)
+  // Urutan tampilan sidebar sekaligus urutan halaman saat dicetak
+  const sortedTraces = useMemo(() => {
+    if (manualOrder) {
+      const byUid = new Map(traces.map((t) => [t.uid, t]))
+      return manualOrder.map((uid) => byUid.get(uid)).filter((t): t is TraceItem => Boolean(t))
+    }
+    return sortTraces(traces, sortMode)
+  }, [traces, sortMode, manualOrder])
+
+  const handleSortChange = (value: string) => {
+    if (value === MANUAL_SORT) {
+      // Mulai mode manual dari urutan yang sedang tampil
+      setManualOrder(sortedTraces.map((t) => t.uid))
+      return
+    }
+    setManualOrder(null)
+    setSortMode(value as SortMode)
     try {
-      localStorage.setItem(SORT_STORAGE_KEY, mode)
+      localStorage.setItem(SORT_STORAGE_KEY, value)
     } catch {}
   }
 
-  // Urutan tampilan sidebar sekaligus urutan halaman saat dicetak
-  const sortedTraces = useMemo(() => sortTraces(traces, sortMode), [traces, sortMode])
+  // Geser satu file naik/turun (dipakai tombol panah keyboard pada pegangan seret)
+  const moveTrace = (uid: number, delta: number) => {
+    const order = sortedTraces.map((t) => t.uid)
+    const from = order.indexOf(uid)
+    const to = from + delta
+    if (from < 0 || to < 0 || to >= order.length) return
+    order.splice(to, 0, ...order.splice(from, 1))
+    setManualOrder(order)
+  }
 
   // Active trace helper
   const activeTrace = useMemo(() => {
@@ -240,6 +344,7 @@ export default function OtdrAnalyzerPage() {
   const handleReset = () => {
     setTraces([])
     setActiveUid(null)
+    setManualOrder(null)
     setErrorMsg(null)
     setOverrideDistances({})
   }
@@ -249,6 +354,7 @@ export default function OtdrAnalyzerPage() {
     setLoading(true)
     setErrorMsg(null)
     setOverrideDistances({})
+    setManualOrder(null)
     setTimeout(() => {
       setTraces([
         {
@@ -272,6 +378,7 @@ export default function OtdrAnalyzerPage() {
     setLoading(true)
     setErrorMsg(null)
     setOverrideDistances({})
+    setManualOrder(null)
 
     const formData = new FormData()
     for (let i = 0; i < files.length; i++) {
@@ -483,7 +590,7 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
           </div>
           <h3 className="text-base font-medium mb-1">Unggah File atau Folder OTDR</h3>
           <p className="text-xs text-muted-foreground max-w-md mb-6 leading-relaxed">
-            Pilih satu file `.sor`, pilih banyak file sekaligus, atau unggah file `.zip` berisi kumpulan file `.sor`. Daftar diurutkan per nama seperti di WinRAR (A01, A1, A02, A2, …); urutan lain (tersimpan di ZIP, tanggal, jarak, loss) bisa dipilih setelah diproses.
+            Pilih satu file `.sor`, pilih banyak file sekaligus, atau unggah file `.zip` berisi kumpulan file `.sor`. Daftar diurutkan per nama seperti di WinRAR (A01, A1, A02, A2, …); setelah diproses, urutan bisa diganti (tanggal, jarak, loss) atau diseret manual.
           </p>
           <label className="h-10 px-6 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/95 transition-all cursor-pointer inline-flex items-center gap-2">
             Pilih File / Zip
@@ -549,7 +656,8 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
           <div className="grid grid-cols-1 md:grid-cols-[250px_1fr] gap-6 items-start">
             {/* Left Sidebar List of Files */}
             {traces.length > 1 && (
-              <div className="bg-card/25 border border-border rounded-2xl p-4 space-y-2 max-h-[600px] overflow-y-auto">
+              // layoutScroll: posisi item dihitung benar walau daftar sudah di-scroll
+              <motion.div layoutScroll className="bg-card/25 border border-border rounded-2xl p-4 space-y-2 max-h-[600px] overflow-y-auto">
                 <div className="text-2xs font-bold text-muted-foreground uppercase tracking-wider px-2 mb-2">
                   <span>Daftar File ({traces.length})</span>
                 </div>
@@ -560,8 +668,8 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
                   </label>
                   <select
                     id="otdr-sort"
-                    value={sortMode}
-                    onChange={(e) => handleSortChange(e.target.value as SortMode)}
+                    value={manualOrder ? MANUAL_SORT : sortMode}
+                    onChange={(e) => handleSortChange(e.target.value)}
                     className="w-full h-8 px-2 rounded-lg border border-border bg-surface-1 text-xs font-semibold text-foreground focus:outline-none focus:border-border-strong cursor-pointer"
                   >
                     {SORT_OPTIONS.map((opt) => (
@@ -570,40 +678,34 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
                         {opt.label}
                       </option>
                     ))}
+                    <option value={MANUAL_SORT} className="bg-card text-foreground">
+                      Manual (seret sendiri)
+                    </option>
                   </select>
                   <p className="text-3xs text-muted-foreground px-1 leading-snug">
-                    Urutan cetak PDF mengikuti daftar ini.
+                    Seret ikon ⠿ untuk memindah posisi file. Urutan cetak PDF mengikuti daftar ini.
                   </p>
                 </div>
-                <div className="space-y-1">
-                  {sortedTraces.map((trace, idx) => {
-                    const isActive = trace.uid === activeTrace.uid
-                    return (
-                      <button
-                        key={trace.uid}
-                        type="button"
-                        onClick={() => setActiveUid(trace.uid)}
-                        title={trace.filename}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition-all truncate flex items-center justify-between gap-2 group ${
-                          isActive
-                            ? "bg-primary text-primary-foreground font-semibold"
-                            : "hover:bg-surface-2 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <span className={`text-3xs font-mono tabular-nums w-5 flex-shrink-0 ${isActive ? "opacity-80" : "opacity-60"}`}>
-                          {idx + 1}
-                        </span>
-                        <span className="truncate flex-1">{trace.filename}</span>
-                        {trace.message && (
-                          <span className={`text-3xs px-1 py-0.5 rounded font-mono ${isActive ? 'bg-warning/30 text-warning' : 'bg-warning/10 text-warning group-hover:bg-warning/20'}`} title={trace.message}>
-                            ⚠️
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+                <Reorder.Group
+                  as="div"
+                  axis="y"
+                  values={sortedTraces.map((t) => t.uid)}
+                  onReorder={(order: number[]) => setManualOrder(order)}
+                  className="space-y-1"
+                >
+                  {sortedTraces.map((trace, idx) => (
+                    <TraceListItem
+                      key={trace.uid}
+                      trace={trace}
+                      position={idx + 1}
+                      total={sortedTraces.length}
+                      isActive={trace.uid === activeTrace.uid}
+                      onSelect={() => setActiveUid(trace.uid)}
+                      onMove={(delta) => moveTrace(trace.uid, delta)}
+                    />
+                  ))}
+                </Reorder.Group>
+              </motion.div>
             )}
 
             {/* Right: Active Single Report Content */}
