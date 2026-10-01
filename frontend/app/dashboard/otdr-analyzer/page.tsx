@@ -135,9 +135,9 @@ type SortMode =
   | "loss-desc"
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: "original", label: "Urutan asli (sesuai input)" },
-  { value: "name-asc", label: "Nama file A–Z" },
+  { value: "name-asc", label: "Nama file A–Z (seperti WinRAR)" },
   { value: "name-desc", label: "Nama file Z–A" },
+  { value: "original", label: "Urutan tersimpan di ZIP / unggahan" },
   { value: "date-asc", label: "Tanggal ukur: terlama dulu" },
   { value: "date-desc", label: "Tanggal ukur: terbaru dulu" },
   { value: "distance-asc", label: "Jarak: terpendek dulu" },
@@ -146,7 +146,9 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: "loss-desc", label: "Span loss: terbesar dulu" },
 ]
 
-const SORT_STORAGE_KEY = "otdr-analyzer:sort"
+// v2: default berubah jadi urutan nama; pilihan lama "original" tidak dibawa
+const SORT_STORAGE_KEY = "otdr-analyzer:sort:v2"
+const DEFAULT_SORT: SortMode = "name-asc"
 
 // "1,79753 km" / "0,554 dB" -> angka; NaN bila kosong/tidak valid
 const parseLocaleNumber = (value: string) => parseFloat((value || "").replace(",", "."))
@@ -159,8 +161,12 @@ const parseTraceDate = (value: string) => {
   return Date.UTC(year, Number(m[2]) - 1, Number(m[1]), Number(m[4]), Number(m[5]))
 }
 
+// Urutan nama seperti WinRAR: angka dibaca sebagai angka (A2 sebelum A10),
+// dan bila nilainya sama (A01 vs A1) versi ber-nol-depan didahulukan:
+// A01, A1, A02, A2, ...
 const compareNames = (a: TraceItem, b: TraceItem) =>
-  a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: "base" })
+  a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: "base" }) ||
+  a.filename.localeCompare(b.filename, undefined, { sensitivity: "base" })
 
 function sortTraces(traces: TraceItem[], mode: SortMode): TraceItem[] {
   if (mode === "original") return [...traces].sort((a, b) => a.uid - b.uid)
@@ -198,7 +204,7 @@ export default function OtdrAnalyzerPage() {
   const [traces, setTraces] = useState<TraceItem[]>([])
   // Trace aktif dilacak lewat uid agar tidak berpindah saat urutan diganti
   const [activeUid, setActiveUid] = useState<number | null>(null)
-  const [sortMode, setSortMode] = useState<SortMode>("original")
+  const [sortMode, setSortMode] = useState<SortMode>(DEFAULT_SORT)
 
   // Dictionary of overrides: trace uid -> override distance string
   const [overrideDistances, setOverrideDistances] = useState<Record<number, string>>({})
@@ -477,7 +483,7 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
           </div>
           <h3 className="text-base font-medium mb-1">Unggah File atau Folder OTDR</h3>
           <p className="text-xs text-muted-foreground max-w-md mb-6 leading-relaxed">
-            Pilih satu file `.sor`, pilih banyak file sekaligus, atau unggah file `.zip` berisi kumpulan file `.sor`. Urutan file bisa dibiarkan sesuai input atau diurutkan ulang (A-Z, tanggal, jarak, loss) setelah diproses.
+            Pilih satu file `.sor`, pilih banyak file sekaligus, atau unggah file `.zip` berisi kumpulan file `.sor`. Daftar diurutkan per nama seperti di WinRAR (A01, A1, A02, A2, …); urutan lain (tersimpan di ZIP, tanggal, jarak, loss) bisa dipilih setelah diproses.
           </p>
           <label className="h-10 px-6 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/95 transition-all cursor-pointer inline-flex items-center gap-2">
             Pilih File / Zip
@@ -559,7 +565,8 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
                     className="w-full h-8 px-2 rounded-lg border border-border bg-surface-1 text-xs font-semibold text-foreground focus:outline-none focus:border-border-strong cursor-pointer"
                   >
                     {SORT_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
+                      // Latar select transparan, jadi popup bawaan browser jatuh ke putih
+                      <option key={opt.value} value={opt.value} className="bg-card text-foreground">
                         {opt.label}
                       </option>
                     ))}
