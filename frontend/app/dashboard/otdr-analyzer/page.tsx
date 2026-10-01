@@ -13,7 +13,9 @@ import {
   Sparkles,
   Layers,
   ArrowUpDown,
-  GripVertical
+  GripVertical,
+  Plus,
+  X
 } from "lucide-react"
 import { 
   ResponsiveContainer, 
@@ -152,6 +154,10 @@ const MANUAL_SORT = "manual"
 
 // v2: default berubah jadi urutan nama; pilihan lama "original" tidak dibawa
 const SORT_STORAGE_KEY = "otdr-analyzer:sort:v2"
+
+// Tinggi tiap halaman cetak. Sengaja di bawah tinggi A4 (297mm): kalau pas
+// 297mm, pembulatan browser bisa meluberkan isi dan menambah halaman kosong.
+const PRINT_PAGE_HEIGHT = "290mm"
 const DEFAULT_SORT: SortMode = "name-asc"
 
 // "1,79753 km" / "0,554 dB" -> angka; NaN bila kosong/tidak valid
@@ -209,6 +215,7 @@ function TraceListItem({
   isActive,
   onSelect,
   onMove,
+  onRemove,
 }: {
   trace: TraceItem
   position: number
@@ -216,6 +223,7 @@ function TraceListItem({
   isActive: boolean
   onSelect: () => void
   onMove: (delta: number) => void
+  onRemove: () => void
 }) {
   const dragControls = useDragControls()
 
@@ -259,7 +267,7 @@ function TraceListItem({
         type="button"
         onClick={onSelect}
         title={trace.filename}
-        className="flex-1 min-w-0 text-left pl-1 pr-3 py-2.5 flex items-center gap-2"
+        className="flex-1 min-w-0 text-left pl-1 pr-1 py-2.5 flex items-center gap-2"
       >
         <span className={`text-3xs font-mono tabular-nums w-5 flex-shrink-0 ${isActive ? "opacity-80" : "opacity-60"}`}>
           {position}
@@ -271,12 +279,87 @@ function TraceListItem({
           </span>
         )}
       </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Hapus ${trace.filename} dari daftar`}
+        title="Hapus dari daftar"
+        className={`mr-1 p-1.5 rounded-lg flex-shrink-0 transition-colors ${
+          isActive
+            ? "opacity-70 hover:opacity-100 hover:bg-black/15"
+            : "opacity-40 hover:opacity-100 hover:bg-red-500/15 hover:text-red-400"
+        }`}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </Reorder.Item>
   )
 }
 
+// Kirim file .sor/.zip ke backend dan ubah hasilnya jadi TraceItem.
+// uid diberi berurutan mulai firstUid sesuai urutan hasil (= urutan input).
+async function parseTraceFiles(
+  files: File[],
+  firstUid: number
+): Promise<{ traces: TraceItem[]; notice: string | null }> {
+  const formData = new FormData()
+  for (const file of files) {
+    formData.append("files", file)
+  }
+
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    const res = await fetch(`${apiUrl}/api/v1/otdr/parse-batch`, {
+      method: "POST",
+      body: formData,
+    })
+
+    if (!res.ok) {
+      throw new Error("API parsing failed or server offline")
+    }
+
+    const data = await res.json()
+    if (data.status === "success" && data.results && data.results.length > 0) {
+      const parsedTraces: TraceItem[] = data.results.map((r: any, idx: number) => ({
+        uid: firstUid + idx,
+        filename: r.filename,
+        metadata: r.metadata,
+        events: r.events,
+        dataPoints: r.data_points,
+        message: r.message
+      }))
+
+      const failedFiles = parsedTraces.filter(t => t.message)
+      const notice = failedFiles.length > 0
+        ? `Note: ${failedFiles.length} file(s) failed parsing and fell back to demo trace template (e.g. ${failedFiles[0].filename}).`
+        : null
+      return { traces: parsedTraces, notice }
+    }
+    throw new Error(data.message || "Failed to process SOR files")
+  } catch (err) {
+    console.warn("FastAPI offline or parsing error, falling back to local simulation:", err)
+
+    // Local fallback for each file
+    const fallbackTraces: TraceItem[] = files.map((file, i) => ({
+      uid: firstUid + i,
+      filename: file.name,
+      metadata: {
+        ...demoMetadata,
+        cable_id: file.name.split(".")[0].toUpperCase(),
+        parsed_mode: "Local Emulated Parse (FastAPI Offline)"
+      },
+      events: demoEvents,
+      dataPoints: demoDataPoints,
+      message: "API offline"
+    }))
+    return { traces: fallbackTraces, notice: "Note: Backend API offline. Loaded emulated trace previews." }
+  }
+}
+
 export default function OtdrAnalyzerPage() {
   const [loading, setLoading] = useState(false)
+  // Sedang memproses file tambahan (daftar & laporan tetap tampil)
+  const [adding, setAdding] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   
   // Traces list state (selalu disimpan dalam urutan input)
@@ -372,78 +455,70 @@ export default function OtdrAnalyzerPage() {
 
   // Parse uploaded files (supports multiple selection and ZIP)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
 
     setLoading(true)
     setErrorMsg(null)
     setOverrideDistances({})
     setManualOrder(null)
 
-    const formData = new FormData()
-    for (let i = 0; i < files.length; i++) {
-      formData.append("files", files[i])
-    }
-
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-      const res = await fetch(`${apiUrl}/api/v1/otdr/parse-batch`, {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!res.ok) {
-        throw new Error("API parsing failed or server offline")
-      }
-
-      const data = await res.json()
-      if (data.status === "success" && data.results && data.results.length > 0) {
-        // Backend mengembalikan hasil sesuai urutan input; index-nya jadi uid
-        const parsedTraces: TraceItem[] = data.results.map((r: any, idx: number) => ({
-          uid: idx,
-          filename: r.filename,
-          metadata: r.metadata,
-          events: r.events,
-          dataPoints: r.data_points,
-          message: r.message
-        }))
-        setTraces(parsedTraces)
-        setActiveUid(null)
-        
-        const failedFiles = parsedTraces.filter(t => t.message)
-        if (failedFiles.length > 0) {
-          setErrorMsg(`Note: ${failedFiles.length} file(s) failed parsing and fell back to demo trace template (e.g. ${failedFiles[0].filename}).`)
-        }
-      } else {
-        throw new Error(data.message || "Failed to process SOR files")
-      }
-    } catch (err) {
-      console.warn("FastAPI offline or parsing error, falling back to local simulation:", err)
-      
-      // Local fallback for each file
-      const fallbackTraces: TraceItem[] = []
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        fallbackTraces.push({
-          uid: i,
-          filename: file.name,
-          metadata: {
-            ...demoMetadata,
-            cable_id: file.name.split(".")[0].toUpperCase(),
-            parsed_mode: "Local Emulated Parse (FastAPI Offline)"
-          },
-          events: demoEvents,
-          dataPoints: demoDataPoints,
-          message: "API offline"
-        })
-      }
-
-      setTraces(fallbackTraces)
+      const { traces: parsed, notice } = await parseTraceFiles(files, 0)
+      setTraces(parsed)
       setActiveUid(null)
-      setErrorMsg("Note: Backend API offline. Loaded emulated trace previews.")
+      setErrorMsg(notice)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Tambah file ke daftar yang sudah ada (tidak mengganti isi daftar)
+  const handleAddFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    // Kosongkan input supaya file yang sama bisa dipilih lagi nanti
+    e.target.value = ""
+    if (files.length === 0) return
+
+    setAdding(true)
+    setErrorMsg(null)
+
+    try {
+      const firstUid = traces.reduce((max, t) => Math.max(max, t.uid), -1) + 1
+      const { traces: added, notice } = await parseTraceFiles(files, firstUid)
+      if (added.length === 0) {
+        setErrorMsg("Tidak ada file .sor yang bisa ditambahkan.")
+        return
+      }
+      setTraces((prev) => [...prev, ...added])
+      // Dalam mode manual, file baru ditaruh di paling bawah
+      setManualOrder((prev) => (prev ? [...prev, ...added.map((t) => t.uid)] : prev))
+      setActiveUid(added[0].uid)
+      setErrorMsg(notice)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  // Hapus satu file dari daftar (dan dari hasil cetak)
+  const handleRemoveTrace = (uid: number) => {
+    if (traces.length <= 1) {
+      handleReset()
+      return
+    }
+    if (activeTrace?.uid === uid) {
+      // Pindah ke file di bawahnya, atau di atasnya bila yang dihapus paling bawah
+      const idx = sortedTraces.findIndex((t) => t.uid === uid)
+      const neighbor = sortedTraces[idx + 1] || sortedTraces[idx - 1]
+      setActiveUid(neighbor ? neighbor.uid : null)
+    }
+    setTraces((prev) => prev.filter((t) => t.uid !== uid))
+    setManualOrder((prev) => (prev ? prev.filter((u) => u !== uid) : prev))
+    setOverrideDistances((prev) => {
+      const next = { ...prev }
+      delete next[uid]
+      return next
+    })
   }
 
   const handlePrint = () => {
@@ -555,6 +630,15 @@ export default function OtdrAnalyzerPage() {
             margin: 0 !important;
             padding: 0 !important;
           }
+          /* Kerangka dashboard (sidebar, header, padding konten) jangan ikut
+             dicetak. Tanpa ini laporan terdorong turun dan muncul halaman
+             kosong di awal, setelah halaman grafik, dan di paling akhir. */
+          aside, header {
+            display: none !important;
+          }
+          main {
+            padding: 0 !important;
+          }
         }
       `}} />
 
@@ -653,60 +737,78 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
           </div>
 
           {/* Grid Layout: Sidebar Files + Active Report */}
-          <div className="grid grid-cols-1 md:grid-cols-[250px_1fr] gap-6 items-start">
-            {/* Left Sidebar List of Files */}
-            {traces.length > 1 && (
-              // layoutScroll: posisi item dihitung benar walau daftar sudah di-scroll
-              <motion.div layoutScroll className="bg-card/25 border border-border rounded-2xl p-4 space-y-2 max-h-[600px] overflow-y-auto">
-                <div className="text-2xs font-bold text-muted-foreground uppercase tracking-wider px-2 mb-2">
-                  <span>Daftar File ({traces.length})</span>
-                </div>
-                <div className="px-1 pb-2 space-y-1">
-                  <label htmlFor="otdr-sort" className="text-3xs font-semibold text-muted-foreground flex items-center gap-1 px-1">
-                    <ArrowUpDown className="h-3 w-3" />
-                    Urutkan
-                  </label>
-                  <select
-                    id="otdr-sort"
-                    value={manualOrder ? MANUAL_SORT : sortMode}
-                    onChange={(e) => handleSortChange(e.target.value)}
-                    className="w-full h-8 px-2 rounded-lg border border-border bg-surface-1 text-xs font-semibold text-foreground focus:outline-none focus:border-border-strong cursor-pointer"
-                  >
-                    {SORT_OPTIONS.map((opt) => (
-                      // Latar select transparan, jadi popup bawaan browser jatuh ke putih
-                      <option key={opt.value} value={opt.value} className="bg-card text-foreground">
-                        {opt.label}
-                      </option>
-                    ))}
-                    <option value={MANUAL_SORT} className="bg-card text-foreground">
-                      Manual (seret sendiri)
-                    </option>
-                  </select>
-                  <p className="text-3xs text-muted-foreground px-1 leading-snug">
-                    Seret ikon ⠿ untuk memindah posisi file. Urutan cetak PDF mengikuti daftar ini.
-                  </p>
-                </div>
-                <Reorder.Group
-                  as="div"
-                  axis="y"
-                  values={sortedTraces.map((t) => t.uid)}
-                  onReorder={(order: number[]) => setManualOrder(order)}
-                  className="space-y-1"
+          <div className="grid grid-cols-1 md:grid-cols-[270px_1fr] gap-6 items-start">
+            {/* Left Sidebar List of Files — selalu tampil supaya file tetap bisa ditambah/dihapus */}
+            {/* layoutScroll: posisi item dihitung benar walau daftar sudah di-scroll */}
+            <motion.div layoutScroll className="bg-card/25 border border-border rounded-2xl p-4 space-y-2 max-h-[600px] overflow-y-auto">
+              <div className="flex items-center justify-between gap-2 px-2 mb-2">
+                <span className="text-2xs font-bold text-muted-foreground uppercase tracking-wider">
+                  Daftar File ({traces.length})
+                </span>
+                <label
+                  className={`h-7 px-2.5 rounded-lg text-3xs font-semibold border border-border bg-surface-1 text-foreground inline-flex items-center gap-1 transition-colors ${
+                    adding ? "opacity-60 cursor-wait" : "hover:border-border-strong hover:bg-surface-2 cursor-pointer"
+                  }`}
+                  title="Tambah file .sor atau .zip ke daftar ini"
                 >
-                  {sortedTraces.map((trace, idx) => (
-                    <TraceListItem
-                      key={trace.uid}
-                      trace={trace}
-                      position={idx + 1}
-                      total={sortedTraces.length}
-                      isActive={trace.uid === activeTrace.uid}
-                      onSelect={() => setActiveUid(trace.uid)}
-                      onMove={(delta) => moveTrace(trace.uid, delta)}
-                    />
+                  {adding ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                  {adding ? "Memproses…" : "Tambah"}
+                  <input
+                    type="file"
+                    accept=".sor,.zip"
+                    multiple
+                    disabled={adding}
+                    onChange={handleAddFiles}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              <div className="px-1 pb-2 space-y-1">
+                <label htmlFor="otdr-sort" className="text-3xs font-semibold text-muted-foreground flex items-center gap-1 px-1">
+                  <ArrowUpDown className="h-3 w-3" />
+                  Urutkan
+                </label>
+                <select
+                  id="otdr-sort"
+                  value={manualOrder ? MANUAL_SORT : sortMode}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                  className="w-full h-8 px-2 rounded-lg border border-border bg-surface-1 text-xs font-semibold text-foreground focus:outline-none focus:border-border-strong cursor-pointer"
+                >
+                  {SORT_OPTIONS.map((opt) => (
+                    // Latar select transparan, jadi popup bawaan browser jatuh ke putih
+                    <option key={opt.value} value={opt.value} className="bg-card text-foreground">
+                      {opt.label}
+                    </option>
                   ))}
-                </Reorder.Group>
-              </motion.div>
-            )}
+                  <option value={MANUAL_SORT} className="bg-card text-foreground">
+                    Manual (seret sendiri)
+                  </option>
+                </select>
+                <p className="text-3xs text-muted-foreground px-1 leading-snug">
+                  Seret ⠿ untuk memindah posisi, × untuk menghapus. Urutan cetak PDF mengikuti daftar ini.
+                </p>
+              </div>
+              <Reorder.Group
+                as="div"
+                axis="y"
+                values={sortedTraces.map((t) => t.uid)}
+                onReorder={(order: number[]) => setManualOrder(order)}
+                className="space-y-1"
+              >
+                {sortedTraces.map((trace, idx) => (
+                  <TraceListItem
+                    key={trace.uid}
+                    trace={trace}
+                    position={idx + 1}
+                    total={sortedTraces.length}
+                    isActive={trace.uid === activeTrace.uid}
+                    onSelect={() => setActiveUid(trace.uid)}
+                    onMove={(delta) => moveTrace(trace.uid, delta)}
+                    onRemove={() => handleRemoveTrace(trace.uid)}
+                  />
+                ))}
+              </Reorder.Group>
+            </motion.div>
 
             {/* Right: Active Single Report Content */}
             <div className="space-y-6">
@@ -1013,18 +1115,17 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
               <div
                 key={trace.uid}
                 className="space-y-0 print:space-y-0"
-                style={{ 
-                  pageBreakAfter: isLast ? "avoid" : "always", 
-                  breakAfter: isLast ? "avoid" : "page" 
-                }}
               >
                 {/* Print Page 1 */}
-                <div 
-                  className="p-8 bg-white text-black flex flex-col justify-between" 
-                  style={{ 
-                    height: "296mm", 
-                    pageBreakInside: "avoid", 
-                    boxSizing: "border-box" 
+                <div
+                  className="p-8 bg-white text-black flex flex-col justify-between"
+                  style={{
+                    height: PRINT_PAGE_HEIGHT,
+                    pageBreakInside: "avoid",
+                    breakInside: "avoid",
+                    pageBreakAfter: "always",
+                    breakAfter: "page",
+                    boxSizing: "border-box"
                   }}
                 >
                   <div>
@@ -1224,11 +1325,14 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
                 {/* Print Page 2 */}
                 <div 
                   className="p-8 bg-white text-black flex flex-col justify-between" 
-                  style={{ 
-                    height: "296mm", 
-                    pageBreakBefore: "always", 
-                    breakBefore: "page", 
-                    pageBreakInside: "avoid" 
+                  style={{
+                    height: PRINT_PAGE_HEIGHT,
+                    pageBreakInside: "avoid",
+                    breakInside: "avoid",
+                    // Halaman terakhir tanpa pemisah supaya tidak ada halaman kosong di ujung
+                    pageBreakAfter: isLast ? "auto" : "always",
+                    breakAfter: isLast ? "auto" : "page",
+                    boxSizing: "border-box"
                   }}
                 >
                   <div>
