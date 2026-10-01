@@ -128,6 +128,7 @@ for (let i = 0; i <= 150; i++) {
 
 type SortMode =
   | "original"
+  | "code-asc"
   | "name-asc"
   | "name-desc"
   | "date-asc"
@@ -138,6 +139,7 @@ type SortMode =
   | "loss-desc"
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "code-asc", label: "Kode titik (A01/A1…), 1310 → 1550" },
   { value: "name-asc", label: "Nama file A–Z (seperti WinRAR)" },
   { value: "name-desc", label: "Nama file Z–A" },
   { value: "original", label: "Urutan tersimpan di ZIP / unggahan" },
@@ -152,13 +154,13 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
 // Nilai <select> saat daftar sedang diurutkan manual dengan cara diseret
 const MANUAL_SORT = "manual"
 
-// v2: default berubah jadi urutan nama; pilihan lama "original" tidak dibawa
-const SORT_STORAGE_KEY = "otdr-analyzer:sort:v2"
+// v3: default berubah jadi urutan kode titik; pilihan lama tidak dibawa
+const SORT_STORAGE_KEY = "otdr-analyzer:sort:v3"
+const DEFAULT_SORT: SortMode = "code-asc"
 
 // Tinggi tiap halaman cetak. Sengaja di bawah tinggi A4 (297mm): kalau pas
 // 297mm, pembulatan browser bisa meluberkan isi dan menambah halaman kosong.
 const PRINT_PAGE_HEIGHT = "290mm"
-const DEFAULT_SORT: SortMode = "name-asc"
 
 // "1,79753 km" / "0,554 dB" -> angka; NaN bila kosong/tidak valid
 const parseLocaleNumber = (value: string) => parseFloat((value || "").replace(",", "."))
@@ -178,8 +180,108 @@ const compareNames = (a: TraceItem, b: TraceItem) =>
   a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: "base" }) ||
   a.filename.localeCompare(b.filename, undefined, { sensitivity: "base" })
 
+// Kode titik di nama file: satu huruf yang berdiri sendiri + pemisah opsional
+// (. , - _ spasi) + 1–3 angka. A01, A1, A.1, A,1, A-1, A_1, A 1, A001 = titik A1.
+// Huruf yang menempel di kata lain tidak dihitung ("AMBLU 4" bukan U4).
+const POINT_CODE_RE = /(?<![A-Za-z0-9])([A-Za-z])[.,_\s-]?(\d{1,3})(?![A-Za-z0-9])/g
+// Angka panjang gelombang di nama file dibuang dulu supaya tidak dikira kode
+const WAVELENGTH_IN_NAME_RE = /(?<!\d)(1310|1550|1490|1625)\s*(nm)?(?![A-Za-z0-9])/gi
+const EDGE_SEPARATORS_RE = /^[\s.,_-]+|[\s.,_-]+$/g
+
+interface PointCode {
+  letter: string
+  num: number
+}
+
+function parsePointCode(filename: string): PointCode | null {
+  const base = filename
+    .replace(/\.[^.]+$/, "")
+    .replace(WAVELENGTH_IN_NAME_RE, " ")
+    .replace(EDGE_SEPARATORS_RE, "")
+  const matches = [...base.matchAll(POINT_CODE_RE)]
+  if (matches.length === 0) return null
+  // Tiap aplikasi OTDR menaruh kode di tempat berbeda: utamakan yang di akhir
+  // nama, lalu yang di awal, selain itu ambil yang paling belakang
+  const atEnd = matches.find((m) => (m.index ?? 0) + m[0].length === base.length)
+  const atStart = matches.find((m) => m.index === 0)
+  const pick = atEnd || atStart || matches[matches.length - 1]
+  return { letter: pick[1].toUpperCase(), num: Number(pick[2]) }
+}
+
+const formatPointCode = (code: PointCode) => `${code.letter}${String(code.num).padStart(2, "0")}`
+
+// Panjang gelombang (nm) diambil dari isi file SOR, karena nama file tidak bisa
+// dijadikan patokan (A01 bisa 1550 sementara A02 justru 1310). Nama file hanya
+// dipakai bila file gagal di-parse.
+function traceWavelength(trace: TraceItem): number {
+  if (!trace.message) {
+    let wl = parseLocaleNumber(trace.metadata.wavelength)
+    if (wl > 10000) wl /= 10 // sebagian alat menyimpan dalam satuan 0,1 nm
+    if (wl > 0) return wl
+  }
+  const m = trace.filename.match(/(?<!\d)(1310|1550|1490|1625)(?!\d)/)
+  return m ? Number(m[1]) : NaN
+}
+
+// Kelompokkan ke 1310/1550 walau alat menyimpan nilai aktual (mis. 1312, 1548)
+const wavelengthBand = (wl: number) =>
+  Math.abs(wl - 1310) <= 20 ? 1310 : Math.abs(wl - 1550) <= 20 ? 1550 : wl
+
+// 1310 paling atas, lalu 1550, lalu panjang gelombang lain, yang tidak terbaca paling bawah
+const wavelengthRank = (wl: number) => {
+  const band = wavelengthBand(wl)
+  if (band === 1310) return 0
+  if (band === 1550) return 1
+  return Number.isNaN(band) ? 1e9 : 2 + band
+}
+
+// Tiap kode titik semestinya punya tepat 2 file: satu 1310 nm dan satu 1550 nm.
+// Mengembalikan catatan untuk kode yang pasangannya kurang/dobel.
+function findIncompletePairs(traces: TraceItem[]): string[] {
+  const groups = new Map<string, { code: PointCode; bands: number[] }>()
+  for (const t of traces) {
+    const code = parsePointCode(t.filename)
+    if (!code) continue
+    const key = `${code.letter}${code.num}`
+    const group = groups.get(key) ?? { code, bands: [] }
+    group.bands.push(wavelengthBand(traceWavelength(t)))
+    groups.set(key, group)
+  }
+  return [...groups.values()]
+    .sort((a, b) => a.code.letter.localeCompare(b.code.letter) || a.code.num - b.code.num)
+    .flatMap(({ code, bands }) => {
+      const n1310 = bands.filter((b) => b === 1310).length
+      const n1550 = bands.filter((b) => b === 1550).length
+      const others = bands.length - n1310 - n1550
+      if (n1310 === 1 && n1550 === 1 && others === 0) return []
+      const notes: string[] = []
+      if (n1310 === 0) notes.push("tidak ada 1310")
+      if (n1550 === 0) notes.push("tidak ada 1550")
+      if (n1310 > 1) notes.push(`${n1310}× 1310`)
+      if (n1550 > 1) notes.push(`${n1550}× 1550`)
+      if (others > 0) notes.push(`${others} file λ lain/tak terbaca`)
+      return [`${formatPointCode(code)}: ${notes.join(", ")}`]
+    })
+}
+
 function sortTraces(traces: TraceItem[], mode: SortMode): TraceItem[] {
   if (mode === "original") return [...traces].sort((a, b) => a.uid - b.uid)
+
+  if (mode === "code-asc") {
+    const info = new Map(traces.map((t) => [t.uid, { code: parsePointCode(t.filename), rank: wavelengthRank(traceWavelength(t)) }]))
+    return [...traces].sort((a, b) => {
+      const ia = info.get(a.uid)!
+      const ib = info.get(b.uid)!
+      let cmp: number
+      if (ia.code && ib.code) {
+        cmp = ia.code.letter.localeCompare(ib.code.letter) || ia.code.num - ib.code.num || ia.rank - ib.rank
+      } else {
+        // File tanpa kode titik ditaruh di bawah
+        cmp = ia.code ? -1 : ib.code ? 1 : 0
+      }
+      return cmp || compareNames(a, b) || a.uid - b.uid
+    })
+  }
 
   const [key, dir] = mode.split("-") as ["name" | "date" | "distance" | "loss", "asc" | "desc"]
   const sign = dir === "desc" ? -1 : 1
@@ -226,6 +328,7 @@ function TraceListItem({
   onRemove: () => void
 }) {
   const dragControls = useDragControls()
+  const band = wavelengthBand(traceWavelength(trace))
 
   return (
     <Reorder.Item
@@ -273,6 +376,14 @@ function TraceListItem({
           {position}
         </span>
         <span className="truncate flex-1">{trace.filename}</span>
+        {!Number.isNaN(band) && (
+          <span
+            className={`text-3xs font-mono tabular-nums flex-shrink-0 ${isActive ? "opacity-80" : "opacity-60"}`}
+            title={`Panjang gelombang ${Math.round(band)} nm`}
+          >
+            {Math.round(band)}
+          </span>
+        )}
         {trace.message && (
           <span className={`text-3xs px-1 py-0.5 rounded font-mono ${isActive ? 'bg-warning/30 text-warning' : 'bg-warning/10 text-warning group-hover:bg-warning/20'}`} title={trace.message}>
             ⚠️
@@ -415,6 +526,8 @@ export default function OtdrAnalyzerPage() {
     order.splice(to, 0, ...order.splice(from, 1))
     setManualOrder(order)
   }
+
+  const pairIssues = useMemo(() => findIncompletePairs(traces), [traces])
 
   // Active trace helper
   const activeTrace = useMemo(() => {
@@ -674,7 +787,7 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
           </div>
           <h3 className="text-base font-medium mb-1">Unggah File atau Folder OTDR</h3>
           <p className="text-xs text-muted-foreground max-w-md mb-6 leading-relaxed">
-            Pilih satu file `.sor`, pilih banyak file sekaligus, atau unggah file `.zip` berisi kumpulan file `.sor`. Daftar diurutkan per nama seperti di WinRAR (A01, A1, A02, A2, …); setelah diproses, urutan bisa diganti (tanggal, jarak, loss) atau diseret manual.
+            Pilih satu file `.sor`, pilih banyak file sekaligus, atau unggah file `.zip` berisi kumpulan file `.sor`. Daftar otomatis diurutkan per kode titik (A01/A1/A.1/A-1/A001 …), tiap titik 1310 nm di atas 1550 nm; setelah diproses, urutan bisa diganti atau diseret manual.
           </p>
           <label className="h-10 px-6 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/95 transition-all cursor-pointer inline-flex items-center gap-2">
             Pilih File / Zip
@@ -737,7 +850,7 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
           </div>
 
           {/* Grid Layout: Sidebar Files + Active Report */}
-          <div className="grid grid-cols-1 md:grid-cols-[270px_1fr] gap-6 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-[290px_1fr] gap-6 items-start">
             {/* Left Sidebar List of Files — selalu tampil supaya file tetap bisa ditambah/dihapus */}
             {/* layoutScroll: posisi item dihitung benar walau daftar sudah di-scroll */}
             <motion.div layoutScroll className="bg-card/25 border border-border rounded-2xl p-4 space-y-2 max-h-[600px] overflow-y-auto">
@@ -787,6 +900,15 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
                 <p className="text-3xs text-muted-foreground px-1 leading-snug">
                   Seret ⠿ untuk memindah posisi, × untuk menghapus. Urutan cetak PDF mengikuti daftar ini.
                 </p>
+                {pairIssues.length > 0 && (
+                  <div className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-2 text-3xs text-warning space-y-0.5">
+                    <div className="font-semibold">Pasangan 1310/1550 belum lengkap ({pairIssues.length})</div>
+                    {pairIssues.slice(0, 6).map((issue) => (
+                      <div key={issue}>{issue}</div>
+                    ))}
+                    {pairIssues.length > 6 && <div>+{pairIssues.length - 6} lainnya</div>}
+                  </div>
+                )}
               </div>
               <Reorder.Group
                 as="div"
