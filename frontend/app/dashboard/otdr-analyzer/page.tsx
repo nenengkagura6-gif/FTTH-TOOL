@@ -1,17 +1,18 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { motion } from "framer-motion"
-import { 
-  Upload, 
-  FileText, 
-  LineChart as LineChartIcon, 
-  Table as TableIcon, 
-  Printer, 
-  RefreshCw, 
+import {
+  Upload,
+  FileText,
+  LineChart as LineChartIcon,
+  Table as TableIcon,
+  Printer,
+  RefreshCw,
   ShieldAlert,
   Sparkles,
-  Layers
+  Layers,
+  ArrowUpDown
 } from "lucide-react"
 import { 
   ResponsiveContainer, 
@@ -66,6 +67,9 @@ interface DataPoint {
 }
 
 interface TraceItem {
+  // Posisi asli saat diunggah (urutan pilih file, lalu urutan di dalam ZIP).
+  // Dipakai sebagai identitas unik karena nama file dari ZIP bisa kembar.
+  uid: number
   filename: string
   metadata: OtdrMetadata
   events: OtdrEvent[]
@@ -119,28 +123,117 @@ for (let i = 0; i <= 150; i++) {
   })
 }
 
+type SortMode =
+  | "original"
+  | "name-asc"
+  | "name-desc"
+  | "date-asc"
+  | "date-desc"
+  | "distance-asc"
+  | "distance-desc"
+  | "loss-asc"
+  | "loss-desc"
+
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "original", label: "Urutan asli (sesuai input)" },
+  { value: "name-asc", label: "Nama file A–Z" },
+  { value: "name-desc", label: "Nama file Z–A" },
+  { value: "date-asc", label: "Tanggal ukur: terlama dulu" },
+  { value: "date-desc", label: "Tanggal ukur: terbaru dulu" },
+  { value: "distance-asc", label: "Jarak: terpendek dulu" },
+  { value: "distance-desc", label: "Jarak: terpanjang dulu" },
+  { value: "loss-asc", label: "Span loss: terkecil dulu" },
+  { value: "loss-desc", label: "Span loss: terbesar dulu" },
+]
+
+const SORT_STORAGE_KEY = "otdr-analyzer:sort"
+
+// "1,79753 km" / "0,554 dB" -> angka; NaN bila kosong/tidak valid
+const parseLocaleNumber = (value: string) => parseFloat((value || "").replace(",", "."))
+
+// Format tanggal dari backend: "dd/mm/yy HH.MM"
+const parseTraceDate = (value: string) => {
+  const m = (value || "").match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2})[.:](\d{2})/)
+  if (!m) return NaN
+  const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])
+  return Date.UTC(year, Number(m[2]) - 1, Number(m[1]), Number(m[4]), Number(m[5]))
+}
+
+const compareNames = (a: TraceItem, b: TraceItem) =>
+  a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: "base" })
+
+function sortTraces(traces: TraceItem[], mode: SortMode): TraceItem[] {
+  if (mode === "original") return [...traces].sort((a, b) => a.uid - b.uid)
+
+  const [key, dir] = mode.split("-") as ["name" | "date" | "distance" | "loss", "asc" | "desc"]
+  const sign = dir === "desc" ? -1 : 1
+  const valueOf = (t: TraceItem) =>
+    key === "date" ? parseTraceDate(t.metadata.date)
+    : key === "distance" ? parseLocaleNumber(t.metadata.span_distance)
+    : parseLocaleNumber(t.metadata.span_loss)
+
+  return [...traces].sort((a, b) => {
+    let cmp: number
+    if (key === "name") {
+      cmp = compareNames(a, b) * sign
+    } else {
+      const va = valueOf(a)
+      const vb = valueOf(b)
+      const aMissing = Number.isNaN(va)
+      const bMissing = Number.isNaN(vb)
+      // Nilai yang tidak terbaca selalu ditaruh paling bawah
+      if (aMissing || bMissing) cmp = aMissing === bMissing ? 0 : aMissing ? 1 : -1
+      else cmp = (va - vb) * sign
+    }
+    // Nilai sama -> pertahankan urutan input
+    return cmp || a.uid - b.uid
+  })
+}
+
 export default function OtdrAnalyzerPage() {
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   
-  // Traces list state
+  // Traces list state (selalu disimpan dalam urutan input)
   const [traces, setTraces] = useState<TraceItem[]>([])
-  const [activeTraceIndex, setActiveTraceIndex] = useState<number>(0)
-  
-  // Dictionary of overrides: filename -> override distance string
-  const [overrideDistances, setOverrideDistances] = useState<Record<string, string>>({})
+  // Trace aktif dilacak lewat uid agar tidak berpindah saat urutan diganti
+  const [activeUid, setActiveUid] = useState<number | null>(null)
+  const [sortMode, setSortMode] = useState<SortMode>("original")
+
+  // Dictionary of overrides: trace uid -> override distance string
+  const [overrideDistances, setOverrideDistances] = useState<Record<number, string>>({})
+
+  // Ingat pilihan urutan terakhir pengguna
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SORT_STORAGE_KEY)
+      if (stored && SORT_OPTIONS.some((o) => o.value === stored)) {
+        setSortMode(stored as SortMode)
+      }
+    } catch {}
+  }, [])
+
+  const handleSortChange = (mode: SortMode) => {
+    setSortMode(mode)
+    try {
+      localStorage.setItem(SORT_STORAGE_KEY, mode)
+    } catch {}
+  }
+
+  // Urutan tampilan sidebar sekaligus urutan halaman saat dicetak
+  const sortedTraces = useMemo(() => sortTraces(traces, sortMode), [traces, sortMode])
 
   // Active trace helper
   const activeTrace = useMemo(() => {
-    return traces[activeTraceIndex] || null
-  }, [traces, activeTraceIndex])
+    return sortedTraces.find((t) => t.uid === activeUid) || sortedTraces[0] || null
+  }, [sortedTraces, activeUid])
 
   const activeFilename = activeTrace?.filename || null
 
   // Reset all states
   const handleReset = () => {
     setTraces([])
-    setActiveTraceIndex(0)
+    setActiveUid(null)
     setErrorMsg(null)
     setOverrideDistances({})
   }
@@ -153,13 +246,14 @@ export default function OtdrAnalyzerPage() {
     setTimeout(() => {
       setTraces([
         {
+          uid: 0,
           filename: "GDG06_A14.sor",
           metadata: demoMetadata,
           events: demoEvents,
           dataPoints: demoDataPoints
         }
       ])
-      setActiveTraceIndex(0)
+      setActiveUid(null)
       setLoading(false)
     }, 400)
   }
@@ -191,7 +285,9 @@ export default function OtdrAnalyzerPage() {
 
       const data = await res.json()
       if (data.status === "success" && data.results && data.results.length > 0) {
-        const parsedTraces: TraceItem[] = data.results.map((r: any) => ({
+        // Backend mengembalikan hasil sesuai urutan input; index-nya jadi uid
+        const parsedTraces: TraceItem[] = data.results.map((r: any, idx: number) => ({
+          uid: idx,
           filename: r.filename,
           metadata: r.metadata,
           events: r.events,
@@ -199,7 +295,7 @@ export default function OtdrAnalyzerPage() {
           message: r.message
         }))
         setTraces(parsedTraces)
-        setActiveTraceIndex(0)
+        setActiveUid(null)
         
         const failedFiles = parsedTraces.filter(t => t.message)
         if (failedFiles.length > 0) {
@@ -216,6 +312,7 @@ export default function OtdrAnalyzerPage() {
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         fallbackTraces.push({
+          uid: i,
           filename: file.name,
           metadata: {
             ...demoMetadata,
@@ -227,12 +324,9 @@ export default function OtdrAnalyzerPage() {
           message: "API offline"
         })
       }
-      
-      // Sort alphabetically A-Z
-      fallbackTraces.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' }))
-      
+
       setTraces(fallbackTraces)
-      setActiveTraceIndex(0)
+      setActiveUid(null)
       setErrorMsg("Note: Backend API offline. Loaded emulated trace previews.")
     } finally {
       setLoading(false)
@@ -245,21 +339,22 @@ export default function OtdrAnalyzerPage() {
 
   // Active trace variables
   const activeOverrideDistance = useMemo(() => {
-    if (!activeFilename) return ""
-    return overrideDistances[activeFilename] || ""
-  }, [overrideDistances, activeFilename])
+    if (!activeTrace) return ""
+    return overrideDistances[activeTrace.uid] || ""
+  }, [overrideDistances, activeTrace])
 
   const handleOverrideChange = (val: string) => {
-    if (!activeFilename) return
+    if (!activeTrace) return
+    const uid = activeTrace.uid
     setOverrideDistances((prev) => ({
       ...prev,
-      [activeFilename]: val
+      [uid]: val
     }))
   }
 
   // Helper to compile dynamic values for a given trace item
   const compileTraceData = (trace: TraceItem) => {
-    const fileOverrideDist = overrideDistances[trace.filename] || ""
+    const fileOverrideDist = overrideDistances[trace.uid] || ""
     const origSpanDist = parseFloat(trace.metadata.span_distance.replace(",", ".")) || 1.79753
     const spanDistOverride = fileOverrideDist ? (parseFloat(fileOverrideDist) || origSpanDist) : origSpanDist
     const scale = spanDistOverride / origSpanDist
@@ -382,7 +477,7 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
           </div>
           <h3 className="text-base font-medium mb-1">Unggah File atau Folder OTDR</h3>
           <p className="text-xs text-muted-foreground max-w-md mb-6 leading-relaxed">
-            Pilih satu file `.sor`, pilih banyak file sekaligus, atau unggah file `.zip` berisi kumpulan file `.sor`. File otomatis diurutkan A-Z.
+            Pilih satu file `.sor`, pilih banyak file sekaligus, atau unggah file `.zip` berisi kumpulan file `.sor`. Urutan file bisa dibiarkan sesuai input atau diurutkan ulang (A-Z, tanggal, jarak, loss) setelah diproses.
           </p>
           <label className="h-10 px-6 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/95 transition-all cursor-pointer inline-flex items-center gap-2">
             Pilih File / Zip
@@ -402,7 +497,7 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
         <div className="rounded-2xl border border-border bg-card/20 p-12 text-center max-w-md mx-auto print:hidden">
           <RefreshCw className="h-8 w-8 text-primary animate-spin mx-auto mb-4" />
           <h3 className="text-sm font-medium mb-1">Memproses File SOR...</h3>
-          <p className="text-xs text-muted-foreground">Membaca struktur blok Telcordia, menyaring redaman, dan mengurutkan A-Z</p>
+          <p className="text-xs text-muted-foreground">Membaca struktur blok Telcordia dan menyaring redaman</p>
         </div>
       )}
 
@@ -449,24 +544,48 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
             {/* Left Sidebar List of Files */}
             {traces.length > 1 && (
               <div className="bg-card/25 border border-border rounded-2xl p-4 space-y-2 max-h-[600px] overflow-y-auto">
-                <div className="text-2xs font-bold text-muted-foreground uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
+                <div className="text-2xs font-bold text-muted-foreground uppercase tracking-wider px-2 mb-2">
                   <span>Daftar File ({traces.length})</span>
-                  <span className="text-3xs bg-primary/20 text-primary px-1.5 py-0.5 rounded font-mono">A-Z</span>
+                </div>
+                <div className="px-1 pb-2 space-y-1">
+                  <label htmlFor="otdr-sort" className="text-3xs font-semibold text-muted-foreground flex items-center gap-1 px-1">
+                    <ArrowUpDown className="h-3 w-3" />
+                    Urutkan
+                  </label>
+                  <select
+                    id="otdr-sort"
+                    value={sortMode}
+                    onChange={(e) => handleSortChange(e.target.value as SortMode)}
+                    className="w-full h-8 px-2 rounded-lg border border-border bg-surface-1 text-xs font-semibold text-foreground focus:outline-none focus:border-border-strong cursor-pointer"
+                  >
+                    {SORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-3xs text-muted-foreground px-1 leading-snug">
+                    Urutan cetak PDF mengikuti daftar ini.
+                  </p>
                 </div>
                 <div className="space-y-1">
-                  {traces.map((trace, idx) => {
-                    const isActive = idx === activeTraceIndex
+                  {sortedTraces.map((trace, idx) => {
+                    const isActive = trace.uid === activeTrace.uid
                     return (
                       <button
-                        key={trace.filename}
+                        key={trace.uid}
                         type="button"
-                        onClick={() => setActiveTraceIndex(idx)}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition-all truncate flex items-center justify-between group ${
+                        onClick={() => setActiveUid(trace.uid)}
+                        title={trace.filename}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition-all truncate flex items-center justify-between gap-2 group ${
                           isActive
                             ? "bg-primary text-primary-foreground font-semibold"
                             : "hover:bg-surface-2 text-muted-foreground hover:text-foreground"
                         }`}
                       >
+                        <span className={`text-3xs font-mono tabular-nums w-5 flex-shrink-0 ${isActive ? "opacity-80" : "opacity-60"}`}>
+                          {idx + 1}
+                        </span>
                         <span className="truncate flex-1">{trace.filename}</span>
                         {trace.message && (
                           <span className={`text-3xs px-1 py-0.5 rounded font-mono ${isActive ? 'bg-warning/30 text-warning' : 'bg-warning/10 text-warning group-hover:bg-warning/20'}`} title={trace.message}>
@@ -778,12 +897,12 @@ className="rounded-2xl border border-dashed border-border bg-card/20 p-12 text-c
       {/* Batch Print View Only (Hidden on Web, Visible during window.print()) */}
       {traces.length > 0 && (
         <div className="hidden print:block print-container space-y-0 bg-white text-black p-0 m-0">
-          {traces.map((trace, index) => {
+          {sortedTraces.map((trace, index) => {
             const compiled = compileTraceData(trace)
-            const isLast = index === traces.length - 1
+            const isLast = index === sortedTraces.length - 1
             return (
-              <div 
-                key={trace.filename} 
+              <div
+                key={trace.uid}
                 className="space-y-0 print:space-y-0"
                 style={{ 
                   pageBreakAfter: isLast ? "avoid" : "always", 

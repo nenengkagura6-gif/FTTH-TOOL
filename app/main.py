@@ -1144,7 +1144,8 @@ async def parse_otdr_batch(
 ):
     """
     Parse multiple standard OTDR SOR files, or files inside a ZIP archive,
-    and return a sorted list of trace results.
+    and return trace results in input order (upload order, then archive order
+    inside each ZIP). Sorting is left to the client.
     """
     import zipfile
     
@@ -1163,7 +1164,6 @@ async def parse_otdr_batch(
                         if name.lower().endswith(".sor") and not name.startswith("__"):
                             sor_bytes = z.read(name)
                             res = parse_sor_file(sor_bytes, filename=name)
-                            # Ensure we set a clean filename for sorting
                             res["filename"] = os.path.basename(name)
                             parsed_results.append(res)
             elif filename.lower().endswith(".sor"):
@@ -1171,10 +1171,9 @@ async def parse_otdr_batch(
                 res = parse_sor_file(content, filename=filename)
                 res["filename"] = filename
                 parsed_results.append(res)
-                
-        # Sort alphabetically (A-Z) by filename (case-insensitive)
-        parsed_results.sort(key=lambda x: x.get("filename", "").lower())
-        
+
+        # Sengaja tidak diurutkan: frontend menyimpan urutan asli input dan
+        # menyediakan pilihan urutan (A-Z, tanggal, jarak, dst.).
         return JSONResponse(content={
             "status": "success",
             "results": parsed_results
