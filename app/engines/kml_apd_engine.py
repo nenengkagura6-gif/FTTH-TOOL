@@ -14,6 +14,7 @@ Adapted from standalone desktop script for cloud/server use.
 
 import io
 import os
+import re
 import copy
 import math
 import zipfile
@@ -34,6 +35,7 @@ from utils.report import ProcessReport
 
 try:
     from shapely.geometry import Point, Polygon
+    from shapely.ops import nearest_points
 except ImportError:
     raise ImportError(
         "shapely is required for KML APD engine. "
@@ -94,6 +96,150 @@ def _fdt_num_of(text: str) -> Optional[int]:
     return fdt_number(text)
 
 
+def _localname(tag) -> str:
+    if not isinstance(tag, str):
+        return ""
+    return tag.split("}", 1)[1] if "}" in tag else tag
+
+
+def strip_metadata_etl(root) -> Tuple[int, int]:
+    """Hapus semua <ExtendedData> dan <Schema> agar file lolos validasi ETL.
+
+    Atribut GIS (<ExtendedData>/<SchemaData>/<SimpleData>) dan definisi
+    <Schema> membuat parser ETL beralih ke jalur skema dan gagal membaca titik
+    atau layer, terutama bila schemaUrl mengarah ke path file lokal lama.
+    """
+    removed_ext = 0
+    removed_schema = 0
+    for el in root.iter():
+        for child in list(el):
+            local = _localname(child.tag)
+            if local == "ExtendedData":
+                el.remove(child)
+                removed_ext += 1
+            elif local == "Schema":
+                el.remove(child)
+                removed_schema += 1
+    return removed_ext, removed_schema
+
+
+def _strip_extended_data(el) -> None:
+    for child in list(el):
+        if _localname(child.tag) == "ExtendedData":
+            el.remove(child)
+
+
+def _is_line_folder_name(name: str) -> bool:
+    u = (name or "").strip().upper()
+    return u.startswith("LINE ") or bool(re.match(r"^LINE[\-_]+[A-Z]\b", u))
+
+
+def _line_letter(line_name: str) -> str:
+    """Ambil huruf line ('LINE A' / 'LINE-A' / 'LINE A FDT 01' -> 'A')."""
+    text = (line_name or "").strip()
+    m = re.search(r"\bLINE[\s\-_]*([A-Z])\b", text, re.IGNORECASE)
+    if m:
+        return m.group(1).upper()
+    parts = text.split()
+    if len(parts) >= 2 and parts[1]:
+        return parts[1][0].upper()
+    letters = "".join(ch for ch in text if ch.isalpha())
+    return letters[0].upper() if letters else "X"
+
+
+def _is_fdt_folder(name: str) -> bool:
+    u = (name or "").strip().upper()
+    if not u or _is_line_folder_name(u) or "SLACK" in u or "BOUNDARY" in u or "CABLE" in u:
+        return False
+    return u.startswith("FDT") or bool(re.search(r"\bFDT\b", u))
+
+
+def _is_pole_folder_name(name: str) -> bool:
+    """True untuk folder tiang (baik input mentah POLE/NP/EXT maupun hasil APD)."""
+    u = (name or "").strip().upper()
+    if not u or any(bad in u for bad in ("CABLE", "KABEL", "SLING", "SLACK", "BOUNDARY", "HP ")):
+        return False
+    if u in ("POLE", "NP", "EXT", "EXST", "EXISTING", "EKSISTING", "TIANG"):
+        return True
+    if u.startswith(("NP ", "EXT ", "EXST ")):
+        return True
+    return bool(re.search(r"\b(POLE|TIANG)\b", u))
+
+
+def _pole_metadata_text(pm, folder_hint: str = "") -> str:
+    """Gabungkan teks atribut relevan tiang tanpa ikut membaca schemaUrl/LookAt.
+
+    Membaca ET.tostring(pm) penuh rentan salah baca bila schemaUrl berisi path
+    file lokal yang mengandung kata 'EXISTING' atau angka ukuran tiang.
+    """
+    parts = [folder_hint] if folder_hint else []
+    for tag in ("name", "description", "styleUrl"):
+        el = pm.find(tag)
+        if el is not None and el.text:
+            parts.append(el.text)
+    for child in pm.iter():
+        local = _localname(child.tag)
+        if local in ("SimpleData", "Data"):
+            if child.get("name"):
+                parts.append(child.get("name"))
+            if child.text:
+                parts.append(child.text)
+            val = child.find("value")
+            if val is not None and val.text:
+                parts.append(val.text)
+    return " ".join(parts).upper()
+
+
+def _parse_point_coords(pm) -> Optional[Tuple[float, float]]:
+    """Ambil koordinat (lon, lat) pertama yang valid dari Point (termasuk MultiGeometry)."""
+    for coords_el in pm.findall(".//Point/coordinates"):
+        if coords_el.text:
+            pts = parse_coords(coords_el.text)
+            if pts:
+                return pts[0]
+    return None
+
+
+def _extract_cable_prefix(orig_name: str) -> str:
+    """Pertahankan kode cluster di depan CABLE (mis. 'SRG05.057 - ') bila sudah ada."""
+    m = re.match(
+        r"^\s*([A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*)\s*-\s*(?:CABLE|KABEL)\b",
+        orig_name or "",
+        re.IGNORECASE,
+    )
+    if not m:
+        return ""
+    prefix = m.group(1).strip()
+    if re.match(r"^(?:LINE|FDT)\b", prefix, re.IGNORECASE):
+        return ""
+    if "." in prefix or any(ch.isdigit() for ch in prefix):
+        return f"{prefix} - "
+    return ""
+
+
+def _detect_cable_topology(orig_name: str, desc_text: str = "", folder_name: str = "") -> str:
+    """Deteksi topologi kabel ('UG' jika eksplisit underground, selain itu 'AE')."""
+    combined = f"{orig_name or ''} {desc_text or ''} {folder_name or ''}".upper()
+    if re.search(r"(?:^|[\s\-_/()])UG(?:$|[\s\-_/()])|UNDERGROUND|KABEL\s+TANAM|\bTANAM\b|\bDUCT\b|\bHDPE\b", combined):
+        return "UG"
+    return "AE"
+
+
+def _slack_fat_name(fat_name: str) -> str:
+    """Bentuk nama standar Slack Hanger FAT ('SLACK.FAT.A01')."""
+    text = (fat_name or "").strip()
+    if text.upper().startswith("SLACK"):
+        m_code = re.search(r"([A-Za-z]+\d+)$", text)
+        if m_code and "FAT" in text.upper():
+            return f"SLACK.FAT.{m_code.group(1).upper()}"
+        return text
+    m = re.search(r"([A-Za-z]\d{1,3})\s*$", text)
+    if m:
+        return f"SLACK.FAT.{m.group(1).upper()}"
+    clean = re.sub(r"^(?:FAT[\s._\-]*)", "", text, flags=re.IGNORECASE).strip()
+    return f"SLACK.FAT.{clean or 'FAT'}"
+
+
 class FdtIndex:
     """Koordinat FDT, dicari dengan nomornya — bukan kecocokan teks persis.
 
@@ -106,10 +252,12 @@ class FdtIndex:
     def __init__(self):
         self.by_name: Dict[str, Tuple[float, float]] = {}
         self.by_num: Dict[int, Tuple[float, float]] = {}
+        self.entries: List[Tuple[str, float, float, Any]] = []
         self.fallbacks = set()
 
-    def add(self, name: str, lat: float, lon: float) -> None:
+    def add(self, name: str, lat: float, lon: float, pm: Any = None) -> None:
         self.by_name[name.upper()] = (lat, lon)
+        self.entries.append((name, lat, lon, pm))
         num = _fdt_num_of(name)
         if num is not None and num not in self.by_num:
             self.by_num[num] = (lat, lon)
@@ -120,17 +268,32 @@ class FdtIndex:
     def values(self):
         return self.by_name.values()
 
+    def resolve_entry(self, line_name: str) -> Optional[Tuple[str, float, float, Any]]:
+        if not self.entries:
+            return None
+        num = _fdt_num_of(line_name)
+        if num is not None:
+            for entry in self.entries:
+                if _fdt_num_of(entry[0]) == num:
+                    return entry
+        key = get_fdt_name_from_line(line_name).upper()
+        for entry in self.entries:
+            if entry[0].upper() == key:
+                return entry
+        up_line = (line_name or "").upper()
+        for entry in self.entries:
+            if entry[0].strip() and entry[0].upper() in up_line:
+                return entry
+        if len(self.entries) > 1:
+            self.fallbacks.add(line_name)
+        return self.entries[0]
+
     def resolve(self, line_name: str) -> Tuple[Optional[float], Optional[float]]:
         if not self.by_name:
             return None, None
-        num = _fdt_num_of(line_name)
-        if num is not None and num in self.by_num:
-            return self.by_num[num]
-        key = get_fdt_name_from_line(line_name).upper()
-        if key in self.by_name:
-            return self.by_name[key]
-        if len(self.by_name) > 1:
-            self.fallbacks.add(line_name)
+        entry = self.resolve_entry(line_name)
+        if entry is not None:
+            return entry[1], entry[2]
         return next(iter(self.by_name.values()))
 
 
@@ -151,10 +314,52 @@ def find_line_container(doc):
     while queue:
         node = queue.pop(0)
         subs = node.findall("Folder")
-        if any(_direct_name(f).upper().startswith("LINE ") for f in subs):
+        if any(_is_line_folder_name(_direct_name(f)) for f in subs):
             return node
         queue.extend(subs)
     return doc
+
+
+def _collect_line_folders(doc):
+    """Temukan container utama, semua scope folder global, dan semua folder LINE.
+
+    Mendukung struktur standar (LINE langsung di Document / satu folder proyek)
+    maupun struktur berbungkus per-FDT (FDT 01/LINE A, FDT 02/LINE A).
+    """
+    direct_lines = [f for f in doc.findall("Folder") if _is_line_folder_name(_direct_name(f))]
+    if direct_lines:
+        return doc, [doc], direct_lines, {}
+
+    container = find_line_container(doc)
+    if container is doc:
+        return doc, [doc], [], {}
+
+    # Cek apakah ada folder saudara container yang juga membungkus folder LINE
+    # (misalnya FDT 01/LINE A dan FDT 02/LINE B).
+    parent_map = {child: parent for parent in doc.iter() for child in parent}
+    wrapper_parent = parent_map.get(container, doc)
+    sibling_wrappers = [
+        f for f in wrapper_parent.findall("Folder")
+        if any(_is_line_folder_name(_direct_name(sub)) for sub in f.findall("Folder"))
+    ]
+
+    if len(sibling_wrappers) > 1:
+        scopes = [wrapper_parent] if wrapper_parent is doc else [wrapper_parent, doc]
+        scopes.extend(sibling_wrappers)
+        line_folders = []
+        fdt_hints = {}
+        for wr in sibling_wrappers:
+            wr_name = _direct_name(wr)
+            for sub in wr.findall("Folder"):
+                if _is_line_folder_name(_direct_name(sub)):
+                    line_folders.append(sub)
+                    if _fdt_num_of(wr_name) is not None or "FDT" in wr_name.upper():
+                        fdt_hints[id(sub)] = wr_name
+        return wrapper_parent, scopes, line_folders, fdt_hints
+
+    scopes = [container, doc]
+    line_folders = [f for f in container.findall("Folder") if _is_line_folder_name(_direct_name(f))]
+    return container, scopes, line_folders, {}
 
 
 def scope_folders(scopes):
@@ -199,14 +404,23 @@ def parse_kml_tolerant(raw_kml):
 
 
 def parse_coords(text):
-    """Parse KML coordinate string into list of (lon, lat) tuples."""
+    """Parse KML coordinate string into list of valid (lon, lat) tuples."""
     pts = []
     if not text:
         return pts
     for c in text.strip().split():
         try:
-            lon, lat = map(float, c.split(",")[:2])
-            pts.append((lon, lat))
+            parts = c.split(",")
+            if len(parts) < 2:
+                continue
+            lon, lat = float(parts[0]), float(parts[1])
+            if (
+                math.isfinite(lon)
+                and math.isfinite(lat)
+                and -180.0 <= lon <= 180.0
+                and -90.0 <= lat <= 90.0
+            ):
+                pts.append((lon, lat))
         except Exception:
             continue
     return pts
@@ -325,7 +539,7 @@ def find_or_create_folder(parent, name):
 
 def determine_pole_style(pm):
     """Determine pole style URL based on placemark content."""
-    pm_str = ET.tostring(pm).decode('utf-8').upper()
+    pm_str = _pole_metadata_text(pm)
     if "9-4" in pm_str or "9M" in pm_str:
         return "#style_pole_9m_4inch"
     elif "7-4" in pm_str or "7M 4" in pm_str:
@@ -442,18 +656,13 @@ def get_fdt_name_from_line(line_name):
 
 def process_boundaries_and_hp_in_line(line_folder):
     """Process boundary polygons within a LINE folder, naming them with letters."""
-    nm = line_folder.find("name")
-    line_name = (nm.text or "").strip() if nm is not None else "LINE"
-    parts = line_name.split()
-    if len(parts) >= 2 and parts[1]:
-        letter = parts[1][0].upper()
-    else:
-        letter = (''.join(ch for ch in line_name if ch.isalpha()).upper()[:1]) or 'X'
+    line_name = _direct_name(line_folder) or "LINE"
+    letter = _line_letter(line_name)
 
     boundary_folder = None
     for sub in line_folder.findall("Folder"):
-        sname = sub.find("name")
-        if sname is not None and "BOUNDARY" in (sname.text or "").upper():
+        sname = _direct_name(sub).upper()
+        if "BOUNDARY" in sname and "CLUSTER" not in sname:
             boundary_folder = sub
             break
 
@@ -462,14 +671,18 @@ def process_boundaries_and_hp_in_line(line_folder):
         return polygons
 
     counter = 0
-    for pm in list(boundary_folder.findall("Placemark")):
-        coords_el = pm.find("Polygon/outerBoundaryIs/LinearRing/coordinates")
+    for pm in list(boundary_folder.findall(".//Placemark")):
+        coords_el = pm.find(".//Polygon/outerBoundaryIs/LinearRing/coordinates")
         if coords_el is None or not coords_el.text:
             continue
         coords = parse_coords(coords_el.text)
-        if not coords:
+        if len(coords) < 3:
             continue
         poly = Polygon([(lon, lat) for lon, lat in coords])
+        if not poly.is_valid:
+            poly = poly.buffer(0)
+        if poly.is_empty:
+            continue
         counter += 1
         poly_name = f"{letter}{counter:02d}"
         nm_el = pm.find("name")
@@ -486,96 +699,90 @@ def process_boundaries_and_hp_in_line(line_folder):
 # Move HP root
 # =====================================================================
 
-def _line_polygons(line_folder, polygons_by_line):
+def _line_polygons(line_folder, polygons_by_line, polygons_by_folder=None):
+    if polygons_by_folder and id(line_folder) in polygons_by_folder:
+        return polygons_by_folder[id(line_folder)]
     line_name = _direct_name(line_folder)
-    parts = line_name.split()
-    letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else line_name[0].upper() if line_name else 'X'
+    letter = _line_letter(line_name)
     return polygons_by_line.get(get_fdt_name_from_line(line_name), {}).get(letter, [])
 
 
-def move_root_hp_to_lines(scopes, line_folders, polygons_by_line):
+def _iter_placemarks_with_parent(folder):
+    for pm in list(folder.findall("Placemark")):
+        yield folder, pm
+    for sub in list(folder.findall("Folder")):
+        yield from _iter_placemarks_with_parent(sub)
+
+
+def move_root_hp_to_lines(scopes, line_folders, polygons_by_line, polygons_by_folder=None):
     """Move HP placemarks from root HP folder into line-specific HP COVER folders.
 
     Mengembalikan jumlah HP yang tidak masuk boundary mana pun (HP UNCOVER).
     """
-    root_hp_folder, hp_parent = None, None
-    for parent, f in scope_folders(scopes):
-        if _direct_name(f).upper() == "HP":
-            root_hp_folder, hp_parent = f, parent
-            break
-    if root_hp_folder is None:
+    hp_roots = [
+        (parent, f) for parent, f in scope_folders(scopes)
+        if _direct_name(f).upper() == "HP"
+    ]
+    if not hp_roots:
         return 0
-    doc = hp_parent
     uncovered = 0
 
-    to_remove = []
-    for pm in list(root_hp_folder.findall("Placemark")):
-        coords_el = pm.find("Point/coordinates")
-        if coords_el is None or not coords_el.text:
-            continue
-        try:
-            lon, lat = map(float, coords_el.text.strip().split(",")[:2])
-        except Exception:
-            continue
-        pt = Point(lon, lat)
-        placed = False
+    for hp_parent, root_hp_folder in hp_roots:
+        to_remove = []
+        for pm_parent, pm in list(_iter_placemarks_with_parent(root_hp_folder)):
+            pt_coords = _parse_point_coords(pm)
+            if pt_coords is None:
+                continue
+            lon, lat = pt_coords
+            pt = Point(lon, lat)
+            placed = False
 
-        for line_folder in line_folders:
-            nm = line_folder.find("name")
-            line_name = (nm.text or "").strip()
-            parts = line_name.split()
-            letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else line_name[0].upper() if line_name else 'X'
-            fdt_name = get_fdt_name_from_line(line_name)
-            
-            polygons = []
-            if fdt_name in polygons_by_line and letter in polygons_by_line[fdt_name]:
-                polygons = polygons_by_line[fdt_name][letter]
-            hp_folder = find_or_create_folder(line_folder, "HP COVER")
-            for poly_name, poly, _, _ in polygons:
-                if poly.distance(pt) < 2e-5:
-                    subfolder = find_or_create_folder(hp_folder, poly_name)
-                    # Set styleUrl to green homepass icon
-                    for st in pm.findall("styleUrl"):
-                        pm.remove(st)
-                    st_el = ET.Element("styleUrl")
-                    st_el.text = "#style_homepass"
-                    pm.append(st_el)
-                    subfolder.append(pm)
-                    placed = True
+            for line_folder in line_folders:
+                polygons = _line_polygons(line_folder, polygons_by_line, polygons_by_folder)
+                hp_folder = find_or_create_folder(line_folder, "HP COVER")
+                for poly_name, poly, _, _ in polygons:
+                    if poly.distance(pt) < 2e-5:
+                        subfolder = find_or_create_folder(hp_folder, poly_name)
+                        for st in pm.findall("styleUrl"):
+                            pm.remove(st)
+                        st_el = ET.Element("styleUrl")
+                        st_el.text = "#style_homepass"
+                        pm.append(st_el)
+                        subfolder.append(pm)
+                        placed = True
+                        break
+                if placed:
                     break
-            if placed:
-                break
 
-        if not placed and len(line_folders) > 0:
-            # Masuk ke line yang boundary-nya paling dekat — dulu selalu ke
-            # line pertama, meski HP-nya berada di area FDT lain.
-            def jarak(lf):
-                polys = _line_polygons(lf, polygons_by_line)
-                return min((p[1].distance(pt) for p in polys), default=float("inf"))
-            target_line = min(line_folders, key=jarak)
-            hp_folder = find_or_create_folder(target_line, "HP UNCOVER")
-            uncovered += 1
-            for st in pm.findall("styleUrl"):
-                pm.remove(st)
-            st_el = ET.Element("styleUrl")
-            st_el.text = "#style_homepass_not_cover"
-            pm.append(st_el)
-            hp_folder.append(pm)
+            if not placed and len(line_folders) > 0:
+                # Masuk ke line yang boundary-nya paling dekat — dulu selalu ke
+                # line pertama, meski HP-nya berada di area FDT lain.
+                def jarak(lf):
+                    polys = _line_polygons(lf, polygons_by_line, polygons_by_folder)
+                    return min((p[1].distance(pt) for p in polys), default=float("inf"))
+                target_line = min(line_folders, key=jarak)
+                hp_folder = find_or_create_folder(target_line, "HP UNCOVER")
+                uncovered += 1
+                for st in pm.findall("styleUrl"):
+                    pm.remove(st)
+                st_el = ET.Element("styleUrl")
+                st_el.text = "#style_homepass_not_cover"
+                pm.append(st_el)
+                hp_folder.append(pm)
 
-        to_remove.append(pm)
+            to_remove.append((pm_parent, pm))
 
-    # Remove after iteration to avoid modifying during iteration
-    for pm in to_remove:
-        try:
-            root_hp_folder.remove(pm)
-        except ValueError:
-            pass
+        for pm_parent, pm in to_remove:
+            try:
+                pm_parent.remove(pm)
+            except ValueError:
+                pass
 
-    if len(list(root_hp_folder.findall("Placemark"))) == 0:
-        try:
-            doc.remove(root_hp_folder)
-        except ValueError:
-            pass
+        if len(list(root_hp_folder.findall(".//Placemark"))) == 0:
+            try:
+                hp_parent.remove(root_hp_folder)
+            except ValueError:
+                pass
     return uncovered
 
 
@@ -583,14 +790,10 @@ def move_root_hp_to_lines(scopes, line_folders, polygons_by_line):
 # Update Boundary Descriptions
 # =====================================================================
 
-def update_boundary_descriptions(line_folders, polygons_by_line):
+def update_boundary_descriptions(line_folders, polygons_by_line, polygons_by_folder=None):
     """Update boundary polygon descriptions with HP count."""
     for line_folder in line_folders:
-        line_name = _direct_name(line_folder)
-        parts = line_name.split()
-        letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else (line_name or "")[0].upper()
-        fdt_name = get_fdt_name_from_line(line_name)
-        polygons = polygons_by_line.get(fdt_name, {}).get(letter, [])
+        polygons = _line_polygons(line_folder, polygons_by_line, polygons_by_folder)
         hp_folder = None
         for sub in line_folder.findall("Folder"):
             sname = sub.find("name")
@@ -629,10 +832,12 @@ FORCED_BOUNDARY_TOL_M = 15.0 # tiang ujung kabel boleh sejauh ini di luar bounda
 
 def _dist_to_polygon_m(lon, lat, poly) -> float:
     """Jarak (meter) titik ke poligon lon/lat; 0 kalau di dalamnya."""
+    if poly.is_empty:
+        return float("inf")
     pt = Point(lon, lat)
     if poly.contains(pt):
         return 0.0
-    q = poly.exterior.interpolate(poly.exterior.project(pt))
+    _, q = nearest_points(pt, poly)
     return haversine(lat, lon, q.y, q.x)
 
 
@@ -712,12 +917,13 @@ def mandatory_fat_points(dist_lines, fdt_lonlat=None):
 
 def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_count,
                                      doc, line_folders, fdt_lat, fdt_lon,
-                                     tol_m_pole_line=5.0, report=None):
+                                     tol_m_pole_line=5.0, report=None,
+                                     all_line_polygons=None):
     """Process FAT placement, cable descriptions, and sling wire for a single LINE folder."""
     dist_lines = []
     cable_pms = []
-    nm = line_folder.find("name")
-    line_name = (nm.text or "").strip() if nm is not None else "LINE"
+    cable_segs = []
+    line_name = _direct_name(line_folder) or "LINE"
     for sub in line_folder.findall("Folder"):
         sname = sub.find("name")
         if sname is None:
@@ -729,22 +935,75 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
         if not _is_cable_folder(sname.text):
             continue
         for pm in sub.findall("Placemark"):
-            coords_el = pm.find("LineString/coordinates")
-            if coords_el is None or not coords_el.text:
+            segs = [
+                parse_coords(c.text)
+                for c in pm.findall(".//LineString/coordinates")
+                if c.text
+            ]
+            segs = [s for s in segs if len(s) >= 2]
+            if not segs:
                 continue
-            coords = parse_coords(coords_el.text)
-            if not coords:
-                continue
-            dist_lines.append(coords)
+            dist_lines.extend(segs)
             cable_pms.append(pm)
+            cable_segs.append((_direct_name(sub), segs))
+
+    other_polys = [
+        poly for other_id, opolys in (all_line_polygons or {}).items()
+        if other_id != id(line_folder)
+        for _, poly, _, _ in opolys
+    ]
 
     poles = []
-    for pm_pole, parent, lon, lat, is_exist in global_poles:
+    for gp in global_poles:
+        pm_pole, _, lon, lat, is_exist = gp[:5]
         pt = Point(lon, lat)
+        strict_hits = []
+        best_strict_d = float("inf")
+        best_strict_name = None
         for poly_name, poly, poly_pm, letter in polygons:
-            if poly.distance(pt) < 2e-5:
-                poles.append({"pm": pm_pole, "lon": lon, "lat": lat, "poly": poly_name, "is_exist": is_exist})
-                break
+            d_m = _dist_to_polygon_m(lon, lat, poly)
+            if poly.distance(pt) < 2e-5 or d_m <= 3.0:
+                strict_hits.append(poly_name)
+                if d_m < best_strict_d:
+                    best_strict_d = d_m
+                    best_strict_name = poly_name
+        if strict_hits:
+            poles.append({
+                "pm": pm_pole,
+                "lon": lon,
+                "lat": lat,
+                "poly": best_strict_name or strict_hits[0],
+                "polys": set(strict_hits),
+                "strict_polys": set(strict_hits),
+                "is_exist": is_exist,
+            })
+            continue
+
+        # Tiang pinggir jalan yang berdiri sedikit di luar poligon boundary
+        # (<= FORCED_BOUNDARY_TOL_M) ikut dipetakan ke boundary terdekat di
+        # line ini asal tidak berada di dalam boundary line lain.
+        if not polygons:
+            continue
+        near_poly, near_d = None, float("inf")
+        for poly_name, poly, _, _ in polygons:
+            d_m = _dist_to_polygon_m(lon, lat, poly)
+            if d_m < near_d:
+                near_poly, near_d = poly_name, d_m
+        if near_poly is None or near_d > FORCED_BOUNDARY_TOL_M:
+            continue
+        if other_polys:
+            min_other = min(_dist_to_polygon_m(lon, lat, op) for op in other_polys)
+            if min_other <= 3.0 or min_other < near_d:
+                continue
+        poles.append({
+            "pm": pm_pole,
+            "lon": lon,
+            "lat": lat,
+            "poly": near_poly,
+            "polys": {near_poly},
+            "strict_polys": set(),
+            "is_exist": is_exist,
+        })
 
     # Tiang yang WAJIB jadi FAT: tiang di ujung kabel / titik balik loopback.
     fdt_lonlat = (fdt_lon, fdt_lat) if fdt_lat is not None else None
@@ -775,8 +1034,15 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
             if near_poly is None or near_d > FORCED_BOUNDARY_TOL_M:
                 forced_outside.append(f"{kind} {lat:.6f},{lon:.6f}")
                 continue
-            pole = {"pm": nearest[0], "lon": plon, "lat": plat,
-                    "poly": near_poly, "is_exist": nearest[4]}
+            pole = {
+                "pm": nearest[0],
+                "lon": plon,
+                "lat": plat,
+                "poly": near_poly,
+                "polys": {near_poly},
+                "strict_polys": set(),
+                "is_exist": nearest[4],
+            }
             poles.append(pole)
             by_pm[id(nearest[0])] = pole
         forced[id(pole)] = kind
@@ -792,44 +1058,121 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
     no_fat = []
     forced_used = 0
     double_forced = []
+    used_fat_pms = set()
+    chosen_by_poly = {}
+    candidates_by_poly = {}
+    forced_polys = set()
+    deferred_polys = []
+
+    def _pick_best_for_poly(poly, pool):
+        cx, cy = poly.centroid.x, poly.centroid.y
+        best, best_d = None, float('inf')
+        for c in pool:
+            d = (c["lon"] - cx) ** 2 + (c["lat"] - cy) ** 2
+            if d < best_d:
+                best, best_d = c, d
+        return best
+
+    # Pass 1: pilih FAT untuk tiap boundary dari kandidatnya sendiri.
     for poly_name, poly, poly_pm, letter in polygons:
-        candidates = []
+        strict_candidates = []
+        street_candidates = []
         for p in poles:
-            if p["poly"] != poly_name:
+            if poly_name not in p["polys"]:
                 continue
-            for dline in dist_lines:
-                if point_linestring_distance_m((p["lon"], p["lat"]), dline) <= tol_m_pole_line:
-                    candidates.append(p)
-                    break
-        in_poly_forced = [p for p in poles if p["poly"] == poly_name and id(p) in forced]
+            if any(point_linestring_distance_m((p["lon"], p["lat"]), dline) <= tol_m_pole_line for dline in dist_lines):
+                if poly_name in p["strict_polys"]:
+                    strict_candidates.append(p)
+                else:
+                    street_candidates.append(p)
+        candidates = strict_candidates if strict_candidates else street_candidates
+
+        in_poly_forced = [
+            p for p in poles
+            if poly_name in p["polys"] and id(p) in forced
+            and (poly_name in p["strict_polys"] or not strict_candidates)
+        ]
         if in_poly_forced:
             # Tiang ujung kabel / loopback di boundary ini mengalahkan
             # tiang yang sekadar paling dekat ke titik tengahnya.
             candidates = in_poly_forced
+            forced_polys.add(poly_name)
             forced_used += 1
             if len(in_poly_forced) > 1:
                 double_forced.append(poly_name)
         if not candidates:
-            no_fat.append(poly_name)
+            deferred_polys.append((poly_name, poly))
             continue
-        cx, cy = poly.centroid.x, poly.centroid.y
-        best, best_d = None, float('inf')
-        for c in candidates:
-            d = (c["lon"] - cx) ** 2 + (c["lat"] - cy) ** 2
-            if d < best_d:
-                best, best_d = c, d
+        candidates_by_poly[poly_name] = candidates
+        # Hindari memilih tiang yang sudah dipakai boundary lain bila masih ada kandidat lain.
+        unused = [c for c in candidates if id(c["pm"]) not in used_fat_pms]
+        pool = unused if unused else candidates
+        best = _pick_best_for_poly(poly, pool)
         if best is not None:
-            new_pm = ET.fromstring(ET.tostring(best["pm"]))
-            nm_el = new_pm.find("name")
-            if nm_el is None:
-                nm_el = ET.Element("name")
-                new_pm.insert(0, nm_el)
+            used_fat_pms.add(id(best["pm"]))
+            chosen_by_poly[poly_name] = best
+
+    # Pass 2: boundary yang masih kosong boleh memakai tiang jalur kabel
+    # yang belum terpakai di dekatnya (<= FORCED_BOUNDARY_TOL_M), atau bertukar
+    # dengan boundary tetangga yang masih punya alternatif tiang lain.
+    poly_by_name = {pn: po for pn, po, _, _ in polygons}
+    for poly_name, poly in deferred_polys:
+        near_cable_poles = [
+            p for p in poles
+            if _dist_to_polygon_m(p["lon"], p["lat"], poly) <= FORCED_BOUNDARY_TOL_M
+            and any(point_linestring_distance_m((p["lon"], p["lat"]), dline) <= tol_m_pole_line for dline in dist_lines)
+        ]
+        fallback_pool = [p for p in near_cable_poles if id(p["pm"]) not in used_fat_pms]
+        if fallback_pool:
+            best = _pick_best_for_poly(poly, fallback_pool)
+            if best is not None:
+                used_fat_pms.add(id(best["pm"]))
+                chosen_by_poly[poly_name] = best
+            continue
+
+        swapped = False
+        for cand in sorted(
+            near_cable_poles,
+            key=lambda c: _dist_to_polygon_m(c["lon"], c["lat"], poly),
+        ):
+            owner_poly = next(
+                (oname for oname, op in chosen_by_poly.items()
+                 if id(op["pm"]) == id(cand["pm"]) and oname not in forced_polys),
+                None,
+            )
+            if owner_poly is None:
+                continue
+            alts = [
+                a for a in candidates_by_poly.get(owner_poly, [])
+                if id(a["pm"]) not in used_fat_pms
+            ]
+            if not alts:
+                continue
+            alt_best = _pick_best_for_poly(poly_by_name[owner_poly], alts)
+            if alt_best is not None:
+                chosen_by_poly[owner_poly] = alt_best
+                used_fat_pms.add(id(alt_best["pm"]))
+                chosen_by_poly[poly_name] = cand
+                swapped = True
+                break
+        if not swapped:
+            no_fat.append(poly_name)
+
+    for poly_name, poly, poly_pm, letter in polygons:
+        best = chosen_by_poly.get(poly_name)
+        if best is not None:
+            new_pm = ET.Element("Placemark")
+            nm_el = ET.Element("name")
             nm_el.text = poly_name
-            for st in new_pm.findall("styleUrl"):
-                new_pm.remove(st)
+            new_pm.append(nm_el)
             st_el = ET.Element("styleUrl")
             st_el.text = "#style_fat"
             new_pm.append(st_el)
+            pt_el = ET.Element("Point")
+            coord_el = ET.Element("coordinates")
+            coord_el.text = f"{best['lon']},{best['lat']},0"
+            pt_el.append(coord_el)
+            new_pm.append(pt_el)
             fat_folder.append(new_pm)
             fat_count += 1
             fat_points.append((best["lon"], best["lat"]))
@@ -861,40 +1204,35 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
     # Slack dibagi ke segmen kabel yang tepat. Dulu SETIAP segmen mendapat
     # slack seluruh FAT di line, ditambah slack SEMUA FDT di dokumen —
     # line dengan dua segmen kabel menghitung slack dua kali lipat.
-    cable_geoms = []
-    for pm in cable_pms:
-        ls = pm.find("LineString")
-        coords_el = ls.find("coordinates") if ls is not None else None
-        pts = parse_coords(coords_el.text) if coords_el is not None and coords_el.text else []
-        cable_geoms.append(pts if len(pts) >= 2 else None)
-    valid_idx = [i for i, g in enumerate(cable_geoms) if g]
+    valid_idx = list(range(len(cable_pms)))
     fdt_slack = defaultdict(int)
     fat_slack = defaultdict(int)
     if valid_idx:
+        def _min_dist_to_segs(pt, segs):
+            return min(point_linestring_distance_m(pt, s) for s in segs)
+
         if fdt_lat is not None:
-            nearest = min(valid_idx, key=lambda i: point_linestring_distance_m((fdt_lon, fdt_lat), cable_geoms[i]))
+            nearest = min(valid_idx, key=lambda i: _min_dist_to_segs((fdt_lon, fdt_lat), cable_segs[i][1]))
         else:
             nearest = valid_idx[0]
         fdt_slack[nearest] = 1
         for fp in fat_points:
-            j = min(valid_idx, key=lambda i: point_linestring_distance_m(fp, cable_geoms[i]))
+            j = min(valid_idx, key=lambda i: _min_dist_to_segs(fp, cable_segs[i][1]))
             fat_slack[j] += 1
 
     for ci, pm in enumerate(cable_pms):
-        pts = cable_geoms[ci]
-        if not pts:
-            continue
-
-        total_route = int(round(line_length_m(pts)))
+        cable_folder_name, segs = cable_segs[ci]
+        total_route = int(round(sum(line_length_m(s) for s in segs)))
 
         for i, p in enumerate(poles_list):
-            if point_linestring_distance_m((p["lon"], p["lat"]), pts) <= 10:
+            if any(point_linestring_distance_m((p["lon"], p["lat"]), s) <= 10 for s in segs):
                 served.add(i)
 
         n_fdt_slack, n_fat_slack = fdt_slack[ci], fat_slack[ci]
         total_slack_units = n_fdt_slack + n_fat_slack
         total_slack = total_slack_units * 20
-        toleransi = int(round((total_route + total_slack) * 0.03))
+        # Toleransi standar cluster FTTH: 5% (pembulatan ke atas) dari route + slack.
+        toleransi = math.ceil((total_route + total_slack) * 0.05) if (total_route + total_slack) > 0 else 0
         total_length = total_route + total_slack + toleransi
 
         nm_el = pm.find("name")
@@ -903,17 +1241,12 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
             pm.insert(0, nm_el)
 
         orig_name = nm_el.text or ""
-        suffix = ""
-        if ")" in orig_name:
-            suffix = orig_name.split(")", 1)[1]
-        else:
-            idx = orig_name.upper().find(line_name.upper())
-            if idx != -1:
-                suffix_part = orig_name[idx + len(line_name):]
-                if "-" in suffix_part:
-                    suffix = suffix_part[suffix_part.find("-"):]
+        desc_el = pm.find("description")
+        orig_desc = desc_el.text if desc_el is not None and desc_el.text else ""
+        prefix_part = _extract_cable_prefix(orig_name)
+        topo = _detect_cable_topology(orig_name, orig_desc, cable_folder_name)
 
-        nm_el.text = f"CABLE {line_name} ({fo_text}){suffix}"
+        nm_el.text = f"{prefix_part}CABLE {line_name} ({fo_text}) -{topo}- {total_length} m"
 
         if "24" in fo_text:
             cable_style = "#style_cable_24c"
@@ -928,7 +1261,7 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
         st_el.text = cable_style
         pm.append(st_el)
 
-        desc = pm.find("description")
+        desc = desc_el
         if desc is None:
             desc = ET.Element("description")
             pm.append(desc)
@@ -943,15 +1276,42 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
     sling_folder = find_or_create_folder(line_folder, "SLING WIRE")
     # Sling hasil proses sebelumnya dibuang dulu supaya proses ulang tidak
     # menggandakannya. Sling yang digambar tangan (style lain) dibiarkan.
+    manual_sling_lines = []
     for old in list(sling_folder.findall("Placemark")):
         st = old.find("styleUrl")
         if st is not None and (st.text or "").strip() == "#style_sling_wire":
             sling_folder.remove(old)
+        else:
+            for c_el in old.findall(".//LineString/coordinates"):
+                if c_el.text:
+                    pts = parse_coords(c_el.text)
+                    if len(pts) >= 2:
+                        manual_sling_lines.append(pts)
     connections = []
 
     if served:
         connected = set(served)
-        unconnected = {i for i in range(len(poles_list)) if i not in served}
+        # Propagasikan koneksi lewat sling wire manual agar tidak digandakan.
+        if manual_sling_lines:
+            manual_adj = defaultdict(set)
+            for mpts in manual_sling_lines:
+                hit_indices = [
+                    i for i, p in enumerate(poles_list)
+                    if point_linestring_distance_m((p["lon"], p["lat"]), mpts) <= 5.0
+                ]
+                for a in hit_indices:
+                    for b in hit_indices:
+                        if a != b:
+                            manual_adj[a].add(b)
+            queue_m = list(connected)
+            while queue_m:
+                cur = queue_m.pop(0)
+                for nxt in manual_adj.get(cur, ()):
+                    if nxt not in connected:
+                        connected.add(nxt)
+                        queue_m.append(nxt)
+
+        unconnected = {i for i in range(len(poles_list)) if i not in connected}
 
         while unconnected:
             best_p, best_q, best_d = None, None, float('inf')
@@ -965,7 +1325,8 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
                         best_p = p_idx
                         best_q = q_idx
             if best_p is not None and best_d <= 60.0:
-                connections.append((best_p, best_q, best_d, poles_list[best_p], poles_list[best_q]))
+                if best_d > 0.5:
+                    connections.append((best_p, best_q, best_d, poles_list[best_p], poles_list[best_q]))
                 unconnected.remove(best_p)
                 connected.add(best_p)
             else:
@@ -1006,12 +1367,9 @@ def process_fat_cable_sling_for_line(line_folder, polygons, global_poles, fdt_co
 # =====================================================================
 
 def _renamed_pole(pm, name: str, style_url: str):
-    """Salinan placemark tiang asli dengan nama & style baru.
-
-    Dulu tiang dibuat ulang hanya dari nama + koordinat, sehingga
-    description, ExtendedData, dan catatan survei lain ikut hilang.
-    """
+    """Salinan placemark tiang asli dengan nama & style baru (tanpa ExtendedData)."""
     new_pm = copy.deepcopy(pm)
+    _strip_extended_data(new_pm)
     for tag in ("styleUrl", "Style", "StyleMap"):
         for el in new_pm.findall(tag):
             new_pm.remove(el)
@@ -1026,7 +1384,152 @@ def _renamed_pole(pm, name: str, style_url: str):
     return new_pm
 
 
-def process_poles(scopes, fdts, tol_m=5.0, line_folders=None, container=None, report=None):
+def _classify_pole_size(
+    pm_str: str,
+    is_exist: bool,
+    is_fdt: bool = False,
+    is_fat: bool = False,
+    is_loopback: bool = False,
+    is_sharp_bend: bool = False,
+) -> Tuple[str, str]:
+    """Tentukan ukuran tiang ('7-2.5', '7-3', '7-4', '9-4') dan styleUrl.
+
+    Syarat beban (FDT min 7-4; FAT/loopback/belokan tajam min 7-3) hanya
+    menaikkan spesifikasi tiang, tidak pernah menurunkan tiang 9-4 atau 7-4
+    (mis. EXISTING POLE 7-4 agar tidak bergeser dari kolom BOQ 7-4).
+    """
+    rank_to_spec = {
+        1: ("7-2.5", "#style_pole_7m_2_5inch"),
+        2: ("7-3", "#style_pole_7m_3inch"),
+        3: ("7-4", "#style_pole_7m_4inch"),
+        4: ("9-4", "#style_pole_9m_4inch"),
+    }
+    if "9-4" in pm_str or "9M" in pm_str:
+        base_rank = 4
+    elif "7-4" in pm_str or "7M 4" in pm_str:
+        base_rank = 3
+    elif "7-3" in pm_str or "7M 3" in pm_str:
+        base_rank = 2
+    elif "2.5" in pm_str or "2_5" in pm_str or "7M 2.5" in pm_str:
+        base_rank = 1
+    else:
+        base_rank = 3 if is_exist else 1
+
+    req_rank = 3 if is_fdt else (2 if (is_fat or is_loopback or is_sharp_bend) else 1)
+    return rank_to_spec[max(base_rank, req_rank)]
+
+
+def _make_slack_placemark(name: str, lon: float, lat: float) -> ET.Element:
+    """Buat placemark SLACK HANGER yang bersih tanpa ExtendedData."""
+    pm = ET.Element("Placemark")
+    nm = ET.Element("name")
+    nm.text = name
+    pm.append(nm)
+    st = ET.Element("styleUrl")
+    st.text = "#style_slack_cable"
+    pm.append(st)
+    pt = ET.Element("Point")
+    coords = ET.Element("coordinates")
+    coords.text = f"{lon},{lat},0"
+    pt.append(coords)
+    pm.append(pt)
+    return pm
+
+
+def generate_slack_hangers(scopes, fdts, line_folders, fdt_hints=None) -> None:
+    """Bangun folder SLACK HANGER untuk tiap LINE berdasarkan FDT dan FAT aktual.
+
+    Menjamin:
+    - Tidak ada placemark bernama mentah 'FDT' di dalam SLACK HANGER (selalu 'SLACK.FDT...').
+    - Setiap FAT di folder FAT mendapat 'SLACK.FAT.<KODE>' tepat di koordinatnya.
+    - Setiap FDT pada dokumen multi-FDT tetap mendapat slack FDT masing-masing.
+    """
+    if isinstance(fdts, dict):
+        idx = FdtIndex()
+        for k, (la, lo) in fdts.items():
+            idx.add(k, la, lo)
+        fdts = idx
+
+    added_fdt_slacks = set()
+    for line_folder in line_folders:
+        for sub in list(line_folder.findall("Folder")):
+            if _direct_name(sub).upper() == "SLACK HANGER":
+                line_folder.remove(sub)
+
+        slack_folder = ET.Element("Folder")
+        snm = ET.Element("name")
+        snm.text = "SLACK HANGER"
+        slack_folder.append(snm)
+        has_slack = False
+
+        line_name = _direct_name(line_folder)
+        lookup_name = (fdt_hints or {}).get(id(line_folder), line_name)
+        fdt_entry = fdts.resolve_entry(lookup_name) if len(fdts) else None
+        if fdt_entry is not None:
+            fdt_name_resolved, fdt_lat, fdt_lon, _ = fdt_entry
+            fdt_key = (round(fdt_lat, 6), round(fdt_lon, 6))
+            if fdt_key not in added_fdt_slacks:
+                added_fdt_slacks.add(fdt_key)
+                fdt_num = _fdt_num_of(fdt_name_resolved)
+                slack_fdt_name = (
+                    f"SLACK.FDT.{fdt_num:02d}"
+                    if (len(fdts) > 1 and fdt_num is not None)
+                    else "SLACK.FDT"
+                )
+                slack_folder.append(_make_slack_placemark(slack_fdt_name, fdt_lon, fdt_lat))
+                has_slack = True
+
+        fat_folder_ref = None
+        for sub in line_folder.findall("Folder"):
+            if _direct_name(sub).upper() == "FAT":
+                fat_folder_ref = sub
+                break
+        if fat_folder_ref is not None:
+            for pm in fat_folder_ref.findall("Placemark"):
+                pt_coords = _parse_point_coords(pm)
+                if pt_coords is None:
+                    continue
+                flon, flat = pt_coords
+                slack_fat_name = _slack_fat_name(_direct_name(pm))
+                slack_folder.append(_make_slack_placemark(slack_fat_name, flon, flat))
+                has_slack = True
+
+        if has_slack:
+            line_folder.append(slack_folder)
+
+
+def _collect_poles_from_folder(folder, poles_out, hints_out, is_line_sub=False):
+    """Kumpulkan placemark tiang secara rekursif beserta hint nama foldernya."""
+    fname = _direct_name(folder).upper()
+    for pm_parent, pm in _iter_placemarks_with_parent(folder):
+        pt_coords = _parse_point_coords(pm)
+        if pt_coords is None:
+            continue
+        lon, lat = pt_coords
+        parent_name = _direct_name(pm_parent)
+        hint = parent_name or fname
+        pm_str = _pole_metadata_text(pm, hint)
+        is_exist = (
+            fname == "EXT"
+            or fname.startswith("EXT ")
+            or fname.startswith("EXST")
+            or fname.startswith("EXISTING")
+            or ("EXISTING" in pm_str)
+            or ("EXST" in pm_str)
+        )
+        poles_out.append((pm, pm_parent, lon, lat, is_exist, hint, is_line_sub))
+        hints_out[id(pm)] = hint
+
+
+def process_poles(
+    scopes,
+    fdts,
+    tol_m=5.0,
+    line_folders=None,
+    container=None,
+    report=None,
+    fdt_hints=None,
+):
     """Process and renumber all poles based on distribution cable and sling wire routes.
 
     `scopes`: elemen yang anak-anaknya memuat folder POLE/NP/EXT dan FDT.
@@ -1041,24 +1544,65 @@ def process_poles(scopes, fdts, tol_m=5.0, line_folders=None, container=None, re
         fdts = idx
     container = container if container is not None else scopes[0]
 
-    poles = {}
+    if line_folders is None:
+        line_folders = [
+            f for _, f in scope_folders(scopes)
+            if _is_line_folder_name(_direct_name(f))
+        ]
+    line_folders = list(line_folders)
+
+    def fdt_group_key(lf):
+        name = (fdt_hints or {}).get(id(lf), _direct_name(lf))
+        num = _fdt_num_of(name)
+        return (num if num is not None else 0, get_fdt_name_from_line(name).upper())
+
+    # Group line folders by FDT (sort stabil: urutan LINE di dalam FDT tetap)
+    line_folders.sort(key=fdt_group_key)
+
+    collected = []
+    pole_hints = {}
+    seen_pms = set()
     for _, f in scope_folders(scopes):
-        fname = _direct_name(f).upper()
-        if fname in ("POLE", "NP", "EXT"):
-            for pm in f.findall("Placemark"):
-                coords_el = pm.find("Point/coordinates")
-                if coords_el is None or not coords_el.text:
-                    continue
-                try:
-                    lon, lat, *_ = coords_el.text.strip().split(",")
-                    pm_str = ET.tostring(pm).decode('utf-8').upper()
-                    is_exist = (fname == "EXT") or ("EXISTING" in pm_str) or ("EXST" in pm_str)
-                    poles[pm] = (float(lat), float(lon), is_exist)
-                except Exception:
-                    continue
+        fname = _direct_name(f)
+        if _is_pole_folder_name(fname):
+            tmp = []
+            _collect_poles_from_folder(f, tmp, pole_hints, is_line_sub=False)
+            for item in tmp:
+                if id(item[0]) not in seen_pms:
+                    seen_pms.add(id(item[0]))
+                    collected.append(item)
+
+    for lf in line_folders:
+        for sub in list(lf.findall("Folder")):
+            sname = _direct_name(sub)
+            if _is_pole_folder_name(sname):
+                tmp = []
+                _collect_poles_from_folder(sub, tmp, pole_hints, is_line_sub=True)
+                for item in tmp:
+                    if id(item[0]) not in seen_pms:
+                        seen_pms.add(id(item[0]))
+                        collected.append(item)
+
+    poles = {}
+    for pm, pm_parent, lon, lat, is_exist, _, _ in collected:
+        poles[pm] = (lat, lon, is_exist)
+
+    # Bersihkan folder UNASSIGNED lama & tiang lama di dalam LINE agar proses ulang tidak menggandakan tiang.
+    for parent, f in list(scope_folders(scopes)):
+        if "UNASSIGNED" in _direct_name(f).upper() and _is_pole_folder_name(_direct_name(f)):
+            try:
+                parent.remove(f)
+            except ValueError:
+                pass
+    for lf in line_folders:
+        for sub in list(lf.findall("Folder")):
+            if _is_pole_folder_name(_direct_name(sub)):
+                for old_pm in list(sub.findall("Placemark")):
+                    sub.remove(old_pm)
 
     if not poles:
         print("[WARNING] Tidak ada POLE ditemukan")
+        generate_slack_hangers(scopes, fdts, line_folders, fdt_hints=fdt_hints)
         return
 
     def coords_key_pm(pm):
@@ -1076,19 +1620,6 @@ def process_poles(scopes, fdts, tol_m=5.0, line_folders=None, container=None, re
         candidates.sort(key=lambda x: x[1])
         return [pm for pm, _ in candidates]
 
-    if line_folders is None:
-        line_folders = [f for _, f in scope_folders(scopes)
-                        if _direct_name(f).upper().startswith("LINE ")]
-    line_folders = list(line_folders)
-
-    def fdt_group_key(lf):
-        name = _direct_name(lf)
-        num = _fdt_num_of(name)
-        return (num if num is not None else 0, get_fdt_name_from_line(name).upper())
-
-    # Group line folders by FDT (sort stabil: urutan LINE di dalam FDT tetap)
-    line_folders.sort(key=fdt_group_key)
-
     visited_coords = set()
     numbered = 0
     new_pole_counter = 1
@@ -1096,46 +1627,38 @@ def process_poles(scopes, fdts, tol_m=5.0, line_folders=None, container=None, re
     last_fdt = None
 
     for line_folder in line_folders:
-        nm_el = line_folder.find("name")
-        line_name = (nm_el.text or "").strip().upper()
+        line_name = _direct_name(line_folder).upper()
+        lookup_name = (fdt_hints or {}).get(id(line_folder), line_name)
 
         distribution_coords_list = []
         sling_coords_list = []
         for sub in line_folder.findall("Folder"):
-            sname = sub.find("name")
-            if sname is None:
+            stext = _direct_name(sub).upper()
+            if not stext:
                 continue
-            stext = (sname.text or "").upper()
             if ("DISTRIBUTION" in stext or "CABLE" in stext or "KABEL" in stext) and "SLING" not in stext:
                 for pm in sub.findall("Placemark"):
-                    coords_el = pm.find("LineString/coordinates")
-                    if coords_el is None or not coords_el.text:
-                        continue
-                    coords = parse_coords(coords_el.text)
-                    if coords:
-                        distribution_coords_list.append(coords)
+                    for coords_el in pm.findall(".//LineString/coordinates"):
+                        if coords_el.text:
+                            coords = parse_coords(coords_el.text)
+                            if len(coords) >= 2:
+                                distribution_coords_list.append(coords)
             if "SLING" in stext:
                 for pm in sub.findall("Placemark"):
-                    coords_el = pm.find("LineString/coordinates")
-                    if coords_el is None or not coords_el.text:
-                        continue
-                    coords = parse_coords(coords_el.text)
-                    if coords:
-                        sling_coords_list.append(coords)
+                    for coords_el in pm.findall(".//LineString/coordinates"):
+                        if coords_el.text:
+                            coords = parse_coords(coords_el.text)
+                            if len(coords) >= 2:
+                                sling_coords_list.append(coords)
 
         # Get FAT coordinates for this line
         fat_coords = []
         for sub in line_folder.findall("Folder"):
-            sname = sub.find("name")
-            if sname is not None and (sname.text or "").strip().upper() == "FAT":
+            if _direct_name(sub).upper() == "FAT":
                 for pm in sub.findall("Placemark"):
-                    pt = pm.find("Point/coordinates")
-                    if pt is not None and pt.text:
-                        try:
-                            flon, flat, *_ = map(float, pt.text.strip().split(","))
-                            fat_coords.append((flat, flon))
-                        except Exception:
-                            continue
+                    pt_coords = _parse_point_coords(pm)
+                    if pt_coords is not None:
+                        fat_coords.append((pt_coords[1], pt_coords[0]))
 
         # Get bend points > 30 degrees for this line
         bend_points = set()
@@ -1163,14 +1686,14 @@ def process_poles(scopes, fdts, tol_m=5.0, line_folders=None, container=None, re
         dist_mapped = [map_line_to_poles(coords) for coords in distribution_coords_list]
         sling_mapped = [map_line_to_poles(coords) for coords in sling_coords_list]
 
-        fdt_lat, fdt_lon = fdts.resolve(line_name)
+        fdt_lat, fdt_lon = fdts.resolve(lookup_name)
 
         resolved_fdt_name = fdt_group_key(line_folder)
         if resolved_fdt_name != last_fdt:
             new_pole_counter = 1
             existing_pole_counter = 1
             last_fdt = resolved_fdt_name
-            
+
         # Normalize direction: distribution from FDT to end
         if fdt_lat is not None and dist_mapped:
             for i, seq in enumerate(dist_mapped):
@@ -1286,55 +1809,26 @@ def process_poles(scopes, fdts, tol_m=5.0, line_folders=None, container=None, re
                     pole_name = f"MR.XXX.P{new_pole_counter:03d}"
                     new_pole_counter += 1
 
-                pm_str = ET.tostring(pm).decode('utf-8').upper()
+                pm_str = _pole_metadata_text(pm, pole_hints.get(id(pm), ""))
                 owner = "PARTNER" if "PARTNER" in pm_str else "EMR"
 
-                is_fdt = False
-                for fdt_lat, fdt_lon in fdts.values():
-                    if haversine(lat, lon, fdt_lat, fdt_lon) <= 5.0:
-                        is_fdt = True
-                        break
-
-                is_fat = False
-                for flat, flon in fat_coords:
-                    if haversine(lat, lon, flat, flon) <= 1.0:
-                        is_fat = True
-                        break
-
+                is_fdt = any(
+                    haversine(lat, lon, f_lat, f_lon) <= 5.0
+                    for f_lat, f_lon in fdts.values()
+                )
+                is_fat = any(
+                    haversine(lat, lon, flat, flon) <= 1.0
+                    for flat, flon in fat_coords
+                )
                 is_loopback = is_loopback_pole(lat, lon)
+                is_sharp_bend = any(
+                    haversine(lat, lon, blat, blon) <= 2.0
+                    for blat, blon in bend_points
+                )
 
-                is_sharp_bend = False
-                for blat, blon in bend_points:
-                    if haversine(lat, lon, blat, blon) <= 2.0:
-                        is_sharp_bend = True
-                        break
-
-                if is_fdt:
-                    size_str = "7-4"
-                    style_url = "#style_pole_7m_4inch"
-                elif is_fat or is_loopback or is_sharp_bend:
-                    size_str = "7-3"
-                    style_url = "#style_pole_7m_3inch"
-                else:
-                    if "9-4" in pm_str or "9M" in pm_str:
-                        size_str = "9-4"
-                        style_url = "#style_pole_9m_4inch"
-                    elif "7-4" in pm_str or "7M 4" in pm_str:
-                        size_str = "7-4"
-                        style_url = "#style_pole_7m_4inch"
-                    elif "7-3" in pm_str or "7M 3" in pm_str:
-                        size_str = "7-3"
-                        style_url = "#style_pole_7m_3inch"
-                    elif "2.5" in pm_str or "2_5" in pm_str or "7M 2.5" in pm_str:
-                        size_str = "7-2.5"
-                        style_url = "#style_pole_7m_2_5inch"
-                    else:
-                        if is_exist:
-                            size_str = "7-4"
-                            style_url = "#style_pole_7m_4inch"
-                        else:
-                            size_str = "7-2.5"
-                            style_url = "#style_pole_7m_2_5inch"
+                size_str, style_url = _classify_pole_size(
+                    pm_str, is_exist, is_fdt, is_fat, is_loopback, is_sharp_bend
+                )
 
                 if is_exist:
                     folder_name = f"EXISTING POLE {owner} {size_str}"
@@ -1348,62 +1842,11 @@ def process_poles(scopes, fdts, tol_m=5.0, line_folders=None, container=None, re
                 target_folder = find_or_create_folder(line_folder, folder_name)
                 target_folder.append(new_pm)
 
-        # Clean up any existing SLACK HANGER folder in line_folder
-        for sub in list(line_folder.findall("Folder")):
-            sname = sub.find("name")
-            if sname is not None and (sname.text or "").strip().upper() == "SLACK HANGER":
-                line_folder.remove(sub)
-
-        # Create new SLACK HANGER folder
-        slack_folder = ET.Element("Folder")
-        snm = ET.Element("name")
-        snm.text = "SLACK HANGER"
-        slack_folder.append(snm)
-        has_slack = False
-
-        # Copy FDT slack to the first line's SLACK HANGER
-        if line_folder == line_folders[0] and fdt_lat is not None:
-            fdt_pm = None
-            for _, f in scope_folders(scopes):
-                if _direct_name(f).upper().startswith("FDT"):
-                    fdt_pm = f.find("Placemark")
-                    if fdt_pm is not None:
-                        break
-            if fdt_pm is not None:
-                fdt_slack = ET.fromstring(ET.tostring(fdt_pm))
-                for st in fdt_slack.findall("styleUrl"):
-                    fdt_slack.remove(st)
-                st_el = ET.Element("styleUrl")
-                st_el.text = "#style_slack_cable"
-                fdt_slack.append(st_el)
-                slack_folder.append(fdt_slack)
-                has_slack = True
-
-        # Copy FAT slacks for the current line
-        fat_folder_ref = None
-        for sub in line_folder.findall("Folder"):
-            sname = sub.find("name")
-            if sname is not None and (sname.text or "").strip().upper() == "FAT":
-                fat_folder_ref = sub
-                break
-        if fat_folder_ref is not None:
-            for pm in fat_folder_ref.findall("Placemark"):
-                fat_slack = ET.fromstring(ET.tostring(pm))
-                for st in fat_slack.findall("styleUrl"):
-                    fat_slack.remove(st)
-                st_el = ET.Element("styleUrl")
-                st_el.text = "#style_slack_cable"
-                fat_slack.append(st_el)
-                slack_folder.append(fat_slack)
-                has_slack = True
-
-        if has_slack:
-            line_folder.append(slack_folder)
+    generate_slack_hangers(scopes, fdts, line_folders, fdt_hints=fdt_hints)
 
     # Handle remaining poles (not assigned to any line)
     remaining = [pm for pm in poles.keys() if coords_key_pm(pm) not in visited_coords]
     if remaining:
-        # Fallback to first FDT for unassigned poles if any
         fallback_lat, fallback_lon = None, None
         if fdts:
             fallback_lat, fallback_lon = list(fdts.values())[0]
@@ -1418,27 +1861,8 @@ def process_poles(scopes, fdts, tol_m=5.0, line_folders=None, container=None, re
                 pole_name = f"MR.XXX.P{new_pole_counter:03d}"
                 new_pole_counter += 1
 
-            pm_str = ET.tostring(pm).decode('utf-8').upper()
-
-            if "9-4" in pm_str or "9M" in pm_str:
-                size_str = "9-4"
-                style_url = "#style_pole_9m_4inch"
-            elif "7-4" in pm_str or "7M 4" in pm_str:
-                size_str = "7-4"
-                style_url = "#style_pole_7m_4inch"
-            elif "7-3" in pm_str or "7M 3" in pm_str:
-                size_str = "7-3"
-                style_url = "#style_pole_7m_3inch"
-            elif "2.5" in pm_str or "2_5" in pm_str or "7M 2.5" in pm_str:
-                size_str = "7-2.5"
-                style_url = "#style_pole_7m_2_5inch"
-            else:
-                if is_exist:
-                    size_str = "7-4"
-                    style_url = "#style_pole_7m_4inch"
-                else:
-                    size_str = "7-2.5"
-                    style_url = "#style_pole_7m_2_5inch"
+            pm_str = _pole_metadata_text(pm, pole_hints.get(id(pm), ""))
+            size_str, style_url = _classify_pole_size(pm_str, is_exist)
 
             if is_exist:
                 owner = "PARTNER" if "PARTNER" in pm_str else "EMR"
@@ -1569,30 +1993,26 @@ def _process_kml_tree(tree, report: Optional[ProcessReport] = None):
     if doc is None:
         raise ValueError("Tidak ada <Document> di dalam file KML")
 
-    # Folder LINE boleh dibungkus folder proyek. Folder POLE/NP/EXT, HP, dan
-    # FDT dicari di wadah itu DAN di Document.
-    container = find_line_container(doc)
-    scopes = [container] if container is doc else [container, doc]
+    # Folder LINE boleh dibungkus folder proyek atau per-FDT.
+    # Folder POLE/NP/EXT, HP, dan FDT dicari di wadah itu DAN di Document.
+    container, scopes, line_folders, fdt_hints = _collect_line_folders(doc)
 
     # Inject custom styles for Legend Design
     inject_custom_styles(doc)
 
     # Step 1: Process boundaries and HP coverage per LINE
-    polygons_by_line = {}  # polygons_by_line[fdt_name][letter]
-    line_folders = []
-    for line_folder in container.findall("Folder"):
+    polygons_by_line = {}    # polygons_by_line[fdt_name][letter]
+    polygons_by_folder = {}  # id(line_folder) -> polygons
+    for line_folder in line_folders:
         line_name = _direct_name(line_folder)
-        if not line_name.upper().startswith("LINE "):
-            continue
-        line_folders.append(line_folder)
-        fdt_name = get_fdt_name_from_line(line_name)
+        hint_name = fdt_hints.get(id(line_folder), line_name)
+        fdt_name = get_fdt_name_from_line(hint_name)
         polygons_by_line.setdefault(fdt_name, {})
 
         polygons = process_boundaries_and_hp_in_line(line_folder)
+        letter = _line_letter(line_name)
 
-        parts = line_name.split()
-        letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else line_name[0].upper()
-
+        polygons_by_folder[id(line_folder)] = polygons
         if polygons:
             polygons_by_line[fdt_name][polygons[0][3]] = polygons
         else:
@@ -1607,27 +2027,38 @@ def _process_kml_tree(tree, report: Optional[ProcessReport] = None):
         )
 
     # Step 2: Move root HP placemarks into line folders
-    uncovered = move_root_hp_to_lines(scopes, line_folders, polygons_by_line)
-    update_boundary_descriptions(line_folders, polygons_by_line)
+    uncovered = move_root_hp_to_lines(
+        scopes, line_folders, polygons_by_line, polygons_by_folder=polygons_by_folder
+    )
+    update_boundary_descriptions(
+        line_folders, polygons_by_line, polygons_by_folder=polygons_by_folder
+    )
     if uncovered:
         report.warn(f"{uncovered} HP berada di luar semua boundary; dimasukkan ke HP UNCOVER")
 
-    # Step 3: Collect global poles
-    global_poles = []
+    # Step 3: Collect global poles (dari POLE/NP/EXT root maupun sub-folder tiang LINE saat proses ulang)
+    raw_poles = []
+    seen_pole_pms = set()
+    dummy_hints = {}
     for _, f in scope_folders(scopes):
-        fname = _direct_name(f).upper()
-        if fname in ("POLE", "NP", "EXT"):
-            for pm in f.findall("Placemark"):
-                coords_el = pm.find("Point/coordinates")
-                if coords_el is None or not coords_el.text:
-                    continue
-                try:
-                    lon, lat = map(float, coords_el.text.strip().split(",")[:2])
-                except Exception:
-                    continue
-                pm_str = ET.tostring(pm).decode('utf-8').upper()
-                is_exist = (fname == "EXT") or ("EXISTING" in pm_str) or ("EXST" in pm_str)
-                global_poles.append((pm, f, lon, lat, is_exist))
+        if _is_pole_folder_name(_direct_name(f)):
+            tmp = []
+            _collect_poles_from_folder(f, tmp, dummy_hints, is_line_sub=False)
+            for item in tmp:
+                if id(item[0]) not in seen_pole_pms:
+                    seen_pole_pms.add(id(item[0]))
+                    raw_poles.append(item)
+    for line_folder in line_folders:
+        for sub in line_folder.findall("Folder"):
+            if _is_pole_folder_name(_direct_name(sub)):
+                tmp = []
+                _collect_poles_from_folder(sub, tmp, dummy_hints, is_line_sub=True)
+                for item in tmp:
+                    if id(item[0]) not in seen_pole_pms:
+                        seen_pole_pms.add(id(item[0]))
+                        raw_poles.append(item)
+
+    global_poles = [(pm, pm_parent, lon, lat, is_exist) for pm, pm_parent, lon, lat, is_exist, _, _ in raw_poles]
 
     # Deduplicate poles within POLE_DEDUPE_M (prioritize existing)
     poles_sorted = sorted(global_poles, key=lambda x: (not x[4]))
@@ -1656,17 +2087,14 @@ def _process_kml_tree(tree, report: Optional[ProcessReport] = None):
     # Step 4: Get FDT info for cable/sling processing
     fdts = FdtIndex()
     for _, f in scope_folders(scopes):
-        if not _direct_name(f).upper().startswith("FDT"):
+        if not _is_fdt_folder(_direct_name(f)):
             continue
-        for pm in f.findall("Placemark"):
+        for _, pm in _iter_placemarks_with_parent(f):
             fdt_name = _direct_name(pm) or _direct_name(f) or "FDT"
-            coords = pm.find("Point/coordinates")
-            if coords is not None and coords.text:
-                try:
-                    lon, lat, *_ = coords.text.strip().split(",")
-                    fdts.add(fdt_name, float(lat), float(lon))
-                except Exception:
-                    pass
+            pt_coords = _parse_point_coords(pm)
+            if pt_coords is not None:
+                lon, lat = pt_coords
+                fdts.add(fdt_name, lat, lon, pm=pm)
     if not len(fdts):
         report.warn("Titik FDT tidak ditemukan (folder berawalan 'FDT'); arah penomoran "
                     "tiang dan slack FDT tidak bisa ditentukan")
@@ -1674,32 +2102,34 @@ def _process_kml_tree(tree, report: Optional[ProcessReport] = None):
     # Step 5: Process FAT/Cable/Sling for each line
     for line_folder in line_folders:
         line_name = _direct_name(line_folder)
-        parts = line_name.split()
-        letter = parts[1][0].upper() if len(parts) >= 2 and parts[1] else line_name[0].upper()
+        hint_name = fdt_hints.get(id(line_folder), line_name)
+        fdt_lat, fdt_lon = fdts.resolve(hint_name)
 
-        fdt_name = get_fdt_name_from_line(line_name)
-        fdt_lat, fdt_lon = fdts.resolve(line_name)
-
-        polygons = polygons_by_line.get(fdt_name, {}).get(letter, [])
+        polygons = polygons_by_folder.get(id(line_folder), [])
         process_fat_cable_sling_for_line(
             line_folder, polygons, global_poles, len(fdts),
             doc=doc, line_folders=line_folders,
             fdt_lat=fdt_lat, fdt_lon=fdt_lon,
             tol_m_pole_line=5.0, report=report,
+            all_line_polygons=polygons_by_folder,
         )
 
-    # Step 6: Process pole numbering
+    # Step 6: Process pole numbering & Slack Hangers
     process_poles(scopes, fdts, tol_m=5.0, line_folders=line_folders,
-                  container=container, report=report)
+                  container=container, report=report, fdt_hints=fdt_hints)
 
     if fdts.fallbacks:
         report.warn("Nomor FDT di nama folder LINE tidak cocok dengan titik FDT mana pun; "
                     "memakai FDT pertama", sorted(fdts.fallbacks))
 
-    # Step 7: Remove original root POLE/NP/EXT folders
+    # Step 7: Remove original root pole folders (sisakan folder '... UNASSIGNED' hasil Step 6)
     for parent, f in list(scope_folders(scopes)):
-        if _direct_name(f).upper() in ("POLE", "NP", "EXT"):
-            parent.remove(f)
+        fname_up = _direct_name(f).upper()
+        if _is_pole_folder_name(fname_up) and "UNASSIGNED" not in fname_up:
+            try:
+                parent.remove(f)
+            except ValueError:
+                pass
 
     # Step 8: Reorder folders for each Line
     for line_folder in line_folders:
@@ -1721,11 +2151,14 @@ def _process_kml_tree(tree, report: Optional[ProcessReport] = None):
     # Count totals
     total_fat_count = 0
     total_hp_count = 0
+    total_hp_uncover = 0
     for line_folder in line_folders:
         for sub in line_folder.findall("Folder"):
             stext = _direct_name(sub).upper()
             if stext == "FAT":
                 total_fat_count += len(sub.findall("Placemark"))
+            elif "HP UNCOVER" in stext or "HP UN" in stext:
+                total_hp_uncover += len(sub.findall(".//Placemark"))
             elif "HP COVER" in stext:
                 for hp_sub in sub.findall("Folder"):
                     total_hp_count += len(hp_sub.findall("Placemark"))
@@ -1733,14 +2166,14 @@ def _process_kml_tree(tree, report: Optional[ProcessReport] = None):
     report.stat("line", len(line_folders))
     report.stat("fat", total_fat_count)
     report.stat("hp_cover", total_hp_count)
-    report.stat("hp_uncover", uncovered)
+    report.stat("hp_uncover", max(uncovered, total_hp_uncover))
     report.stat("fdt", len(fdts))
     print(f"[KML-APD] Total FAT: {total_fat_count}, Total HP Cover: {total_hp_count}")
     print(f"[KML-APD] Total LINE folders: {len(line_folders)}")
 
     # Step 9: Apply FDT styles based on core capacity
     for _, f in scope_folders(scopes):
-        if not _direct_name(f).upper().startswith("FDT"):
+        if not _is_fdt_folder(_direct_name(f)):
             continue
         for pm in f.findall("Placemark"):
             pm_name = _direct_name(pm).upper()
@@ -1756,6 +2189,11 @@ def _process_kml_tree(tree, report: Optional[ProcessReport] = None):
             else:
                 st_el.text = "#style_fdt_72c"
             pm.append(st_el)
+
+    # Step 10: Strip ExtendedData & Schema agar output bersih untuk ETL validator
+    removed_ext, removed_schema = strip_metadata_etl(root)
+    if removed_ext or removed_schema:
+        report.stat("metadata_dibersihkan", removed_ext + removed_schema)
 
     restore_namespace(root)
     return tree
@@ -1787,6 +2225,9 @@ def process_kml_apd(
         report = ProcessReport()
         tree = ET.ElementTree(parse_kml_tolerant(raw_kml))
         tree = _process_kml_tree(tree, report)
+
+        if hasattr(ET, "indent"):
+            ET.indent(tree, space="\t")
 
         output_buffer = io.BytesIO()
         tree.write(output_buffer, encoding="utf-8", xml_declaration=True)
